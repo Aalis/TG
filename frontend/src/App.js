@@ -14,6 +14,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import TelegramTokens from './pages/TelegramTokens';
 import ParsedGroups from './pages/ParsedGroups';
+import ParsedChannels from './pages/ParsedChannels';
 import GroupDetails from './pages/GroupDetails';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
@@ -53,6 +54,7 @@ function App() {
           <Route path="tokens" element={<TelegramTokens />} />
           <Route path="groups" element={<ParsedGroups />} />
           <Route path="groups/:id" element={<GroupDetails />} />
+          <Route path="channels" element={<ParsedChannels />} />
           <Route path="profile" element={<Profile />} />
         </Route>
         

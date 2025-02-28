@@ -30,6 +30,7 @@ import {
   Dashboard as DashboardIcon,
   VpnKey as TokensIcon,
   Group as GroupsIcon,
+  Forum as ChannelsIcon,
   Person as ProfileIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
@@ -114,6 +115,16 @@ const MainLayout = () => {
             <GroupsIcon />
           </ListItemIcon>
           <ListItemText primary="Parsed Groups" />
+        </ListItem>
+        <ListItem 
+          button 
+          onClick={() => handleNavigate('/channels')}
+          selected={location.pathname === '/channels'}
+        >
+          <ListItemIcon>
+            <ChannelsIcon />
+          </ListItemIcon>
+          <ListItemText primary="Parsed Channels" />
         </ListItem>
       </List>
       <Divider />

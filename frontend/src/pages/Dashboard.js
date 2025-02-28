@@ -21,6 +21,7 @@ import {
 } from '@mui/icons-material';
 import { tokensAPI, groupsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import TelegramSessions from '../components/TelegramSessions';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -293,6 +294,11 @@ const Dashboard = () => {
             </Paper>
           </Grid>
         )}
+
+        {/* Telegram Sessions */}
+        <Grid item xs={12}>
+          <TelegramSessions />
+        </Grid>
       </Grid>
     </Box>
   );

@@ -15,6 +15,10 @@ from app.schemas.telegram import (
     ParsedGroup,
     GroupParseRequest,
     GroupParseResponse,
+    ChannelParseRequest,
+    ChannelParseResponse,
+    ChannelPost,
+    PostComment,
 )
 from app.services.telegram_parser import TelegramParserService
 
@@ -86,7 +90,7 @@ def delete_token(
     return {"success": True}
 
 
-@router.get("/groups/", response_model=List[ParsedGroup])
+@router.get("/parsed-groups/", response_model=List[ParsedGroup])
 def read_groups(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
@@ -98,7 +102,7 @@ def read_groups(
     return groups
 
 
-@router.get("/groups/{group_id}", response_model=ParsedGroup)
+@router.get("/parsed-groups/{group_id}", response_model=ParsedGroup)
 def read_group(
     *,
     db: Session = Depends(deps.get_db),
@@ -116,7 +120,7 @@ def read_group(
     return group
 
 
-@router.delete("/groups/{group_id}", response_model=dict)
+@router.delete("/parsed-groups/{group_id}", response_model=dict)
 def delete_group(
     *,
     db: Session = Depends(deps.get_db),
@@ -175,4 +179,89 @@ async def parse_group(
             "success": False,
             "message": f"Failed to parse group: {str(e)}",
             "group": None
-        } 
+        }
+
+
+@router.post("/parse-channel/", response_model=ChannelParseResponse)
+async def parse_channel(
+    *,
+    db: Session = Depends(deps.get_db),
+    request: ChannelParseRequest,
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Parse a Telegram channel using the bot token pool.
+    """
+    parser = TelegramParserService(
+        api_id=settings.API_ID,
+        api_hash=settings.API_HASH,
+    )
+    
+    try:
+        result = await parser.parse_channel(db, request.channel_link, current_user.id)
+        if result:
+            return {
+                "success": True,
+                "message": f"Successfully parsed channel with {len(result.posts)} posts",
+                "group": result
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to parse channel: All bot tokens are exhausted or invalid",
+                "group": None
+            }
+    except (FloodWaitError, UserDeactivatedBanError) as e:
+        return {
+            "success": False,
+            "message": f"Rate limit exceeded: {str(e)}. Please try again later.",
+            "group": None
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Failed to parse channel: {str(e)}",
+            "group": None
+        }
+
+
+@router.get("/groups/{group_id}/posts/", response_model=List[ChannelPost])
+def read_group_posts(
+    *,
+    db: Session = Depends(deps.get_db),
+    group_id: int,
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Get all posts for a specific group.
+    """
+    group = crud.telegram.get_group_by_id(db, group_id=group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if group.user_id != current_user.id:
+        raise HTTPException(status_code=400, detail="Not enough permissions")
+    
+    posts = crud.telegram.get_posts_by_group(db, group_id=group_id)
+    return posts
+
+
+@router.get("/posts/{post_id}/comments/", response_model=List[PostComment])
+def read_post_comments(
+    *,
+    db: Session = Depends(deps.get_db),
+    post_id: int,
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Get all comments for a specific post.
+    """
+    post = crud.telegram.get_post_by_id(db, post_id=post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    group = crud.telegram.get_group_by_id(db, group_id=post.group_id)
+    if not group or group.user_id != current_user.id:
+        raise HTTPException(status_code=400, detail="Not enough permissions")
+    
+    comments = crud.telegram.get_comments_by_post(db, post_id=post_id)
+    return comments 

@@ -2,8 +2,8 @@ from typing import List, Optional, Union, Dict, Any
 
 from sqlalchemy.orm import Session
 
-from app.database.models import TelegramToken, ParsedGroup, GroupMember
-from app.schemas.telegram import TelegramTokenCreate, TelegramTokenUpdate, ParsedGroupCreate, GroupMemberCreate
+from app.database.models import TelegramToken, ParsedGroup, GroupMember, ChannelPost, PostComment
+from app.schemas.telegram import TelegramTokenCreate, TelegramTokenUpdate, ParsedGroupCreate, GroupMemberCreate, ChannelPostCreate, PostCommentCreate
 
 
 # Telegram Token CRUD
@@ -124,4 +124,88 @@ def create_members_bulk(db: Session, *, members: List[GroupMemberCreate]) -> Non
         for member in members
     ]
     db.add_all(db_objs)
+    db.commit()
+
+
+def get_post_by_id(db: Session, post_id: int) -> Optional[ChannelPost]:
+    return db.query(ChannelPost).filter(ChannelPost.id == post_id).first()
+
+
+def get_posts_by_group(db: Session, group_id: int) -> List[ChannelPost]:
+    return db.query(ChannelPost).filter(ChannelPost.group_id == group_id).all()
+
+
+def create_post(db: Session, *, obj_in: ChannelPostCreate) -> ChannelPost:
+    db_obj = ChannelPost(
+        group_id=obj_in.group_id,
+        post_id=obj_in.post_id,
+        message=obj_in.message,
+        views=obj_in.views,
+        forwards=obj_in.forwards,
+        replies=obj_in.replies,
+        posted_at=obj_in.posted_at,
+    )
+    db.add(db_obj)
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
+
+
+def create_posts_bulk(db: Session, *, posts: List[ChannelPostCreate]) -> None:
+    db_objs = [
+        ChannelPost(
+            group_id=post.group_id,
+            post_id=post.post_id,
+            message=post.message,
+            views=post.views,
+            forwards=post.forwards,
+            replies=post.replies,
+            posted_at=post.posted_at,
+        )
+        for post in posts
+    ]
+    db.bulk_save_objects(db_objs)
+    db.commit()
+
+
+def get_comment_by_id(db: Session, comment_id: int) -> Optional[PostComment]:
+    return db.query(PostComment).filter(PostComment.id == comment_id).first()
+
+
+def get_comments_by_post(db: Session, post_id: int) -> List[PostComment]:
+    return db.query(PostComment).filter(PostComment.post_id == post_id).all()
+
+
+def create_comment(db: Session, *, obj_in: PostCommentCreate) -> PostComment:
+    db_obj = PostComment(
+        post_id=obj_in.post_id,
+        user_id=obj_in.user_id,
+        username=obj_in.username,
+        first_name=obj_in.first_name,
+        last_name=obj_in.last_name,
+        message=obj_in.message,
+        replied_to_id=obj_in.replied_to_id,
+        commented_at=obj_in.commented_at,
+    )
+    db.add(db_obj)
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
+
+
+def create_comments_bulk(db: Session, *, comments: List[PostCommentCreate]) -> None:
+    db_objs = [
+        PostComment(
+            post_id=comment.post_id,
+            user_id=comment.user_id,
+            username=comment.username,
+            first_name=comment.first_name,
+            last_name=comment.last_name,
+            message=comment.message,
+            replied_to_id=comment.replied_to_id,
+            commented_at=comment.commented_at,
+        )
+        for comment in comments
+    ]
+    db.bulk_save_objects(db_objs)
     db.commit() 

@@ -20,6 +20,7 @@ class User(Base):
     # Relationships
     telegram_tokens = relationship("TelegramToken", back_populates="user")
     parsed_groups = relationship("ParsedGroup", back_populates="user")
+    telegram_sessions = relationship("TelegramSession", back_populates="user")
 
 
 class TelegramToken(Base):
@@ -54,6 +55,7 @@ class ParsedGroup(Base):
     # Relationships
     user = relationship("User", back_populates="parsed_groups")
     members = relationship("GroupMember", back_populates="group")
+    posts = relationship("ChannelPost", back_populates="group")
 
 
 class GroupMember(Base):
@@ -71,4 +73,56 @@ class GroupMember(Base):
     is_premium = Column(Boolean, default=False)
     
     # Relationships
-    group = relationship("ParsedGroup", back_populates="members") 
+    group = relationship("ParsedGroup", back_populates="members")
+
+
+class TelegramSession(Base):
+    __tablename__ = "telegram_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    phone = Column(String)
+    session_string = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="telegram_sessions")
+
+
+class ChannelPost(Base):
+    __tablename__ = "channel_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("parsed_groups.id"))
+    post_id = Column(String, index=True)
+    message = Column(Text)
+    views = Column(Integer, default=0)
+    forwards = Column(Integer, default=0)
+    replies = Column(Integer, default=0)
+    posted_at = Column(DateTime(timezone=True))
+    parsed_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    group = relationship("ParsedGroup", back_populates="posts")
+    comments = relationship("PostComment", back_populates="post")
+
+
+class PostComment(Base):
+    __tablename__ = "post_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("channel_posts.id"))
+    user_id = Column(String, index=True)
+    username = Column(String, nullable=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    message = Column(Text)
+    replied_to_id = Column(Integer, ForeignKey("post_comments.id"), nullable=True)
+    commented_at = Column(DateTime(timezone=True))
+    parsed_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    post = relationship("ChannelPost", back_populates="comments")
+    replied_to = relationship("PostComment", remote_side=[id], backref="replies") 

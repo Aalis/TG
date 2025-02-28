@@ -53,10 +53,25 @@ export const tokensAPI = {
 
 // Telegram Groups API
 export const groupsAPI = {
-  getAll: () => api.get('/telegram/groups/'),
-  getById: (id) => api.get(`/telegram/groups/${id}`),
-  delete: (id) => api.delete(`/telegram/groups/${id}`),
+  getAll: () => api.get('/telegram/parsed-groups/'),
+  getById: (id) => api.get(`/telegram/parsed-groups/${id}`),
+  delete: (id) => api.delete(`/telegram/parsed-groups/${id}`),
   parseGroup: (groupLink) => api.post('/telegram/parse-group/', { group_link: groupLink }),
+};
+
+// Telegram Channels API
+export const channelsAPI = {
+  parseChannel: (channelLink) => api.post('/telegram/parse-channel/', { channel_link: channelLink }),
+  getPosts: (groupId) => api.get(`/telegram/groups/${groupId}/posts/`),
+  getComments: (postId) => api.get(`/telegram/posts/${postId}/comments/`),
+};
+
+// Telegram Sessions API
+export const sessionsAPI = {
+  getAll: () => api.get('/telegram-sessions/'),
+  create: (phoneNumber) => api.post('/telegram-sessions/', { phone_number: phoneNumber }),
+  update: (id, isActive) => api.patch(`/telegram-sessions/${id}`, { is_active: isActive }),
+  delete: (id) => api.delete(`/telegram-sessions/${id}`),
 };
 
 export default api; 

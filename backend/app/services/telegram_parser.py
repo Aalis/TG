@@ -2,17 +2,19 @@ import re
 import os
 import random
 from typing import List, Optional, Tuple, Dict, Any
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 from telethon import TelegramClient
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetDialogsRequest
-from telethon.tl.types import InputPeerEmpty, ChannelParticipantsAdmins, Channel, User as TelegramUser
+from telethon.tl.types import InputPeerEmpty, ChannelParticipantsAdmins, Channel, User as TelegramUser, Message
 from telethon.errors import SessionPasswordNeededError, FloodWaitError, UserDeactivatedBanError
 
 from app import crud
-from app.schemas.telegram import ParsedGroupCreate, GroupMemberCreate
+from app.schemas.telegram import ParsedGroupCreate, GroupMemberCreate, ChannelPostCreate, PostCommentCreate
 from app.database.models import ParsedGroup
+from app.core.config import settings
 
 
 class TelegramParserService:
@@ -263,3 +265,114 @@ class TelegramParserService:
         if last_error:
             raise last_error
         return None 
+
+    async def _get_channel_posts(self, channel_entity: Channel, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get posts from a channel"""
+        posts = []
+        try:
+            async for message in self.client.iter_messages(channel_entity, limit=limit):
+                if not isinstance(message, Message):
+                    continue
+                
+                post = {
+                    "post_id": str(message.id),
+                    "message": message.message or "",
+                    "views": getattr(message, "views", 0),
+                    "forwards": getattr(message, "forwards", 0),
+                    "replies": getattr(message.replies, "replies", 0) if message.replies else 0,
+                    "posted_at": message.date,
+                }
+                posts.append(post)
+        except Exception as e:
+            print(f"Error getting channel posts: {e}")
+            raise
+        
+        return posts
+
+    async def _get_post_comments(self, channel_entity: Channel, message_id: int) -> List[Dict[str, Any]]:
+        """Get comments for a specific post"""
+        comments = []
+        try:
+            async for reply in self.client.iter_messages(channel_entity, reply_to=message_id):
+                if not isinstance(reply, Message):
+                    continue
+                
+                sender = await reply.get_sender()
+                comment = {
+                    "user_id": str(sender.id),
+                    "username": sender.username,
+                    "first_name": sender.first_name,
+                    "last_name": sender.last_name,
+                    "message": reply.message or "",
+                    "replied_to_id": reply.reply_to_msg_id if reply.reply_to_msg_id != message_id else None,
+                    "commented_at": reply.date,
+                }
+                comments.append(comment)
+        except Exception as e:
+            print(f"Error getting post comments: {e}")
+            raise
+        
+        return comments
+
+    async def parse_channel(self, db: Session, channel_link: str, user_id: int) -> ParsedGroup:
+        """Parse a Telegram channel"""
+        try:
+            await self._connect()
+            
+            # Extract channel ID from link
+            channel_id = await self._extract_group_id(channel_link)
+            
+            # Check if channel was already parsed
+            existing_group = crud.get_group_by_telegram_id(db, channel_id, user_id)
+            if existing_group:
+                return existing_group
+            
+            # Get channel entity
+            channel_entity, is_channel = await self._get_group_entity(channel_id)
+            if not is_channel:
+                raise ValueError("The provided link is not a channel")
+            
+            # Create group record
+            group_data = ParsedGroupCreate(
+                group_id=str(channel_entity.id),
+                group_name=channel_entity.title,
+                group_username=channel_entity.username,
+                member_count=channel_entity.participants_count if hasattr(channel_entity, "participants_count") else 0,
+                is_public=not getattr(channel_entity, "restricted", False),
+            )
+            group = crud.create_group(db, obj_in=group_data, user_id=user_id)
+            
+            # Get channel posts
+            posts = await self._get_channel_posts(channel_entity)
+            
+            # Create posts in bulk
+            post_creates = [
+                ChannelPostCreate(
+                    group_id=group.id,
+                    **post
+                )
+                for post in posts
+            ]
+            crud.create_posts_bulk(db, posts=post_creates)
+            
+            # Get comments for each post
+            for post in posts:
+                comments = await self._get_post_comments(channel_entity, int(post["post_id"]))
+                if comments:
+                    # Create comments in bulk
+                    comment_creates = [
+                        PostCommentCreate(
+                            post_id=post["id"],
+                            **comment
+                        )
+                        for comment in comments
+                    ]
+                    crud.create_comments_bulk(db, comments=comment_creates)
+            
+            return group
+            
+        except Exception as e:
+            print(f"Error parsing channel: {e}")
+            raise
+        finally:
+            await self._disconnect() 

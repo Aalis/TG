@@ -26,7 +26,7 @@ class TelegramTokenInDBBase(TelegramTokenBase):
     updated_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class TelegramToken(TelegramTokenInDBBase):
@@ -52,7 +52,7 @@ class GroupMember(GroupMemberBase):
     group_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ParsedGroupBase(BaseModel):
@@ -74,7 +74,7 @@ class ParsedGroup(ParsedGroupBase):
     members: List[GroupMember] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class GroupParseRequest(BaseModel):
@@ -82,6 +82,63 @@ class GroupParseRequest(BaseModel):
 
 
 class GroupParseResponse(BaseModel):
+    success: bool
+    message: str
+    group: Optional[ParsedGroup] = None
+
+
+class PostCommentBase(BaseModel):
+    user_id: str
+    username: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    message: str
+    replied_to_id: Optional[int] = None
+    commented_at: datetime
+
+
+class PostCommentCreate(PostCommentBase):
+    post_id: int
+
+
+class PostComment(PostCommentBase):
+    id: int
+    post_id: int
+    parsed_at: datetime
+    replies: List['PostComment'] = []
+
+    class Config:
+        from_attributes = True
+
+
+class ChannelPostBase(BaseModel):
+    post_id: str
+    message: str
+    views: int = 0
+    forwards: int = 0
+    replies: int = 0
+    posted_at: datetime
+
+
+class ChannelPostCreate(ChannelPostBase):
+    group_id: int
+
+
+class ChannelPost(ChannelPostBase):
+    id: int
+    group_id: int
+    parsed_at: datetime
+    comments: List[PostComment] = []
+
+    class Config:
+        from_attributes = True
+
+
+class ChannelParseRequest(BaseModel):
+    channel_link: str
+
+
+class ChannelParseResponse(BaseModel):
     success: bool
     message: str
     group: Optional[ParsedGroup] = None 
