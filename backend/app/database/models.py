@@ -68,6 +68,7 @@ class GroupMember(Base):
     phone = Column(String, nullable=True)
     is_bot = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
+    is_premium = Column(Boolean, default=False)
     
     # Relationships
     group = relationship("ParsedGroup", back_populates="members") 

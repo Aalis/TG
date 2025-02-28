@@ -34,11 +34,15 @@ run_backend() {
     echo "Installing minimal dependencies..."
     pip install --upgrade pip
     pip install wheel
-    pip install python-dotenv psycopg2-binary fastapi uvicorn pyjwt passlib python-multipart
+    pip install python-dotenv psycopg2-binary fastapi uvicorn pyjwt passlib python-multipart telethon
     
-    # Run the simplified application
-    echo "Running simplified backend application..."
-    python simple_run.py
+    # Set debug level for uvicorn
+    export PYTHONUNBUFFERED=1
+    export UVICORN_LOG_LEVEL=debug
+    
+    # Run the simplified application with debug output
+    echo "Running backend application with debug output..."
+    python run.py
 }
 
 # Function to run the frontend

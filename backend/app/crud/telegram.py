@@ -101,6 +101,7 @@ def create_member(db: Session, *, obj_in: GroupMemberCreate) -> GroupMember:
         last_name=obj_in.last_name,
         is_bot=obj_in.is_bot,
         is_admin=obj_in.is_admin,
+        is_premium=obj_in.is_premium,
     )
     db.add(db_obj)
     db.commit()
@@ -118,6 +119,7 @@ def create_members_bulk(db: Session, *, members: List[GroupMemberCreate]) -> Non
             last_name=member.last_name,
             is_bot=member.is_bot,
             is_admin=member.is_admin,
+            is_premium=member.is_premium,
         )
         for member in members
     ]

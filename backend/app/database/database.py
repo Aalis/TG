@@ -5,7 +5,8 @@ from sqlalchemy.pool import QueuePool
 
 from app.core.config import settings
 
-SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
+# Convert PostgresDsn to string for SQLAlchemy
+SQLALCHEMY_DATABASE_URL = str(settings.DATABASE_URL)
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,

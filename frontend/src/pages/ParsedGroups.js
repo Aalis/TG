@@ -120,7 +120,7 @@ const ParsedGroups = () => {
         error: null,
       });
       
-      const response = await groupsAPI.parseGroup({ group_link: groupLink });
+      const response = await groupsAPI.parseGroup(groupLink.trim());
       
       if (response.data.success) {
         // Navigate to the group details page
@@ -142,10 +142,15 @@ const ParsedGroups = () => {
         });
       }
     } catch (err) {
+      // Extract error message from validation errors or use default message
+      const errorMessage = err.response?.data?.detail?.[0]?.msg || 
+                          err.response?.data?.detail || 
+                          'Failed to parse group. Please try again.';
+      
       setParsingStatus({
         loading: false,
         success: false,
-        error: err.response?.data?.detail || 'Failed to parse group. Please try again.',
+        error: errorMessage,
       });
     }
   };

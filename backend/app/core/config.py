@@ -23,10 +23,14 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: PostgresDsn
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
 
     # Telegram API
     API_ID: Optional[str] = None
     API_HASH: Optional[str] = None
+    TELEGRAM_BOT_TOKENS: str
 
     class Config:
         case_sensitive = True

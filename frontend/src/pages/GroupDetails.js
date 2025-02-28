@@ -298,21 +298,21 @@ const GroupDetails = () => {
                       )}
                     </TableCell>
                     <TableCell sx={{ width: '100px', height: '56px', padding: '12px' }} align="center">
-                      {member.username && (
-                        <Tooltip title="Send Message" placement="top">
-                          <IconButton
-                            color="primary"
-                            size="small"
-                            component="a"
-                            href={`https://t.me/${member.username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            sx={{ width: '32px', height: '32px' }}
-                          >
-                            <SendIcon sx={{ fontSize: '20px' }} />
-                          </IconButton>
-                        </Tooltip>
-                      )}
+                      <Tooltip title="Send Message" placement="top">
+                        <IconButton
+                          color="primary"
+                          size="small"
+                          component="a"
+                          href={member.username ? 
+                            `https://t.me/${member.username}` : 
+                            `https://web.telegram.org/a/#/profile/${member.user_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          sx={{ width: '32px', height: '32px' }}
+                        >
+                          <SendIcon sx={{ fontSize: '20px' }} />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}

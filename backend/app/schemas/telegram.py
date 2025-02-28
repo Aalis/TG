@@ -40,6 +40,7 @@ class GroupMemberBase(BaseModel):
     last_name: Optional[str] = None
     is_bot: bool = False
     is_admin: bool = False
+    is_premium: bool = False
 
 
 class GroupMemberCreate(GroupMemberBase):

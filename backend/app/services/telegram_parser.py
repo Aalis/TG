@@ -118,26 +118,63 @@ class TelegramParserService:
         return None, False
 
     async def _get_group_members(self, group_entity: Channel) -> List[Dict[str, Any]]:
-        """Get all members of a group"""
+        """Get all members of a group."""
         members = []
+        admins = set()
         
-        # Get admins first
-        admins = []
-        async for admin in self.client.iter_participants(group_entity, filter=ChannelParticipantsAdmins):
-            admins.append(admin.id)
-        
-        # Get all participants
-        async for user in self.client.iter_participants(group_entity):
-            if isinstance(user, TelegramUser):
-                member = {
-                    "user_id": str(user.id),
-                    "username": user.username,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "is_bot": user.bot,
-                    "is_admin": user.id in admins,
-                }
-                members.append(member)
+        try:
+            print("\n" + "="*50)
+            print("STARTING GROUP MEMBER PARSING")
+            print("="*50)
+            
+            # Get admin list first
+            print("\nGetting admin list...")
+            async for admin in self.client.iter_participants(group_entity, filter=ChannelParticipantsAdmins):
+                admins.add(admin.id)
+            print(f"Found {len(admins)} admins")
+            
+            # Get all members
+            member_count = 0
+            print("\nGetting all members...")
+            async for member in self.client.iter_participants(group_entity):
+                if isinstance(member, TelegramUser):
+                    member_count += 1
+                    print("\n" + "-"*30)
+                    print(f"MEMBER #{member_count}")
+                    print(f"ID: {member.id}")
+                    print(f"Username: {member.username}")
+                    print(f"Premium: {getattr(member, 'premium', None)}")
+                    print(f"Premium Type: {type(getattr(member, 'premium', None))}")
+                    print("Available attributes:")
+                    for attr in dir(member):
+                        if not attr.startswith('_'):
+                            try:
+                                value = getattr(member, attr)
+                                print(f"  {attr}: {value}")
+                            except:
+                                continue
+                    
+                    member_data = {
+                        "user_id": str(member.id),
+                        "username": member.username,
+                        "first_name": member.first_name,
+                        "last_name": member.last_name,
+                        "phone": getattr(member, 'phone', None),
+                        "is_bot": member.bot,
+                        "is_admin": member.id in admins,
+                        "is_premium": bool(getattr(member, 'premium', False))
+                    }
+                    print(f"\nProcessed data: {member_data}")
+                    members.append(member_data)
+            
+            print("\n" + "="*50)
+            print(f"FINISHED PARSING {member_count} MEMBERS")
+            print("="*50 + "\n")
+            
+        except Exception as e:
+            print(f"\nERROR getting members: {str(e)}")
+            print(f"Error type: {type(e)}")
+            raise
         
         return members
 
@@ -200,6 +237,7 @@ class TelegramParserService:
                         last_name=member["last_name"],
                         is_bot=member["is_bot"],
                         is_admin=member["is_admin"],
+                        is_premium=member["is_premium"]
                     )
                     member_objects.append(member_data)
                 
