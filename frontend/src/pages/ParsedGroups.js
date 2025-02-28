@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -45,6 +45,7 @@ const ParsedGroups = () => {
     success: false,
     error: null,
   });
+  const navigate = useNavigate();
 
   // Fetch groups on component mount
   useEffect(() => {
@@ -102,9 +103,7 @@ const ParsedGroups = () => {
     }
   };
 
-  const handleParseGroup = async (e) => {
-    e.preventDefault();
-    
+  const handleParseGroup = async () => {
     if (!groupLink.trim()) {
       setParsingStatus({
         loading: false,
@@ -121,30 +120,20 @@ const ParsedGroups = () => {
         error: null,
       });
       
-      const response = await groupsAPI.parseGroup(groupLink);
+      const response = await groupsAPI.parseGroup({ group_link: groupLink });
       
       if (response.data.success) {
+        // Navigate to the group details page
+        navigate(`/groups/${response.data.group.id}`);
+        
+        // Close dialog and reset state
+        setParseDialogOpen(false);
+        setGroupLink('');
         setParsingStatus({
           loading: false,
           success: true,
           error: null,
         });
-        
-        // Refresh groups list
-        await fetchGroups();
-        
-        // Clear input
-        setGroupLink('');
-        
-        // Close dialog after a delay
-        setTimeout(() => {
-          setParseDialogOpen(false);
-          setParsingStatus({
-            loading: false,
-            success: false,
-            error: null,
-          });
-        }, 1500);
       } else {
         setParsingStatus({
           loading: false,

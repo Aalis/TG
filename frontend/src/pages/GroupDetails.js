@@ -20,6 +20,7 @@ import {
   Alert,
   Tooltip,
   Divider,
+  IconButton,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -28,6 +29,8 @@ import {
   AdminPanelSettings as AdminIcon,
   SmartToy as BotIcon,
   Download as DownloadIcon,
+  Send as SendIcon,
+  Verified as VerifiedIcon,
 } from '@mui/icons-material';
 import { groupsAPI } from '../services/api';
 
@@ -234,69 +237,80 @@ const GroupDetails = () => {
         />
         
         <TableContainer>
-          <Table>
+          <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead>
               <TableRow>
-                <TableCell>User</TableCell>
-                <TableCell>User ID</TableCell>
-                <TableCell>Username</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell align="center">Type</TableCell>
+                <TableCell width="60px" sx={{ minWidth: '60px', height: '56px', padding: '12px' }}>#</TableCell>
+                <TableCell width="120px" sx={{ minWidth: '120px', height: '56px', padding: '12px' }}>User ID</TableCell>
+                <TableCell width="150px" sx={{ minWidth: '150px', height: '56px', padding: '12px' }}>Username</TableCell>
+                <TableCell width="200px" sx={{ minWidth: '200px', height: '56px', padding: '12px' }}>Name</TableCell>
+                <TableCell width="120px" sx={{ minWidth: '120px', height: '56px', padding: '12px' }} align="center">Premium</TableCell>
+                <TableCell width="100px" sx={{ minWidth: '100px', height: '56px', padding: '12px' }} align="center">Message</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredMembers
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Avatar sx={{ mr: 2, bgcolor: member.is_admin ? 'primary.main' : (member.is_bot ? 'warning.main' : 'grey.500') }}>
-                          {member.is_admin ? <AdminIcon /> : (member.is_bot ? <BotIcon /> : <PersonIcon />)}
-                        </Avatar>
-                        <Typography variant="body2">
-                          {member.username ? `@${member.username}` : (member.first_name || 'Unknown User')}
-                        </Typography>
-                      </Box>
+                .map((member, index) => (
+                  <TableRow 
+                    key={member.user_id}
+                    sx={{ height: '56px' }}
+                  >
+                    <TableCell sx={{ width: '60px', height: '56px', padding: '12px' }}>
+                      {page * rowsPerPage + index + 1}
                     </TableCell>
-                    <TableCell>{member.user_id}</TableCell>
-                    <TableCell>{member.username || '-'}</TableCell>
-                    <TableCell>
-                      {member.first_name && member.last_name
-                        ? `${member.first_name} ${member.last_name}`
-                        : member.first_name || member.last_name || '-'}
+                    <TableCell sx={{ width: '120px', height: '56px', padding: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {member.user_id}
                     </TableCell>
-                    <TableCell align="center">
-                      {member.is_admin && (
-                        <Tooltip title="Admin">
-                          <Chip
-                            icon={<AdminIcon />}
-                            label="Admin"
-                            size="small"
-                            color="primary"
-                            variant="outlined"
-                          />
+                    <TableCell sx={{ width: '150px', height: '56px', padding: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {member.username ? (
+                        <Tooltip title="Open in Telegram" placement="top">
+                          <a
+                            href={`https://t.me/${member.username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ textDecoration: 'none', color: 'inherit', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          >
+                            @{member.username}
+                          </a>
                         </Tooltip>
+                      ) : (
+                        '-'
                       )}
-                      {member.is_bot && (
-                        <Tooltip title="Bot">
+                    </TableCell>
+                    <TableCell sx={{ width: '200px', height: '56px', padding: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {[member.first_name, member.last_name].filter(Boolean).join(' ') || '-'}
+                    </TableCell>
+                    <TableCell sx={{ width: '120px', height: '56px', padding: '12px' }} align="center">
+                      {member.is_premium ? (
+                        <Tooltip title="Premium User" placement="top">
                           <Chip
-                            icon={<BotIcon />}
-                            label="Bot"
+                            icon={<VerifiedIcon />}
+                            label="Premium"
                             size="small"
                             color="warning"
                             variant="outlined"
+                            sx={{ maxWidth: '100px', height: '24px' }}
                           />
                         </Tooltip>
+                      ) : (
+                        '-'
                       )}
-                      {!member.is_admin && !member.is_bot && (
-                        <Tooltip title="Member">
-                          <Chip
-                            icon={<PersonIcon />}
-                            label="Member"
+                    </TableCell>
+                    <TableCell sx={{ width: '100px', height: '56px', padding: '12px' }} align="center">
+                      {member.username && (
+                        <Tooltip title="Send Message" placement="top">
+                          <IconButton
+                            color="primary"
                             size="small"
-                            variant="outlined"
-                          />
+                            component="a"
+                            href={`https://t.me/${member.username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{ width: '32px', height: '32px' }}
+                          >
+                            <SendIcon sx={{ fontSize: '20px' }} />
+                          </IconButton>
                         </Tooltip>
                       )}
                     </TableCell>
@@ -304,9 +318,9 @@ const GroupDetails = () => {
                 ))}
               
               {filteredMembers.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    <Typography variant="body1" sx={{ py: 2 }}>
+                <TableRow sx={{ height: '56px' }}>
+                  <TableCell colSpan={6} align="center" sx={{ height: '56px', padding: '12px' }}>
+                    <Typography variant="body1">
                       No members found matching your search.
                     </Typography>
                   </TableCell>

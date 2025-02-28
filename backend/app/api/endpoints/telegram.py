@@ -2,9 +2,11 @@ from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from telethon.errors import FloodWaitError, UserDeactivatedBanError
 
 from app import crud
 from app.api import deps
+from app.core.config import settings
 from app.database.models import User
 from app.schemas.telegram import (
     TelegramToken,
@@ -141,31 +143,32 @@ async def parse_group(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Parse a Telegram group.
+    Parse a Telegram group using the bot token pool.
     """
-    tokens = crud.telegram.get_tokens_by_user(db, user_id=current_user.id)
-    if not tokens:
-        raise HTTPException(
-            status_code=400, detail="No Telegram tokens found. Please add your API credentials first."
-        )
-    
-    # Use the first available token
-    token = tokens[0]
-    
     parser = TelegramParserService(
-        api_id=token.api_id,
-        api_hash=token.api_hash,
-        bot_token=token.bot_token,
-        phone=token.phone,
-        session_string=token.session_string,
+        api_id=settings.API_ID,
+        api_hash=settings.API_HASH,
     )
     
     try:
         result = await parser.parse_group(db, request.group_link, current_user.id)
+        if result:
+            return {
+                "success": True,
+                "message": f"Successfully parsed group with {result.member_count} members",
+                "group": result
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to parse group: All bot tokens are exhausted or invalid",
+                "group": None
+            }
+    except (FloodWaitError, UserDeactivatedBanError) as e:
         return {
-            "success": True,
-            "message": f"Successfully parsed group with {result.member_count} members",
-            "group": result
+            "success": False,
+            "message": f"Rate limit exceeded: {str(e)}. Please try again later.",
+            "group": None
         }
     except Exception as e:
         return {
