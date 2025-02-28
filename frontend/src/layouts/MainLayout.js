@@ -17,6 +17,11 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -41,6 +46,7 @@ const MainLayout = () => {
   
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorElUser, setAnchorElUser] = useState(null);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -54,8 +60,13 @@ const MainLayout = () => {
     setAnchorElUser(null);
   };
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
     handleCloseUserMenu();
+    setLogoutDialogOpen(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    setLogoutDialogOpen(false);
     logout();
     navigate('/login');
   };
@@ -117,7 +128,7 @@ const MainLayout = () => {
           </ListItemIcon>
           <ListItemText primary="Profile" />
         </ListItem>
-        <ListItem button onClick={handleLogout}>
+        <ListItem button onClick={handleLogoutClick}>
           <ListItemIcon>
             <LogoutIcon />
           </ListItemIcon>
@@ -179,7 +190,7 @@ const MainLayout = () => {
               <MenuItem onClick={() => { handleCloseUserMenu(); navigate('/profile'); }}>
                 <Typography textAlign="center">Profile</Typography>
               </MenuItem>
-              <MenuItem onClick={handleLogout}>
+              <MenuItem onClick={handleLogoutClick}>
                 <Typography textAlign="center">Logout</Typography>
               </MenuItem>
             </Menu>
@@ -218,6 +229,28 @@ const MainLayout = () => {
         </Drawer>
       </Box>
       
+      {/* Logout Confirmation Dialog */}
+      <Dialog
+        open={logoutDialogOpen}
+        onClose={() => setLogoutDialogOpen(false)}
+        aria-labelledby="logout-dialog-title"
+      >
+        <DialogTitle id="logout-dialog-title">
+          Confirm Logout
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to log out? You will need to sign in again to access your account.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLogoutDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleLogoutConfirm} color="error" variant="contained">
+            Logout
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Box
         component="main"
         sx={{ 

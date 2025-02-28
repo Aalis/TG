@@ -236,7 +236,21 @@ const ParsedGroups = () => {
         <Grid container spacing={3}>
           {filteredGroups.map((group) => (
             <Grid item xs={12} sm={6} md={4} key={group.id}>
-              <Card className="card-hover">
+              <Card 
+                className="card-hover"
+                sx={{ 
+                  cursor: 'pointer',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    transition: 'transform 0.2s ease-in-out',
+                  }
+                }}
+                onClick={(e) => {
+                  // Prevent navigation if clicking delete button
+                  if (e.target.closest('button[data-delete]')) return;
+                  navigate(`/groups/${group.id}`);
+                }}
+              >
                 <CardContent>
                   <Typography variant="h6" noWrap gutterBottom>
                     {group.group_name}
@@ -268,22 +282,14 @@ const ParsedGroups = () => {
                 </CardContent>
                 
                 <CardActions>
-                  <Tooltip title="View Details">
-                    <Button
-                      component={RouterLink}
-                      to={`/groups/${group.id}`}
-                      size="small"
-                      color="primary"
-                      startIcon={<ViewIcon />}
-                    >
-                      View Details
-                    </Button>
-                  </Tooltip>
-                  
                   <Box sx={{ flexGrow: 1 }} />
                   
                   <Tooltip title="Delete">
-                    <IconButton color="error" onClick={() => handleDeleteClick(group)}>
+                    <IconButton 
+                      color="error" 
+                      onClick={() => handleDeleteClick(group)}
+                      data-delete="true"
+                    >
                       <DeleteIcon />
                     </IconButton>
                   </Tooltip>
