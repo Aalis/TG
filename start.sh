@@ -34,19 +34,36 @@ port_in_use() {
 # Function to kill process using a specific port
 kill_process_on_port() {
     local port=$1
-    local pid=$(lsof -t -i:"$port" 2>/dev/null)
+    local pids=$(lsof -t -i:"$port" 2>/dev/null)
     
-    if [ -n "$pid" ]; then
-        echo -e "${YELLOW}Found process (PID: $pid) using port $port. Stopping it...${NC}"
-        kill -9 "$pid" 2>/dev/null
-        sleep 1
+    if [ -n "$pids" ]; then
+        echo -e "${YELLOW}Found process(es) using port $port. Stopping them...${NC}"
+        for pid in $pids; do
+            echo -e "${YELLOW}Killing process with PID: $pid${NC}"
+            kill -9 "$pid" 2>/dev/null
+        done
+        
+        # Wait to ensure the port is released
+        sleep 2
+        
+        # Verify the port is now free
+        if port_in_use "$port"; then
+            echo -e "${RED}Failed to free up port $port. Please check manually.${NC}"
+            return 1
+        else
+            echo -e "${GREEN}Successfully freed port $port${NC}"
+            return 0
+        fi
     fi
+    
+    return 0
 }
 
 # Kill any existing servers
 echo -e "${BLUE}Stopping any existing servers...${NC}"
 pkill -f "python simple_run.py" 2>/dev/null
 pkill -f "npm start" 2>/dev/null
+sleep 2
 
 # Check and clear port 3000 (React default)
 if port_in_use 3000; then
@@ -54,10 +71,12 @@ if port_in_use 3000; then
     read -p "Do you want to kill the process using port 3000? (y/n) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        kill_process_on_port 3000
+        if ! kill_process_on_port 3000; then
+            echo -e "${YELLOW}Could not free port 3000. Frontend will attempt to use a different port.${NC}"
+            export PORT=0
+        fi
     else
         echo -e "${YELLOW}Frontend will attempt to use a different port.${NC}"
-        # Set environment variable to allow React to use a different port
         export PORT=0
     fi
 fi
@@ -68,7 +87,10 @@ if port_in_use 8000; then
     read -p "Do you want to kill the process using port 8000? (y/n) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        kill_process_on_port 8000
+        if ! kill_process_on_port 8000; then
+            echo -e "${RED}Cannot start backend on port 8000. Please free up the port manually and try again.${NC}"
+            exit 1
+        fi
     else
         echo -e "${RED}Cannot start backend on port 8000. Please free up the port and try again.${NC}"
         exit 1
@@ -96,6 +118,11 @@ cleanup() {
     echo -e "${BLUE}Stopping servers...${NC}"
     kill $BACKEND_PID 2>/dev/null
     kill $FRONTEND_PID 2>/dev/null
+    
+    # Kill any remaining processes
+    pkill -f "python simple_run.py" 2>/dev/null
+    pkill -f "npm start" 2>/dev/null
+    
     echo -e "${GREEN}Servers stopped${NC}"
     exit 0
 }

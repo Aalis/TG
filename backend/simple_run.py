@@ -5,7 +5,7 @@ import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
@@ -72,6 +72,11 @@ class User(BaseModel):
     is_active: bool = True
     is_superuser: bool = False
 
+class UserCreate(BaseModel):
+    email: EmailStr
+    username: str
+    password: str
+
 class UserInDB(User):
     hashed_password: str
 
@@ -108,6 +113,62 @@ def get_user(username: str):
             return UserInDB(**user_record)
     except Exception as e:
         print(f"Error getting user: {e}")
+    
+    return None
+
+def get_user_by_email(email: str):
+    conn = get_db_connection()
+    if not conn:
+        return None
+    
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user_record = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if user_record:
+            return UserInDB(**user_record)
+    except Exception as e:
+        print(f"Error getting user by email: {e}")
+    
+    return None
+
+def create_user_in_db(user_data: UserCreate):
+    conn = get_db_connection()
+    if not conn:
+        return None
+    
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        hashed_password = get_password_hash(user_data.password)
+        
+        # Insert the new user
+        cursor.execute(
+            """
+            INSERT INTO users (email, username, hashed_password, is_active, is_superuser, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, email, username, is_active, is_superuser, created_at
+            """,
+            (
+                user_data.email,
+                user_data.username,
+                hashed_password,
+                True,  # is_active
+                False,  # is_superuser
+                datetime.now(),  # created_at
+            ),
+        )
+        
+        new_user = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if new_user:
+            return User(**new_user)
+    except Exception as e:
+        print(f"Error creating user: {e}")
     
     return None
 
@@ -148,6 +209,34 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Telegram Group Parser API", "docs": "/docs"}
+
+@app.post("/api/v1/users/", response_model=User)
+async def create_user(user_data: UserCreate):
+    # Check if user with this email already exists
+    existing_user = get_user_by_email(user_data.email)
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="The user with this email already exists in the system.",
+        )
+    
+    # Check if user with this username already exists
+    existing_user = get_user(user_data.username)
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="The user with this username already exists in the system.",
+        )
+    
+    # Create new user
+    new_user = create_user_in_db(user_data)
+    if not new_user:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create user. Please try again later.",
+        )
+    
+    return new_user
 
 @app.post("/api/v1/login/access-token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):

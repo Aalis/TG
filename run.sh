@@ -54,8 +54,21 @@ run_frontend() {
     
     # Start the development server
     echo "Starting React development server..."
-    # If PORT is set to 0, React will automatically find an available port
-    npm start
+    
+    # Check if PORT environment variable is set
+    if [ -n "$PORT" ]; then
+        echo "Using port: $PORT (0 means auto-select available port)"
+        npm start
+    else
+        # Check if port 3000 is in use
+        if lsof -i:3000 >/dev/null 2>&1; then
+            echo "Port 3000 is already in use. React will attempt to use a different port."
+            # Setting PORT=0 tells React to find an available port
+            PORT=0 npm start
+        else
+            npm start
+        fi
+    fi
 }
 
 # Function to initialize the database
