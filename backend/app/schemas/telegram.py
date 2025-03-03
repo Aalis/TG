@@ -1,6 +1,7 @@
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
+from pydantic import validator
 
 
 class TelegramTokenBase(BaseModel):
@@ -61,6 +62,7 @@ class ParsedGroupBase(BaseModel):
     group_username: Optional[str] = None
     member_count: int = 0
     is_public: bool = True
+    is_channel: bool = False
 
 
 class ParsedGroupCreate(ParsedGroupBase):
@@ -136,6 +138,15 @@ class ChannelPost(ChannelPostBase):
 
 class ChannelParseRequest(BaseModel):
     channel_link: str
+    post_limit: int = 100  # Default to 100 posts if not specified
+
+    @validator('post_limit')
+    def validate_post_limit(cls, v):
+        if v <= 0:
+            raise ValueError('post_limit must be greater than 0')
+        if v > 100:
+            raise ValueError('post_limit cannot exceed 100')
+        return v
 
 
 class ChannelParseResponse(BaseModel):

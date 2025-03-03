@@ -3,7 +3,8 @@ from datetime import datetime
 from typing import Optional
 
 class TelegramSessionBase(BaseModel):
-    phone_number: str
+    phone: str
+    session_string: Optional[str] = None
 
 class TelegramSessionCreate(TelegramSessionBase):
     pass
@@ -16,7 +17,7 @@ class TelegramSessionResponse(TelegramSessionBase):
     user_id: int
     is_active: bool
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True 

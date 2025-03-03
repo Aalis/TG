@@ -3,14 +3,32 @@ from sqlalchemy.orm import Session
 from typing import List, Dict
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
+from telethon.sessions import StringSession
+import asyncio
 
-from ..database.database import get_db
-from ..database.models import TelegramSession, User
-from ..schemas.telegram_sessions import TelegramSessionCreate, TelegramSessionResponse, TelegramSessionUpdate
-from ..api.deps import get_current_active_user
-from ..core.config import settings
+from app.database.database import get_db
+from app.database.models import TelegramSession, User
+from app.schemas.telegram_sessions import TelegramSessionCreate, TelegramSessionResponse, TelegramSessionUpdate
+from app.api.deps import get_current_active_user
+from app.core.config import settings
 
 router = APIRouter()
+
+# Store client instances temporarily (in production, you might want to use Redis)
+temp_clients = {}
+
+def create_client(phone_number: str) -> TelegramClient:
+    """Create a new Telethon client with consistent parameters"""
+    return TelegramClient(
+        StringSession(),
+        api_id=settings.API_ID,
+        api_hash=settings.API_HASH,
+        device_model="Desktop",
+        system_version="Windows 10",
+        app_version="1.0.0",
+        lang_code="en",
+        system_lang_code="en"
+    )
 
 @router.get("/", response_model=List[TelegramSessionResponse])
 async def get_sessions(
@@ -102,21 +120,21 @@ async def verify_phone(
         raise HTTPException(status_code=400, detail="Phone number is required")
 
     try:
-        # Create Telethon client
-        client = TelegramClient(
-            f"session_{phone_number}",
-            settings.API_ID,
-            settings.API_HASH
-        )
+        # Create and store client
+        client = create_client(phone_number)
+        temp_clients[phone_number] = client
         
         # Connect and send code
+        print(f"Connecting to Telegram for phone {phone_number}...")
         await client.connect()
         sent = await client.send_code_request(phone_number)
-        await client.disconnect()
         
-        # Store phone_code_hash temporarily (you might want to use Redis for this in production)
+        # Don't disconnect, keep the client for verification
         return {"phone_code_hash": sent.phone_code_hash}
     except Exception as e:
+        if phone_number in temp_clients:
+            await temp_clients[phone_number].disconnect()
+            del temp_clients[phone_number]
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/verify-code/")
@@ -126,33 +144,52 @@ async def verify_code(
     db: Session = Depends(get_db)
 ):
     """Verify the code and generate session string."""
+    print("Received verification data:", verification_data)
+    
     phone_number = verification_data.get("phone_number")
     code = verification_data.get("code")
     phone_code_hash = verification_data.get("phone_code_hash")
-    password = verification_data.get("password")  # For 2FA if needed
+    password = verification_data.get("password")
+    
+    print("Extracted fields:")
+    print(f"Phone number: {phone_number}")
+    print(f"Code: {code}")
+    print(f"Phone code hash: {phone_code_hash}")
+    print(f"Password present: {bool(password)}")
     
     if not all([phone_number, code, phone_code_hash]):
-        raise HTTPException(status_code=400, detail="Missing required fields")
+        missing_fields = []
+        if not phone_number: missing_fields.append("phone_number")
+        if not code: missing_fields.append("code")
+        if not phone_code_hash: missing_fields.append("phone_code_hash")
+        error_msg = f"Missing required fields: {', '.join(missing_fields)}"
+        print("Validation error:", error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
 
     try:
-        # Create Telethon client
-        client = TelegramClient(
-            f"session_{phone_number}",
-            settings.API_ID,
-            settings.API_HASH
-        )
-        
-        # Connect and sign in
-        await client.connect()
+        # Get existing client or create new one
+        client = temp_clients.get(phone_number)
+        if not client:
+            print("Creating new client as no existing client found...")
+            client = create_client(phone_number)
+            await client.connect()
+        elif not client.is_connected():
+            print("Reconnecting existing client...")
+            await client.connect()
+            
         try:
+            print("Attempting to sign in...")
+            print(f"Using API ID: {settings.API_ID}")
+            print(f"Using API Hash: {settings.API_HASH[:4]}...")
             await client.sign_in(
                 phone_number,
                 code,
                 phone_code_hash=phone_code_hash
             )
+            print("Sign in successful!")
         except SessionPasswordNeededError:
+            print("2FA password required")
             if not password:
-                await client.disconnect()
                 raise HTTPException(
                     status_code=400,
                     detail="Two-factor authentication required"
@@ -160,8 +197,14 @@ async def verify_code(
             await client.sign_in(password=password)
         
         # Get the session string
+        print("Getting session string...")
         session_string = client.session.save()
         await client.disconnect()
+        print("Client disconnected successfully")
+        
+        # Clean up temp client
+        if phone_number in temp_clients:
+            del temp_clients[phone_number]
         
         # Update or create session in database
         session = db.query(TelegramSession).filter(
@@ -186,4 +229,14 @@ async def verify_code(
         
         return {"message": "Session created successfully"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) 
+        # Clean up on error
+        if phone_number in temp_clients:
+            await temp_clients[phone_number].disconnect()
+            del temp_clients[phone_number]
+        error_message = str(e)
+        if "confirmation code has expired" in error_message.lower():
+            raise HTTPException(
+                status_code=400,
+                detail="The verification code has expired. Please request a new code and try again quickly."
+            )
+        raise HTTPException(status_code=400, detail=error_message) 

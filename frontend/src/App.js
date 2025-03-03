@@ -18,6 +18,7 @@ import ParsedChannels from './pages/ParsedChannels';
 import GroupDetails from './pages/GroupDetails';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
+import ChannelDetails from './pages/ChannelDetails';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -55,6 +56,7 @@ function App() {
           <Route path="groups" element={<ParsedGroups />} />
           <Route path="groups/:id" element={<GroupDetails />} />
           <Route path="channels" element={<ParsedChannels />} />
+          <Route path="channels/:id" element={<ChannelDetails />} />
           <Route path="profile" element={<Profile />} />
         </Route>
         

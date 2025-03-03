@@ -19,6 +19,9 @@ import {
   IconButton,
   Box,
   CircularProgress,
+  Stepper,
+  Step,
+  StepLabel,
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import { sessionsAPI } from '../services/api';
@@ -28,9 +31,16 @@ const TelegramSessions = () => {
   const [sessions, setSessions] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [twoFactorPassword, setTwoFactorPassword] = useState('');
+  const [phoneCodeHash, setPhoneCodeHash] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [activeStep, setActiveStep] = useState(0);
+  const [needsPassword, setNeedsPassword] = useState(false);
+
+  const steps = ['Enter Phone Number', 'Verify Code', 'Complete'];
 
   // Fetch sessions on component mount
   useEffect(() => {
@@ -50,15 +60,26 @@ const TelegramSessions = () => {
   const handleAddSession = () => {
     setOpenDialog(true);
     setError('');
+    setActiveStep(0);
+    setPhoneNumber('');
+    setVerificationCode('');
+    setTwoFactorPassword('');
+    setPhoneCodeHash('');
+    setNeedsPassword(false);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setPhoneNumber('');
+    setVerificationCode('');
+    setTwoFactorPassword('');
+    setPhoneCodeHash('');
+    setActiveStep(0);
     setError('');
+    setNeedsPassword(false);
   };
 
-  const handleSubmit = async () => {
+  const handleSendCode = async () => {
     if (!phoneNumber) {
       setError('Phone number is required');
       return;
@@ -66,13 +87,54 @@ const TelegramSessions = () => {
 
     setLoading(true);
     try {
-      await sessionsAPI.create(phoneNumber);
+      const { data } = await sessionsAPI.verifyPhone(phoneNumber);
+      setPhoneCodeHash(data.phone_code_hash);
+      setActiveStep(1);
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to send verification code');
+      console.error('Error sending code:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!verificationCode) {
+      setError('Verification code is required');
+      return;
+    }
+
+    console.log('Sending verification request with data:', {  // Debug log
+      phoneNumber,
+      verificationCode,
+      phoneCodeHash,
+      needsPassword,
+      twoFactorPassword,
+    });
+
+    setLoading(true);
+    try {
+      await sessionsAPI.verifyCode(
+        phoneNumber,
+        verificationCode,
+        phoneCodeHash,
+        needsPassword ? twoFactorPassword : undefined
+      );
       await fetchSessions();
       setSuccess('Session added successfully');
       handleCloseDialog();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to add session');
-      console.error('Error adding session:', err);
+      console.error('Full error object:', err);  // Debug log
+      console.error('Error response data:', err.response?.data);  // Debug log
+      const errorMessage = err.response?.data?.detail;
+      if (errorMessage === 'Two-factor authentication required') {
+        setNeedsPassword(true);
+        setError('Please enter your two-factor authentication password');
+      } else {
+        setError(errorMessage || 'Failed to verify code');
+      }
+      console.error('Error verifying code:', err);
     } finally {
       setLoading(false);
     }
@@ -97,6 +159,81 @@ const TelegramSessions = () => {
     } catch (err) {
       setError('Failed to update session status');
       console.error('Error updating session status:', err);
+    }
+  };
+
+  const renderDialogContent = () => {
+    switch (activeStep) {
+      case 0:
+        return (
+          <>
+            <DialogContent>
+              <TextField
+                autoFocus
+                margin="dense"
+                label="Phone Number"
+                type="text"
+                fullWidth
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="+1234567890"
+                disabled={loading}
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseDialog}>Cancel</Button>
+              <Button
+                onClick={handleSendCode}
+                variant="contained"
+                color="primary"
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Send Code'}
+              </Button>
+            </DialogActions>
+          </>
+        );
+      case 1:
+        return (
+          <>
+            <DialogContent>
+              <TextField
+                autoFocus
+                margin="dense"
+                label="Verification Code"
+                type="text"
+                fullWidth
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value)}
+                disabled={loading}
+              />
+              {needsPassword && (
+                <TextField
+                  margin="dense"
+                  label="Two-Factor Password"
+                  type="password"
+                  fullWidth
+                  value={twoFactorPassword}
+                  onChange={(e) => setTwoFactorPassword(e.target.value)}
+                  disabled={loading}
+                />
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setActiveStep(0)}>Back</Button>
+              <Button
+                onClick={handleVerifyCode}
+                variant="contained"
+                color="primary"
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : 'Verify Code'}
+              </Button>
+            </DialogActions>
+          </>
+        );
+      default:
+        return null;
     }
   };
 
@@ -140,7 +277,7 @@ const TelegramSessions = () => {
           <TableBody>
             {sessions.map((session) => (
               <TableRow key={session.id}>
-                <TableCell>{session.phone_number}</TableCell>
+                <TableCell>{session.phone}</TableCell>
                 <TableCell>
                   {format(new Date(session.created_at), 'MMM d, yyyy HH:mm')}
                 </TableCell>
@@ -175,32 +312,18 @@ const TelegramSessions = () => {
         </Table>
       </TableContainer>
 
-      <Dialog open={openDialog} onClose={handleCloseDialog}>
-        <DialogTitle>Add New Session</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Phone Number"
-            type="tel"
-            fullWidth
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-            error={!!error}
-            helperText={error}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button
-            onClick={handleSubmit}
-            color="primary"
-            disabled={loading}
-            startIcon={loading && <CircularProgress size={20} />}
-          >
-            Add
-          </Button>
-        </DialogActions>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Add Telegram Session
+          <Stepper activeStep={activeStep} sx={{ mt: 2 }}>
+            {steps.map((label) => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+        </DialogTitle>
+        {renderDialogContent()}
       </Dialog>
     </Paper>
   );
