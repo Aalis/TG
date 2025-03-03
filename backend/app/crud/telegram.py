@@ -57,7 +57,19 @@ def get_group_by_id(db: Session, group_id: int) -> Optional[ParsedGroup]:
 
 
 def get_groups_by_user(db: Session, user_id: int) -> List[ParsedGroup]:
-    return db.query(ParsedGroup).filter(ParsedGroup.user_id == user_id).all()
+    """Get all parsed groups (not channels) for a user"""
+    return db.query(ParsedGroup).filter(
+        ParsedGroup.user_id == user_id,
+        ParsedGroup.is_channel == False
+    ).all()
+
+
+def get_channels_by_user(db: Session, user_id: int) -> List[ParsedGroup]:
+    """Get all parsed channels for a user"""
+    return db.query(ParsedGroup).filter(
+        ParsedGroup.user_id == user_id,
+        ParsedGroup.is_channel == True
+    ).all()
 
 
 def get_group_by_telegram_id(db: Session, telegram_group_id: str, user_id: int) -> Optional[ParsedGroup]:
@@ -75,6 +87,7 @@ def create_group(db: Session, *, obj_in: ParsedGroupCreate, user_id: int) -> Par
         group_username=obj_in.group_username,
         member_count=obj_in.member_count,
         is_public=obj_in.is_public,
+        is_channel=obj_in.is_channel,
     )
     db.add(db_obj)
     db.commit()

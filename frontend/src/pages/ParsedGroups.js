@@ -71,8 +71,12 @@ const ParsedGroups = () => {
     try {
       setLoading(true);
       const response = await groupsAPI.getAll();
-      setGroups(response.data);
-      setFilteredGroups(response.data);
+      // Sort groups by parsed_at in descending order
+      const sortedGroups = response.data.sort((a, b) => 
+        new Date(b.parsed_at) - new Date(a.parsed_at)
+      );
+      setGroups(sortedGroups);
+      setFilteredGroups(sortedGroups);
       setError(null);
     } catch (err) {
       setError('Failed to load groups. Please try again.');

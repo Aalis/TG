@@ -61,9 +61,14 @@ export const groupsAPI = {
 
 // Telegram Channels API
 export const channelsAPI = {
-  parseChannel: (channelLink) => api.post('/telegram/parse-channel/', { channel_link: channelLink }),
+  getAll: () => api.get('/telegram/parsed-channels/'),
+  parseChannel: (channelLink, postLimit = 100) => api.post('/telegram/parse-channel/', { 
+    channel_link: channelLink,
+    post_limit: postLimit
+  }),
   getPosts: (groupId) => api.get(`/telegram/groups/${groupId}/posts/`),
   getComments: (postId) => api.get(`/telegram/posts/${postId}/comments/`),
+  deleteChannel: (channelId) => api.delete(`/telegram/parsed-channels/${channelId}`),
 };
 
 // Telegram Sessions API
@@ -72,6 +77,13 @@ export const sessionsAPI = {
   create: (phoneNumber) => api.post('/telegram-sessions/', { phone_number: phoneNumber }),
   update: (id, isActive) => api.patch(`/telegram-sessions/${id}`, { is_active: isActive }),
   delete: (id) => api.delete(`/telegram-sessions/${id}`),
+  verifyPhone: (phoneNumber) => api.post('/telegram-sessions/verify-phone/', { phone_number: phoneNumber }),
+  verifyCode: (phoneNumber, code, phoneCodeHash, password) => api.post('/telegram-sessions/verify-code/', {
+    phone_number: phoneNumber,
+    code,
+    phone_code_hash: phoneCodeHash,
+    password,
+  }),
 };
 
 export default api; 

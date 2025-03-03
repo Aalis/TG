@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict
+from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 
 from ..database.database import get_db
 from ..database.models import TelegramSession, User
 from ..schemas.telegram_sessions import TelegramSessionCreate, TelegramSessionResponse, TelegramSessionUpdate
 from ..api.deps import get_current_active_user
+from ..core.config import settings
 
 router = APIRouter()
 
@@ -85,4 +88,102 @@ async def update_session(
     db.commit()
     db.refresh(session)
     
-    return session 
+    return session
+
+@router.post("/verify-phone/")
+async def verify_phone(
+    phone_data: Dict[str, str],
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Send verification code to phone number."""
+    phone_number = phone_data.get("phone_number")
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="Phone number is required")
+
+    try:
+        # Create Telethon client
+        client = TelegramClient(
+            f"session_{phone_number}",
+            settings.API_ID,
+            settings.API_HASH
+        )
+        
+        # Connect and send code
+        await client.connect()
+        sent = await client.send_code_request(phone_number)
+        await client.disconnect()
+        
+        # Store phone_code_hash temporarily (you might want to use Redis for this in production)
+        return {"phone_code_hash": sent.phone_code_hash}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/verify-code/")
+async def verify_code(
+    verification_data: Dict[str, str],
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Verify the code and generate session string."""
+    phone_number = verification_data.get("phone_number")
+    code = verification_data.get("code")
+    phone_code_hash = verification_data.get("phone_code_hash")
+    password = verification_data.get("password")  # For 2FA if needed
+    
+    if not all([phone_number, code, phone_code_hash]):
+        raise HTTPException(status_code=400, detail="Missing required fields")
+
+    try:
+        # Create Telethon client
+        client = TelegramClient(
+            f"session_{phone_number}",
+            settings.API_ID,
+            settings.API_HASH
+        )
+        
+        # Connect and sign in
+        await client.connect()
+        try:
+            await client.sign_in(
+                phone_number,
+                code,
+                phone_code_hash=phone_code_hash
+            )
+        except SessionPasswordNeededError:
+            if not password:
+                await client.disconnect()
+                raise HTTPException(
+                    status_code=400,
+                    detail="Two-factor authentication required"
+                )
+            await client.sign_in(password=password)
+        
+        # Get the session string
+        session_string = client.session.save()
+        await client.disconnect()
+        
+        # Update or create session in database
+        session = db.query(TelegramSession).filter(
+            TelegramSession.user_id == current_user.id,
+            TelegramSession.phone == phone_number
+        ).first()
+        
+        if session:
+            session.session_string = session_string
+            session.is_active = True
+        else:
+            session = TelegramSession(
+                user_id=current_user.id,
+                phone=phone_number,
+                session_string=session_string,
+                is_active=True
+            )
+            db.add(session)
+        
+        db.commit()
+        db.refresh(session)
+        
+        return {"message": "Session created successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) 

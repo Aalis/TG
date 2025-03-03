@@ -50,6 +50,7 @@ class ParsedGroup(Base):
     group_username = Column(String, nullable=True)
     member_count = Column(Integer, default=0)
     is_public = Column(Boolean, default=True)
+    is_channel = Column(Boolean, default=False)
     parsed_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
@@ -85,7 +86,7 @@ class TelegramSession(Base):
     session_string = Column(Text)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
     user = relationship("User", back_populates="telegram_sessions")

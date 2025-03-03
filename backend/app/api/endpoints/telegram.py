@@ -198,19 +198,17 @@ async def parse_channel(
     )
     
     try:
-        result = await parser.parse_channel(db, request.channel_link, current_user.id)
-        if result:
-            return {
-                "success": True,
-                "message": f"Successfully parsed channel with {len(result.posts)} posts",
-                "group": result
-            }
-        else:
-            return {
-                "success": False,
-                "message": "Failed to parse channel: All bot tokens are exhausted or invalid",
-                "group": None
-            }
+        group = await parser.parse_channel(
+            db=db,
+            channel_link=request.channel_link,
+            user_id=current_user.id,
+            post_limit=request.post_limit
+        )
+        return {
+            "success": True,
+            "message": f"Successfully parsed channel with {len(group.posts)} posts",
+            "group": group
+        }
     except (FloodWaitError, UserDeactivatedBanError) as e:
         return {
             "success": False,
@@ -264,4 +262,33 @@ def read_post_comments(
         raise HTTPException(status_code=400, detail="Not enough permissions")
     
     comments = crud.telegram.get_comments_by_post(db, post_id=post_id)
-    return comments 
+    return comments
+
+
+@router.get("/parsed-channels/", response_model=List[ParsedGroup])
+def read_channels(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """Get all parsed channels for current user"""
+    channels = crud.telegram.get_channels_by_user(db, user_id=current_user.id)
+    return channels
+
+
+@router.delete("/parsed-channels/{channel_id}", response_model=dict)
+def delete_channel(
+    *,
+    db: Session = Depends(deps.get_db),
+    channel_id: int,
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """Delete a parsed channel."""
+    channel = crud.telegram.get_group_by_id(db, group_id=channel_id)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if channel.user_id != current_user.id:
+        raise HTTPException(status_code=400, detail="Not enough permissions")
+    if not channel.is_channel:
+        raise HTTPException(status_code=400, detail="Specified ID is not a channel")
+    crud.telegram.delete_group(db, group_id=channel_id)
+    return {"success": True} 

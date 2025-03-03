@@ -46,6 +46,7 @@ const ParsedChannels = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [parseDialogOpen, setParseDialogOpen] = useState(false);
   const [channelLink, setChannelLink] = useState('');
+  const [postLimit, setPostLimit] = useState(100);
   const [parsingStatus, setParsingStatus] = useState({
     loading: false,
     success: false,
@@ -56,6 +57,8 @@ const ParsedChannels = () => {
   const [comments, setComments] = useState({});
   const [loadingPosts, setLoadingPosts] = useState({});
   const [loadingComments, setLoadingComments] = useState({});
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [selectedChannelId, setSelectedChannelId] = useState(null);
   
   const navigate = useNavigate();
 
@@ -83,8 +86,12 @@ const ParsedChannels = () => {
     try {
       setLoading(true);
       const response = await channelsAPI.getAll();
-      setChannels(response.data);
-      setFilteredChannels(response.data);
+      // Sort channels by parsed_at in descending order
+      const sortedChannels = response.data.sort((a, b) => 
+        new Date(b.parsed_at) - new Date(a.parsed_at)
+      );
+      setChannels(sortedChannels);
+      setFilteredChannels(sortedChannels);
       setError(null);
     } catch (err) {
       setError('Failed to load channels. Please try again.');
@@ -103,44 +110,26 @@ const ParsedChannels = () => {
       });
       return;
     }
-    
+
     try {
+      setParsingStatus({ loading: true, success: false, error: null });
+      await channelsAPI.parseChannel(channelLink, postLimit);
       setParsingStatus({
-        loading: true,
-        success: false,
+        loading: false,
+        success: true,
         error: null,
       });
-      
-      const response = await channelsAPI.parseChannel(channelLink.trim());
-      
-      if (response.data.success) {
-        // Refresh channels list
-        await fetchChannels();
-        
-        // Close dialog and reset state
-        setParseDialogOpen(false);
-        setChannelLink('');
-        setParsingStatus({
-          loading: false,
-          success: true,
-          error: null,
-        });
-      } else {
-        setParsingStatus({
-          loading: false,
-          success: false,
-          error: response.data.message,
-        });
-      }
+      // Refresh the channels list
+      await fetchChannels();
+      // Close the dialog and reset form
+      setParseDialogOpen(false);
+      setChannelLink('');
+      setPostLimit(100);
     } catch (err) {
-      const errorMessage = err.response?.data?.detail?.[0]?.msg || 
-                          err.response?.data?.detail || 
-                          'Failed to parse channel. Please try again.';
-      
       setParsingStatus({
         loading: false,
         success: false,
-        error: errorMessage,
+        error: err.response?.data?.detail || 'Failed to parse channel',
       });
     }
   };
@@ -179,6 +168,24 @@ const ParsedChannels = () => {
     }
   };
 
+  const handleDeleteClick = (channel) => {
+    setSelectedChannelId(channel.id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedChannelId) return;
+
+    try {
+      await channelsAPI.deleteChannel(selectedChannelId);
+      await fetchChannels();
+      setDeleteConfirmOpen(false);
+    } catch (err) {
+      console.error('Failed to delete channel', err);
+      setError('Failed to delete channel. Please try again.');
+    }
+  };
+
   if (loading && channels.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -205,7 +212,7 @@ const ParsedChannels = () => {
       </Box>
       
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
@@ -259,113 +266,109 @@ const ParsedChannels = () => {
       ) : (
         <Grid container spacing={3}>
           {filteredChannels.map((channel) => (
-            <Grid item xs={12} key={channel.id}>
-              <Card>
+            <Grid item xs={12} sm={6} md={4} key={channel.id}>
+              <Card 
+                className="card-hover"
+                sx={{ 
+                  cursor: 'pointer',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    transition: 'transform 0.2s ease-in-out',
+                  }
+                }}
+                onClick={(e) => {
+                  // Prevent navigation if clicking delete button
+                  if (e.target.closest('button[data-delete]')) return;
+                  navigate(`/channels/${channel.id}`);
+                }}
+              >
                 <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" component="h2">
-                      {channel.group_name}
-                    </Typography>
-                    <Chip
-                      label={channel.is_public ? 'Public' : 'Private'}
-                      color={channel.is_public ? 'success' : 'warning'}
-                      size="small"
+                  <Typography variant="h6" noWrap gutterBottom>
+                    {channel.group_name}
+                  </Typography>
+                  
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    {channel.group_username ? `@${channel.group_username}` : 'Private Channel'}
+                  </Typography>
+                  
+                  <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, mb: 1 }}>
+                    <Chip 
+                      label={`${channel.member_count} subscribers`} 
+                      size="small" 
+                      color="primary" 
+                      variant="outlined"
+                    />
+                    <Chip 
+                      label={channel.is_public ? 'Public' : 'Private'} 
+                      size="small" 
+                      color={channel.is_public ? 'success' : 'default'} 
+                      variant="outlined"
+                      sx={{ ml: 1 }}
                     />
                   </Box>
                   
-                  {channel.group_username && (
-                    <Typography color="text.secondary" gutterBottom>
-                      @{channel.group_username}
-                    </Typography>
-                  )}
-                  
-                  <Typography variant="body2" color="text.secondary">
-                    Parsed at: {format(new Date(channel.parsed_at), 'PPpp')}
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Parsed: {new Date(channel.parsed_at).toLocaleString()}
                   </Typography>
                 </CardContent>
                 
                 <CardActions>
-                  <Button
-                    size="small"
-                    startIcon={expandedPosts[channel.id] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    onClick={() => handleExpandPosts(channel.id)}
-                    disabled={loadingPosts[channel.id]}
-                  >
-                    {loadingPosts[channel.id] ? (
-                      <CircularProgress size={20} />
-                    ) : (
-                      `${expandedPosts[channel.id] ? 'Hide' : 'Show'} Posts`
-                    )}
-                  </Button>
+                  <Box sx={{ flexGrow: 1 }} />
+                  
+                  <Tooltip title="Delete">
+                    <IconButton 
+                      color="error" 
+                      onClick={() => handleDeleteClick(channel)}
+                      data-delete="true"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Tooltip>
                 </CardActions>
-                
-                <Collapse in={expandedPosts[channel.id]}>
-                  <List>
-                    {posts[channel.id]?.map((post) => (
-                      <ListItem key={post.id} divider>
-                        <ListItemText
-                          primary={post.message}
-                          secondary={
-                            <Box sx={{ mt: 1 }}>
-                              <Typography variant="caption" display="block">
-                                Posted: {format(new Date(post.posted_at), 'PPpp')}
-                              </Typography>
-                              <Typography variant="caption" display="block">
-                                Views: {post.views} | Forwards: {post.forwards} | Replies: {post.replies}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                        <ListItemSecondaryAction>
-                          <IconButton
-                            edge="end"
-                            onClick={() => handleExpandComments(post.id)}
-                            disabled={loadingComments[post.id]}
-                          >
-                            {loadingComments[post.id] ? (
-                              <CircularProgress size={20} />
-                            ) : (
-                              <CommentIcon />
-                            )}
-                          </IconButton>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                    ))}
-                  </List>
-                </Collapse>
               </Card>
             </Grid>
           ))}
         </Grid>
       )}
-      
-      <Dialog
-        open={parseDialogOpen}
-        onClose={() => setParseDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
+
+      {/* Parse Channel Dialog */}
+      <Dialog open={parseDialogOpen} onClose={() => setParseDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Parse New Channel</DialogTitle>
         <DialogContent>
           <TextField
-            autoFocus
-            margin="dense"
-            label="Channel Link"
-            type="text"
             fullWidth
+            label="Channel Link"
+            placeholder="Enter channel link or username"
             value={channelLink}
             onChange={(e) => setChannelLink(e.target.value)}
-            placeholder="https://t.me/channel_name"
-            error={!!parsingStatus.error}
-            helperText={parsingStatus.error}
+            margin="normal"
+            variant="outlined"
             disabled={parsingStatus.loading}
           />
+          <TextField
+            fullWidth
+            label="Post Limit"
+            type="number"
+            value={postLimit}
+            onChange={(e) => setPostLimit(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+            margin="normal"
+            variant="outlined"
+            disabled={parsingStatus.loading}
+            helperText="Maximum 100 posts"
+          />
+          {parsingStatus.error && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {parsingStatus.error}
+            </Alert>
+          )}
+          {parsingStatus.success && (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              Channel parsed successfully!
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button
-            onClick={() => setParseDialogOpen(false)}
-            disabled={parsingStatus.loading}
-          >
+          <Button onClick={() => setParseDialogOpen(false)} disabled={parsingStatus.loading}>
             Cancel
           </Button>
           <Button
@@ -375,7 +378,23 @@ const ParsedChannels = () => {
             disabled={parsingStatus.loading}
             startIcon={parsingStatus.loading ? <CircularProgress size={20} /> : <SendIcon />}
           >
-            Parse Channel
+            {parsingStatus.loading ? 'Parsing...' : 'Parse Channel'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <DialogTitle>Delete Channel</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this channel? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

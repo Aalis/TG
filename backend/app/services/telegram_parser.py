@@ -10,10 +10,11 @@ from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetDialogsRequest
 from telethon.tl.types import InputPeerEmpty, ChannelParticipantsAdmins, Channel, User as TelegramUser, Message
 from telethon.errors import SessionPasswordNeededError, FloodWaitError, UserDeactivatedBanError
+from telethon.sessions import StringSession
 
 from app import crud
 from app.schemas.telegram import ParsedGroupCreate, GroupMemberCreate, ChannelPostCreate, PostCommentCreate
-from app.database.models import ParsedGroup
+from app.database.models import ParsedGroup, TelegramSession
 from app.core.config import settings
 
 
@@ -58,10 +59,20 @@ class TelegramParserService:
         self.client = None
 
     async def _connect(self) -> None:
-        """Connect to Telegram API using bot token"""
-        session_name = f"bot_session_{self.bot_token.split(':')[0]}"
-        self.client = TelegramClient(session_name, int(self.api_id), self.api_hash)
-        await self.client.start(bot_token=self.bot_token)
+        """Connect to Telegram API using session string or bot token"""
+        if self.session_string:
+            # Use session string if available
+            self.client = TelegramClient(
+                StringSession(self.session_string),
+                int(self.api_id),
+                self.api_hash
+            )
+            await self.client.start()
+        else:
+            # Fallback to bot token
+            session_name = f"bot_session_{self.bot_token.split(':')[0]}"
+            self.client = TelegramClient(session_name, int(self.api_id), self.api_hash)
+            await self.client.start(bot_token=self.bot_token)
 
     async def _disconnect(self) -> None:
         """Disconnect from Telegram API"""
@@ -273,102 +284,126 @@ class TelegramParserService:
             async for message in self.client.iter_messages(channel_entity, limit=limit):
                 if not isinstance(message, Message):
                     continue
-                
-                post = {
-                    "post_id": str(message.id),
-                    "message": message.message or "",
-                    "views": getattr(message, "views", 0),
-                    "forwards": getattr(message, "forwards", 0),
-                    "replies": getattr(message.replies, "replies", 0) if message.replies else 0,
-                    "posted_at": message.date,
-                }
-                posts.append(post)
+                posts.append(message.id)
         except Exception as e:
             print(f"Error getting channel posts: {e}")
             raise
-        
         return posts
 
-    async def _get_post_comments(self, channel_entity: Channel, message_id: int) -> List[Dict[str, Any]]:
-        """Get comments for a specific post"""
-        comments = []
+    async def _get_commenters_info(self, channel_entity: Channel, message_id: int) -> List[Dict[str, Any]]:
+        """Get unique commenters information"""
+        commenters = {}
         try:
             async for reply in self.client.iter_messages(channel_entity, reply_to=message_id):
-                if not isinstance(reply, Message):
+                if not reply or not reply.sender:
                     continue
                 
-                sender = await reply.get_sender()
-                comment = {
-                    "user_id": str(sender.id),
-                    "username": sender.username,
-                    "first_name": sender.first_name,
-                    "last_name": sender.last_name,
-                    "message": reply.message or "",
-                    "replied_to_id": reply.reply_to_msg_id if reply.reply_to_msg_id != message_id else None,
-                    "commented_at": reply.date,
-                }
-                comments.append(comment)
+                try:
+                    sender = await reply.get_sender()
+                    if isinstance(sender, TelegramUser):
+                        # Store unique users by their ID
+                        commenters[str(sender.id)] = {
+                            "user_id": str(sender.id),
+                            "username": getattr(sender, "username", None),
+                            "first_name": getattr(sender, "first_name", None),
+                            "last_name": getattr(sender, "last_name", None),
+                            "is_bot": getattr(sender, "bot", False),
+                            "is_premium": getattr(sender, "premium", False)
+                        }
+                except Exception as e:
+                    print(f"Error getting commenter info: {e}")
+                    continue
+                
         except Exception as e:
-            print(f"Error getting post comments: {e}")
+            print(f"Error getting post commenters: {e}")
             raise
         
-        return comments
+        return list(commenters.values())
 
-    async def parse_channel(self, db: Session, channel_link: str, user_id: int) -> ParsedGroup:
-        """Parse a Telegram channel"""
+    async def parse_channel(self, db: Session, channel_link: str, user_id: int, post_limit: int = 100) -> ParsedGroup:
+        """Parse a Telegram channel and extract commenters information"""
         try:
+            # Try to get an active session for the user
+            session = db.query(TelegramSession).filter(
+                TelegramSession.user_id == user_id,
+                TelegramSession.is_active == True,
+                TelegramSession.session_string.isnot(None)
+            ).first()
+
+            if not session:
+                raise ValueError("No active Telegram session found. Please add a session first.")
+
+            # Use the session string
+            self.session_string = session.session_string
+            self.bot_token = None  # Don't use bot token when we have a session
+            
             await self._connect()
             
             # Extract channel ID from link
             channel_id = await self._extract_group_id(channel_link)
             
             # Check if channel was already parsed
-            existing_group = crud.get_group_by_telegram_id(db, channel_id, user_id)
+            existing_group = crud.telegram.get_group_by_telegram_id(db, channel_id, user_id)
             if existing_group:
                 return existing_group
             
             # Get channel entity
             channel_entity, is_channel = await self._get_group_entity(channel_id)
-            if not is_channel:
+            if not is_channel or not isinstance(channel_entity, Channel):
                 raise ValueError("The provided link is not a channel")
+            
+            # Get full channel info
+            full_channel = await self.client(GetFullChannelRequest(channel=channel_entity))
             
             # Create group record
             group_data = ParsedGroupCreate(
                 group_id=str(channel_entity.id),
                 group_name=channel_entity.title,
                 group_username=channel_entity.username,
-                member_count=channel_entity.participants_count if hasattr(channel_entity, "participants_count") else 0,
+                member_count=full_channel.full_chat.participants_count,
                 is_public=not getattr(channel_entity, "restricted", False),
+                is_channel=True  # Set this to True for channels
             )
-            group = crud.create_group(db, obj_in=group_data, user_id=user_id)
+            group = crud.telegram.create_group(db, obj_in=group_data, user_id=user_id)
             
-            # Get channel posts
-            posts = await self._get_channel_posts(channel_entity)
+            try:
+                # Get post IDs
+                post_ids = await self._get_channel_posts(channel_entity, limit=post_limit)
+                
+                # Get unique commenters from all posts
+                all_commenters = {}
+                for post_id in post_ids:
+                    try:
+                        commenters = await self._get_commenters_info(channel_entity, post_id)
+                        for commenter in commenters:
+                            all_commenters[commenter["user_id"]] = commenter
+                    except Exception as e:
+                        print(f"Error getting comments for post {post_id}: {e}")
+                        continue  # Skip this post and continue with others
+                
+                # Create member objects for unique commenters
+                member_objects = []
+                for commenter in all_commenters.values():
+                    member_data = GroupMemberCreate(
+                        group_id=group.id,
+                        user_id=commenter["user_id"],
+                        username=commenter["username"],
+                        first_name=commenter["first_name"],
+                        last_name=commenter["last_name"],
+                        is_bot=commenter["is_bot"],
+                        is_premium=commenter.get("is_premium", False)
+                    )
+                    member_objects.append(member_data)
+                
+                # Bulk create members
+                if member_objects:
+                    crud.telegram.create_members_bulk(db, members=member_objects)
+            except Exception as e:
+                print(f"Error processing posts and comments: {e}")
+                # Don't raise the error - we still want to return the channel even if we can't get comments
             
-            # Create posts in bulk
-            post_creates = [
-                ChannelPostCreate(
-                    group_id=group.id,
-                    **post
-                )
-                for post in posts
-            ]
-            crud.create_posts_bulk(db, posts=post_creates)
-            
-            # Get comments for each post
-            for post in posts:
-                comments = await self._get_post_comments(channel_entity, int(post["post_id"]))
-                if comments:
-                    # Create comments in bulk
-                    comment_creates = [
-                        PostCommentCreate(
-                            post_id=post["id"],
-                            **comment
-                        )
-                        for comment in comments
-                    ]
-                    crud.create_comments_bulk(db, comments=comment_creates)
-            
+            # Refresh the group to include any members that were added
+            group = crud.telegram.get_group_by_id(db, group_id=group.id)
             return group
             
         except Exception as e:
