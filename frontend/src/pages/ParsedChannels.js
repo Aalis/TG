@@ -25,6 +25,7 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Collapse,
+  LinearProgress,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -59,6 +60,8 @@ const ParsedChannels = () => {
   const [loadingComments, setLoadingComments] = useState({});
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedChannelId, setSelectedChannelId] = useState(null);
+  const [parsingProgress, setParsingProgress] = useState(null);
+  const [progressPolling, setProgressPolling] = useState(null);
   
   const navigate = useNavigate();
 
@@ -82,6 +85,15 @@ const ParsedChannels = () => {
     }
   }, [searchTerm, channels]);
 
+  // Add cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (progressPolling) {
+        clearInterval(progressPolling);
+      }
+    };
+  }, [progressPolling]);
+
   const fetchChannels = async () => {
     try {
       setLoading(true);
@@ -101,6 +113,32 @@ const ParsedChannels = () => {
     }
   };
 
+  const startProgressPolling = () => {
+    // Stop any existing polling
+    if (progressPolling) {
+      clearInterval(progressPolling);
+    }
+
+    // Start new polling
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await channelsAPI.getParsingProgress();
+        setParsingProgress(response.data);
+        
+        // Stop polling if parsing is complete or errored
+        if (!response.data.is_parsing) {
+          clearInterval(pollInterval);
+          setProgressPolling(null);
+          setParsingProgress(null);
+        }
+      } catch (err) {
+        console.error('Error fetching parsing progress:', err);
+      }
+    }, 1000); // Poll every second
+
+    setProgressPolling(pollInterval);
+  };
+
   const handleParseChannel = async () => {
     if (!channelLink.trim()) {
       setParsingStatus({
@@ -113,14 +151,21 @@ const ParsedChannels = () => {
 
     try {
       setParsingStatus({ loading: true, success: false, error: null });
+      
+      // Start progress polling before making the parse request
+      startProgressPolling();
+
       await channelsAPI.parseChannel(channelLink, postLimit);
+      
       setParsingStatus({
         loading: false,
         success: true,
         error: null,
       });
+      
       // Refresh the channels list
       await fetchChannels();
+      
       // Close the dialog and reset form
       setParseDialogOpen(false);
       setChannelLink('');
@@ -180,6 +225,7 @@ const ParsedChannels = () => {
       await channelsAPI.deleteChannel(selectedChannelId);
       await fetchChannels();
       setDeleteConfirmOpen(false);
+      setError(null); // Clear any previous errors
     } catch (err) {
       console.error('Failed to delete channel', err);
       setError('Failed to delete channel. Please try again.');
@@ -381,6 +427,35 @@ const ParsedChannels = () => {
             {parsingStatus.loading ? 'Parsing...' : 'Parse Channel'}
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Progress Dialog */}
+      <Dialog 
+        open={!!parsingProgress && parsingProgress.is_parsing} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle>Parsing Channel</DialogTitle>
+        <DialogContent>
+          <Box sx={{ width: '100%', mt: 2 }}>
+            <Typography variant="body1" gutterBottom>
+              {parsingProgress?.message || 'Initializing...'}
+            </Typography>
+            <LinearProgress 
+              variant="determinate" 
+              value={parsingProgress?.progress || 0}
+              sx={{ my: 2 }}
+            />
+            <Typography variant="body2" color="text.secondary">
+              Phase: {parsingProgress?.phase || 'initializing'}
+            </Typography>
+            {parsingProgress?.total_members > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Members: {parsingProgress.current_members} / {parsingProgress.total_members}
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_URL } from '../config';
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -45,30 +46,40 @@ export const authAPI = {
 
 // Telegram Tokens API
 export const tokensAPI = {
-  getAll: () => api.get('/telegram/tokens/'),
-  create: (tokenData) => api.post('/telegram/tokens/', tokenData),
-  update: (id, tokenData) => api.put(`/telegram/tokens/${id}`, tokenData),
-  delete: (id) => api.delete(`/telegram/tokens/${id}`),
+  getAll: () => axios.get(`${API_URL}/telegram/tokens/`),
+  create: (tokenData) => axios.post(`${API_URL}/telegram/tokens/`, tokenData),
+  update: (id, tokenData) => axios.put(`${API_URL}/telegram/tokens/${id}`, tokenData),
+  delete: (id) => axios.delete(`${API_URL}/telegram/tokens/${id}`),
 };
 
 // Telegram Groups API
 export const groupsAPI = {
-  getAll: () => api.get('/telegram/parsed-groups/'),
-  getById: (id) => api.get(`/telegram/parsed-groups/${id}`),
-  delete: (id) => api.delete(`/telegram/parsed-groups/${id}`),
-  parseGroup: (groupLink) => api.post('/telegram/parse-group/', { group_link: groupLink }),
+  getAll: () => axios.get(`${API_URL}/telegram/parsed-groups/`),
+  getById: (id) => axios.get(`${API_URL}/telegram/parsed-groups/${id}`),
+  delete: (id) => axios.delete(`${API_URL}/telegram/parsed-groups/${id}`),
+  parseGroup: (groupLink, scanComments = false, commentLimit = 100) => 
+    axios.post(`${API_URL}/telegram/parse-group/`, {
+      group_link: groupLink,
+      scan_comments: scanComments,
+      comment_limit: commentLimit
+    }),
+  getParsingProgress: () => axios.get(`${API_URL}/telegram/parse-group/progress`),
+  getDialogs: () => axios.get(`${API_URL}/telegram/dialogs/`),
 };
 
 // Telegram Channels API
 export const channelsAPI = {
   getAll: () => api.get('/telegram/parsed-channels/'),
-  parseChannel: (channelLink, postLimit = 100) => api.post('/telegram/parse-channel/', { 
-    channel_link: channelLink,
-    post_limit: postLimit
-  }),
-  getPosts: (groupId) => api.get(`/telegram/groups/${groupId}/posts/`),
+  getById: (id) => api.get(`/telegram/parsed-channels/${id}`),
+  deleteChannel: (id) => api.delete(`/telegram/parsed-channels/${id}`),
+  parseChannel: (channelLink, postLimit = 100) => 
+    api.post('/telegram/parse-channel/', {
+      channel_link: channelLink,
+      post_limit: postLimit
+    }),
+  getPosts: (channelId) => api.get(`/telegram/groups/${channelId}/posts/`),
   getComments: (postId) => api.get(`/telegram/posts/${postId}/comments/`),
-  deleteChannel: (channelId) => api.delete(`/telegram/parsed-channels/${channelId}`),
+  getParsingProgress: () => api.get('/telegram/parse-channel/progress'),
 };
 
 // Telegram Sessions API
