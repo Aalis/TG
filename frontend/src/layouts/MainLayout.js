@@ -28,7 +28,6 @@ import {
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
   Dashboard as DashboardIcon,
-  VpnKey as TokensIcon,
   Group as GroupsIcon,
   Forum as ChannelsIcon,
   Person as ProfileIcon,
@@ -95,16 +94,6 @@ const MainLayout = () => {
             <DashboardIcon />
           </ListItemIcon>
           <ListItemText primary="Dashboard" />
-        </ListItem>
-        <ListItem 
-          button 
-          onClick={() => handleNavigate('/tokens')}
-          selected={location.pathname === '/tokens'}
-        >
-          <ListItemIcon>
-            <TokensIcon />
-          </ListItemIcon>
-          <ListItemText primary="Telegram Tokens" />
         </ListItem>
         <ListItem 
           button 
