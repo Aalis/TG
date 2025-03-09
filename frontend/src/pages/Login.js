@@ -53,10 +53,13 @@ const Login = () => {
               name="username"
               label="Username"
               fullWidth
-              margin="normal"
+              variant="outlined"
+              margin="dense"
+              sx={{ mb: 2 }}
               error={touched.username && Boolean(errors.username)}
               helperText={touched.username && errors.username}
               disabled={isLoading || isSubmitting}
+              autoComplete="username"
             />
             
             <Field
@@ -65,10 +68,13 @@ const Login = () => {
               label="Password"
               type="password"
               fullWidth
-              margin="normal"
+              variant="outlined"
+              margin="dense"
+              sx={{ mb: 2 }}
               error={touched.password && Boolean(errors.password)}
               helperText={touched.password && errors.password}
               disabled={isLoading || isSubmitting}
+              autoComplete="current-password"
             />
             
             <Button
@@ -77,7 +83,7 @@ const Login = () => {
               variant="contained"
               color="primary"
               disabled={isLoading || isSubmitting}
-              sx={{ mt: 3, mb: 2 }}
+              sx={{ mt: 1, mb: 2 }}
             >
               {(isLoading || isSubmitting) ? <CircularProgress size={24} /> : 'Sign In'}
             </Button>

@@ -1,4 +1,6 @@
 from typing import Generator
+from datetime import datetime
+import pytz
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -41,6 +43,11 @@ def get_current_user(
     user = crud.user.get_by_id(db, user_id=token_data.sub)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update last visit time with timezone-aware datetime
+    user.last_visit = datetime.now(pytz.UTC)
+    db.commit()
+    
     return user
 
 
@@ -58,5 +65,16 @@ def get_current_active_superuser(
     if not crud.user.is_superuser(current_user):
         raise HTTPException(
             status_code=400, detail="The user doesn't have enough privileges"
+        )
+    return current_user
+
+
+def get_current_user_with_parse_permission(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    if not current_user.can_parse and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="User doesn't have permission to parse"
         )
     return current_user 

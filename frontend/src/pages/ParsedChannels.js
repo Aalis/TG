@@ -26,7 +26,10 @@ import {
   ListItemSecondaryAction,
   Collapse,
   LinearProgress,
+  DialogContentText,
+  Divider,
 } from '@mui/material';
+import { LoadingButton } from '@mui/lab';
 import {
   Search as SearchIcon,
   Delete as DeleteIcon,
@@ -38,6 +41,7 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { channelsAPI } from '../services/api';
+import { useSnackbar } from 'notistack';
 
 const ParsedChannels = () => {
   const [channels, setChannels] = useState([]);
@@ -62,8 +66,14 @@ const ParsedChannels = () => {
   const [selectedChannelId, setSelectedChannelId] = useState(null);
   const [parsingProgress, setParsingProgress] = useState(null);
   const [progressPolling, setProgressPolling] = useState(null);
+  const [availableDialogs, setAvailableDialogs] = useState([]);
+  const [loadingDialogs, setLoadingDialogs] = useState(false);
+  const [dialogError, setDialogError] = useState(null);
+  const [selectedDialog, setSelectedDialog] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
   
   const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
 
   // Fetch channels on component mount
   useEffect(() => {
@@ -139,12 +149,33 @@ const ParsedChannels = () => {
     setProgressPolling(pollInterval);
   };
 
+  const fetchAvailableDialogs = async () => {
+    try {
+      setLoadingDialogs(true);
+      setDialogError(null);
+      const response = await channelsAPI.getDialogs();
+      setAvailableDialogs(response.data);
+    } catch (err) {
+      setDialogError('Failed to load available channels. Please check your Telegram session.');
+      console.error(err);
+    } finally {
+      setLoadingDialogs(false);
+    }
+  };
+
+  // Fetch available dialogs when parse dialog opens
+  useEffect(() => {
+    if (parseDialogOpen) {
+      fetchAvailableDialogs();
+    }
+  }, [parseDialogOpen]);
+
   const handleParseChannel = async () => {
-    if (!channelLink.trim()) {
+    if (!channelLink && !selectedDialog) {
       setParsingStatus({
         loading: false,
         success: false,
-        error: 'Please enter a channel link',
+        error: 'Please enter a channel link or select a channel from the list',
       });
       return;
     }
@@ -155,7 +186,10 @@ const ParsedChannels = () => {
       // Start progress polling before making the parse request
       startProgressPolling();
 
-      await channelsAPI.parseChannel(channelLink, postLimit);
+      await channelsAPI.parseChannel(
+        selectedDialog ? selectedDialog.id : channelLink.trim(),
+        postLimit
+      );
       
       setParsingStatus({
         loading: false,
@@ -170,6 +204,7 @@ const ParsedChannels = () => {
       setParseDialogOpen(false);
       setChannelLink('');
       setPostLimit(100);
+      setSelectedDialog(null);
     } catch (err) {
       setParsingStatus({
         loading: false,
@@ -229,6 +264,19 @@ const ParsedChannels = () => {
     } catch (err) {
       console.error('Failed to delete channel', err);
       setError('Failed to delete channel. Please try again.');
+    }
+  };
+
+  const handleCancelParsing = async () => {
+    try {
+      setIsCancelling(true);
+      await channelsAPI.cancelParsing();
+      // The progress polling will automatically stop when the backend reports is_parsing: false
+    } catch (err) {
+      console.error('Error cancelling parsing:', err);
+      enqueueSnackbar('Failed to cancel parsing', { variant: 'error' });
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -337,19 +385,26 @@ const ParsedChannels = () => {
                     {channel.group_username ? `@${channel.group_username}` : 'Private Channel'}
                   </Typography>
                   
-                  <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, mb: 1 }}>
-                    <Chip 
-                      label={`${channel.member_count} subscribers`} 
-                      size="small" 
-                      color="primary" 
-                      variant="outlined"
-                    />
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Chip 
+                        label={`${channel.member_count.toLocaleString()} subscribers`} 
+                        size="small" 
+                        color="primary" 
+                        variant="outlined"
+                      />
+                      <Chip 
+                        label={`${(channel.members?.length || 0).toLocaleString()} users found`} 
+                        size="small" 
+                        color="info" 
+                        variant="outlined"
+                      />
+                    </Box>
                     <Chip 
                       label={channel.is_public ? 'Public' : 'Private'} 
                       size="small" 
                       color={channel.is_public ? 'success' : 'default'} 
                       variant="outlined"
-                      sx={{ ml: 1 }}
                     />
                   </Box>
                   
@@ -381,12 +436,77 @@ const ParsedChannels = () => {
       <Dialog open={parseDialogOpen} onClose={() => setParseDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Parse New Channel</DialogTitle>
         <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Select a channel from your Telegram channels or enter a channel link manually.
+          </DialogContentText>
+
+          {dialogError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {dialogError}
+            </Alert>
+          )}
+
+          {/* Available Channels List */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Your Telegram Channels
+            </Typography>
+            {loadingDialogs ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <Box sx={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {availableDialogs
+                  .filter(dialog => dialog.type === 'channel')
+                  .map((dialog) => (
+                    <Box
+                      key={dialog.id}
+                      sx={{
+                        p: 1,
+                        mb: 1,
+                        border: '1px solid',
+                        borderColor: selectedDialog?.id === dialog.id ? 'primary.main' : 'divider',
+                        borderRadius: 1,
+                        cursor: 'pointer',
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                        },
+                      }}
+                      onClick={() => {
+                        setSelectedDialog(dialog);
+                        setChannelLink('');
+                        setParsingStatus(prev => ({ ...prev, error: null }));
+                      }}
+                    >
+                      <Typography variant="subtitle2">
+                        {dialog.title}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {dialog.username ? `@${dialog.username}` : 'Private Channel'} • {dialog.members_count} subscribers
+                      </Typography>
+                    </Box>
+                  ))}
+              </Box>
+            )}
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          <Typography variant="subtitle1" gutterBottom>
+            Or Enter Channel Link Manually
+          </Typography>
+
           <TextField
             fullWidth
             label="Channel Link"
             placeholder="Enter channel link or username"
             value={channelLink}
-            onChange={(e) => setChannelLink(e.target.value)}
+            onChange={(e) => {
+              setChannelLink(e.target.value);
+              setSelectedDialog(null);
+              setParsingStatus(prev => ({ ...prev, error: null }));
+            }}
             margin="normal"
             variant="outlined"
             disabled={parsingStatus.loading}
@@ -414,7 +534,12 @@ const ParsedChannels = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setParseDialogOpen(false)} disabled={parsingStatus.loading}>
+          <Button onClick={() => {
+            setParseDialogOpen(false);
+            setSelectedDialog(null);
+            setChannelLink('');
+            setParsingStatus({ loading: false, success: false, error: null });
+          }} disabled={parsingStatus.loading}>
             Cancel
           </Button>
           <Button
@@ -456,6 +581,16 @@ const ParsedChannels = () => {
             )}
           </Box>
         </DialogContent>
+        <DialogActions>
+          <LoadingButton
+            onClick={handleCancelParsing}
+            loading={isCancelling}
+            color="error"
+            variant="contained"
+          >
+            Cancel Parsing
+          </LoadingButton>
+        </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}

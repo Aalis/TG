@@ -36,11 +36,21 @@ class TelegramParserService:
     _bot_tokens = None
     _current_token_index = 0
     _progress: Optional[ParsingProgress] = None
+    _is_cancelled: bool = False
+    _current_group_id: Optional[int] = None
 
     @classmethod
     def get_progress(cls) -> Optional[ParsingProgress]:
         """Get current parsing progress"""
         return cls._progress
+
+    @classmethod
+    def cancel_parsing(cls) -> None:
+        """Cancel the current parsing operation"""
+        cls._is_cancelled = True
+        cls._update_progress("cancelled", message="Parsing cancelled by user")
+        # Don't reset progress here - it will be reset in the finally block
+        # This ensures the cancelled status is visible to the user
 
     @classmethod
     def _update_progress(cls, phase: str, current: int = 0, total: int = 0, message: str = "") -> None:
@@ -62,7 +72,21 @@ class TelegramParserService:
     @classmethod
     def _reset_progress(cls) -> None:
         """Reset parsing progress"""
+        if cls._progress and cls._progress.current_phase == "cancelled":
+            # If we're in cancelled state, keep the message visible briefly
+            asyncio.create_task(cls._delayed_reset())
+        else:
+            cls._progress = None
+            cls._is_cancelled = False
+            cls._current_group_id = None
+
+    @classmethod
+    async def _delayed_reset(cls) -> None:
+        """Reset progress after a short delay to ensure cancelled message is visible"""
+        await asyncio.sleep(2)  # Keep cancelled message visible for 2 seconds
         cls._progress = None
+        cls._is_cancelled = False
+        cls._current_group_id = None
 
     @classmethod
     def get_bot_tokens(cls) -> List[str]:
@@ -183,40 +207,102 @@ class TelegramParserService:
         admins = set()
         
         try:
+            # Check for cancellation before starting
+            if self._is_cancelled:
+                raise ValueError("Parsing cancelled by user")
+
             self._update_progress("admins", message="Getting admin list...")
-            async for admin in self.client.iter_participants(group_entity, filter=ChannelParticipantsAdmins):
-                admins.add(admin.id)
+            try:
+                async for admin in self.client.iter_participants(group_entity, filter=ChannelParticipantsAdmins):
+                    # Check for cancellation
+                    if self._is_cancelled:
+                        raise ValueError("Parsing cancelled by user")
+                    admins.add(admin.id)
+            except Exception as e:
+                if self._is_cancelled:
+                    raise ValueError("Parsing cancelled by user")
+                raise e
+
             self._update_progress("admins", message=f"Found {len(admins)} admins")
             
             # Get total member count for progress tracking
+            if self._is_cancelled:
+                raise ValueError("Parsing cancelled by user")
+
             full_channel = await self.client(GetFullChannelRequest(channel=group_entity))
             total_members = full_channel.full_chat.participants_count
             self._update_progress("members", total=total_members, message=f"Found {total_members} total members")
             
+            # Check for cancellation before starting member iteration
+            if self._is_cancelled:
+                raise ValueError("Parsing cancelled by user")
+
             # Get all members
             member_count = 0
-            async for member in self.client.iter_participants(group_entity):
-                if isinstance(member, TelegramUser):
-                    member_count += 1
-                    self._update_progress("members", current=member_count, total=total_members, 
-                                        message=f"Processing member {member_count}/{total_members}")
-                    
-                    member_data = {
-                        "user_id": str(member.id),
-                        "username": member.username,
-                        "first_name": member.first_name,
-                        "last_name": member.last_name,
-                        "phone": getattr(member, 'phone', None),
-                        "is_bot": member.bot,
-                        "is_admin": member.id in admins,
-                        "is_premium": bool(getattr(member, 'premium', False))
-                    }
-                    members.append(member_data)
+            try:
+                participant_iter = self.client.iter_participants(group_entity)
+                while True:
+                    try:
+                        if self._is_cancelled:
+                            raise ValueError("Parsing cancelled by user")
+                        
+                        member = await participant_iter.__anext__()
+                        if isinstance(member, TelegramUser):
+                            member_count += 1
+                            self._update_progress("members", current=member_count, total=total_members, 
+                                                message=f"Processing member {member_count}/{total_members}")
+                            
+                            member_data = {
+                                "user_id": str(member.id),
+                                "username": member.username,
+                                "first_name": member.first_name,
+                                "last_name": member.last_name,
+                                "phone": getattr(member, 'phone', None),
+                                "is_bot": member.bot,
+                                "is_admin": member.id in admins,
+                                "is_premium": bool(getattr(member, 'premium', False))
+                            }
+                            members.append(member_data)
+
+                            # Check for cancellation after processing each member
+                            if self._is_cancelled:
+                                raise ValueError("Parsing cancelled by user")
+                    except StopAsyncIteration:
+                        break
+                    except ValueError as e:
+                        if str(e) == "Parsing cancelled by user":
+                            raise
+                        raise ValueError(f"Error processing members: {str(e)}")
+                    except Exception as e:
+                        if self._is_cancelled:
+                            raise ValueError("Parsing cancelled by user")
+                        logging.error(f"Error processing member: {e}")
+                        continue
+
+            except ValueError as e:
+                if str(e) == "Parsing cancelled by user":
+                    raise
+                raise ValueError(f"Error processing members: {str(e)}")
+            except Exception as e:
+                if self._is_cancelled:
+                    raise ValueError("Parsing cancelled by user")
+                raise e
             
+            if self._is_cancelled:
+                raise ValueError("Parsing cancelled by user")
+
             self._update_progress("members", current=total_members, total=total_members, 
                                 message=f"Finished processing {total_members} members")
             
+        except ValueError as e:
+            # Re-raise cancellation error
+            if str(e) == "Parsing cancelled by user":
+                raise
+            self._update_progress("error", message=f"Error getting members: {str(e)}")
+            raise
         except Exception as e:
+            if self._is_cancelled:
+                raise ValueError("Parsing cancelled by user")
             self._update_progress("error", message=f"Error getting members: {str(e)}")
             raise
         
@@ -230,6 +316,10 @@ class TelegramParserService:
             
             message_count = 0
             async for message in self.client.iter_messages(group_entity, limit=limit):
+                # Check for cancellation
+                if self._is_cancelled:
+                    raise ValueError("Parsing cancelled by user")
+
                 message_count += 1
                 self._update_progress("comments", current=message_count, total=limit,
                                     message=f"Analyzing message {message_count}/{limit}")
@@ -254,12 +344,19 @@ class TelegramParserService:
                                 message=f"Found {len(users)} unique users from {message_count} messages")
             
             return list(users.values())
+        except ValueError as e:
+            # Re-raise cancellation error
+            if str(e) == "Parsing cancelled by user":
+                raise
+            self._update_progress("error", message=f"Error scanning comments: {str(e)}")
+            return []
         except Exception as e:
             self._update_progress("error", message=f"Error scanning comments: {str(e)}")
             return []
 
     async def parse_group(self, db: Session, group_link: str, user_id: int, scan_comments: bool = False, comment_limit: int = 100) -> ParsedGroup:
         """Parse a Telegram group/chat and store its information"""
+        group = None
         try:
             self._reset_progress()
             self._update_progress("initialization", message="Initializing chat parsing...")
@@ -280,6 +377,10 @@ class TelegramParserService:
 
             self._update_progress("connecting", message="Connecting to Telegram...")
             await self._connect()
+            
+            # Check for cancellation
+            if self._is_cancelled:
+                raise ValueError("Parsing cancelled by user")
             
             # Chat validation
             self._update_progress("validation", message="Validating chat...")
@@ -309,6 +410,10 @@ class TelegramParserService:
                     ))
                     
                     for dialog in result.dialogs:
+                        # Check for cancellation
+                        if self._is_cancelled:
+                            raise ValueError("Parsing cancelled by user")
+                            
                         peer = dialog.peer
                         if (hasattr(peer, 'user_id') and str(peer.user_id) == group_link.lstrip('-')) or \
                            (hasattr(peer, 'channel_id') and str(peer.channel_id) == group_link.lstrip('-')) or \
@@ -340,6 +445,10 @@ class TelegramParserService:
                 logging.error(f"Error getting full chat info: {e}")
                 member_count = 0
             
+            # Check for cancellation
+            if self._is_cancelled:
+                raise ValueError("Parsing cancelled by user")
+            
             # Create chat record
             self._update_progress("database", message="Creating chat record...")
             group_data = ParsedGroupCreate(
@@ -352,6 +461,7 @@ class TelegramParserService:
             )
             
             group = crud.telegram.create_group(db, obj_in=group_data, user_id=user_id)
+            self.__class__._current_group_id = group.id
             
             try:
                 members = []
@@ -384,10 +494,18 @@ class TelegramParserService:
                                 "is_premium": bool(getattr(me, 'premium', False))
                             })
                 
+                # Check for cancellation after getting members
+                if self._is_cancelled:
+                    raise ValueError("Parsing cancelled by user")
+                
                 # Process members
                 self._update_progress("processing", message="Processing member data...")
                 member_objects = []
                 for idx, member in enumerate(members, 1):
+                    # Check for cancellation
+                    if self._is_cancelled:
+                        raise ValueError("Parsing cancelled by user")
+                        
                     self._update_progress("processing", current=idx, total=len(members),
                                         message=f"Processing member data {idx}/{len(members)}")
                     member_data = GroupMemberCreate(
@@ -402,34 +520,82 @@ class TelegramParserService:
                     )
                     member_objects.append(member_data)
                 
+                # Check for cancellation before saving
+                if self._is_cancelled:
+                    raise ValueError("Parsing cancelled by user")
+                
                 # Save members
                 if member_objects:
                     self._update_progress("saving", message="Saving member data to database...")
                     crud.telegram.create_members_bulk(db, members=member_objects)
                 
-                # Update counts
-                group.member_count = len(member_objects)
+                # Don't update the member_count here as it should reflect the total from Telegram
+                # group.member_count = len(member_objects)
                 db.commit()
                 
                 self._update_progress("completed", message="Chat parsing completed successfully")
                 
             except Exception as e:
+                if self._is_cancelled:
+                    # Delete the partially created group if cancelled
+                    if group and group.id:
+                        crud.telegram.delete_group(db, group_id=group.id)
+                    raise ValueError("Parsing cancelled by user")
                 self._update_progress("error", message=f"Error processing members: {str(e)}")
+                raise
+            
+            if self._is_cancelled:
+                # Delete the group if cancelled
+                if group and group.id:
+                    crud.telegram.delete_group(db, group_id=group.id)
+                raise ValueError("Parsing cancelled by user")
             
             # Refresh and return group
             db.refresh(group)
             return group
             
         except Exception as e:
-            self._update_progress("error", message=f"Error parsing chat: {str(e)}")
+            error_msg = str(e)
+            try:
+                # Delete the group if it was created and we got an error or cancellation
+                if self._is_cancelled and group and group.id:
+                    try:
+                        crud.telegram.delete_group(db, group_id=group.id)
+                    except Exception as cleanup_error:
+                        logging.error(f"Error during cleanup: {cleanup_error}")
+            except Exception as cleanup_error:
+                logging.error(f"Error during final cleanup: {cleanup_error}")
+            
+            # Update progress before disconnecting
+            if self._is_cancelled:
+                self._update_progress("cancelled", message="Parsing cancelled by user")
+            else:
+                self._update_progress("error", message=f"Error parsing chat: {error_msg}")
+            
             raise HTTPException(
                 status_code=400,
-                detail=f"Error parsing chat: {str(e)}"
+                detail=f"Error parsing chat: {error_msg}"
             )
         finally:
-            await self._disconnect()
-            await asyncio.sleep(1)  # Give time for final progress update
-            self._reset_progress()
+            try:
+                # Disconnect from Telegram
+                if self.client:
+                    try:
+                        await self._disconnect()
+                    except Exception as disconnect_error:
+                        logging.error(f"Error during disconnect: {disconnect_error}")
+            except Exception as final_error:
+                logging.error(f"Error during final cleanup: {final_error}")
+            
+            # Handle progress reset
+            try:
+                if self._is_cancelled:
+                    # Create a task for delayed reset to avoid blocking
+                    asyncio.create_task(self._delayed_reset())
+                else:
+                    self._reset_progress()
+            except Exception as reset_error:
+                logging.error(f"Error during progress reset: {reset_error}")
 
     async def _get_channel_posts(self, channel_entity: Channel, limit: int = 100) -> List[Dict[str, Any]]:
         """Get posts from a channel"""
@@ -497,36 +663,87 @@ class TelegramParserService:
             self._update_progress("connecting", message="Connecting to Telegram...")
             await self._connect()
             
-            # Extract channel ID from link
+            # Check for cancellation
+            if self._is_cancelled:
+                raise ValueError("Parsing cancelled by user")
+            
+            # Channel validation
             self._update_progress("validation", message="Validating channel...")
-            channel_id = await self._extract_group_id(channel_link)
             
-            # Check if channel was already parsed
-            existing_group = crud.telegram.get_group_by_telegram_id(db, channel_id, user_id)
-            if existing_group:
-                self._update_progress("completed", message="Channel was already parsed")
-                return existing_group
+            try:
+                # Handle numeric IDs (from dialog list) and links differently
+                if channel_link.lstrip('-').isdigit():
+                    # Direct numeric ID from dialog list
+                    channel_entity = await self.client.get_entity(int(channel_link))
+                else:
+                    # Handle links and usernames
+                    channel_id = await self._extract_group_id(channel_link)
+                    channel_entity = await self.client.get_entity(channel_id)
+                
+                if not channel_entity:
+                    raise ValueError("Could not find the channel")
+                
+            except ValueError as e:
+                # Try to get from dialogs if direct lookup fails
+                try:
+                    result = await self.client(GetDialogsRequest(
+                        offset_date=None,
+                        offset_id=0,
+                        offset_peer=InputPeerEmpty(),
+                        limit=100,
+                        hash=0
+                    ))
+                    
+                    for dialog in result.dialogs:
+                        # Check for cancellation
+                        if self._is_cancelled:
+                            raise ValueError("Parsing cancelled by user")
+                            
+                        peer = dialog.peer
+                        if (hasattr(peer, 'channel_id') and str(peer.channel_id) == channel_link.lstrip('-')):
+                            # Found the channel in dialogs
+                            channel_entity = await self.client.get_entity(peer)
+                            if channel_entity:
+                                break
+                    else:
+                        raise ValueError("Could not find the channel. Please check the ID/link and try again.")
+                except Exception as inner_e:
+                    raise ValueError(f"Error accessing channel: {str(inner_e)}")
+            except Exception as e:
+                raise ValueError(f"Error accessing channel: {str(e)}")
             
-            # Get channel entity
-            channel_entity, is_channel = await self._get_group_entity(channel_id)
-            if not is_channel or not isinstance(channel_entity, Channel):
+            # Verify that this is actually a channel
+            if not isinstance(channel_entity, Channel) or not getattr(channel_entity, 'broadcast', False):
                 raise ValueError("The provided link is not a channel")
             
             # Get full channel info
             self._update_progress("info", message="Getting channel information...")
             full_channel = await self.client(GetFullChannelRequest(channel=channel_entity))
             
-            # Create group record
+            # Check for cancellation
+            if self._is_cancelled:
+                raise ValueError("Parsing cancelled by user")
+            
+            # Create channel record
             self._update_progress("database", message="Creating channel record...")
+            
+            # Check if channel is truly public
+            is_public = (
+                bool(getattr(channel_entity, 'username', None)) and  # Has username
+                not getattr(channel_entity, 'restricted', False) and  # Not restricted
+                not getattr(channel_entity, 'private', False)  # Not private
+            )
+            
             group_data = ParsedGroupCreate(
                 group_id=str(channel_entity.id),
                 group_name=channel_entity.title,
                 group_username=channel_entity.username,
                 member_count=full_channel.full_chat.participants_count,
-                is_public=not getattr(channel_entity, "restricted", False),
+                is_public=is_public,
                 is_channel=True  # Set this to True for channels
             )
             group = crud.telegram.create_group(db, obj_in=group_data, user_id=user_id)
+            self.__class__._current_group_id = group.id
             
             try:
                 # Get post IDs
@@ -537,6 +754,10 @@ class TelegramParserService:
                 # Get unique commenters from all posts
                 all_commenters = {}
                 for idx, post_id in enumerate(post_ids, 1):
+                    # Check for cancellation
+                    if self._is_cancelled:
+                        raise ValueError("Parsing cancelled by user")
+                        
                     try:
                         self._update_progress("processing", current=idx, total=len(post_ids),
                                             message=f"Processing post {idx}/{len(post_ids)}")
@@ -551,6 +772,10 @@ class TelegramParserService:
                 self._update_progress("saving", message=f"Saving {len(all_commenters)} unique commenters...")
                 member_objects = []
                 for commenter in all_commenters.values():
+                    # Check for cancellation
+                    if self._is_cancelled:
+                        raise ValueError("Parsing cancelled by user")
+                        
                     member_data = GroupMemberCreate(
                         group_id=group.id,
                         user_id=commenter["user_id"],
@@ -568,22 +793,44 @@ class TelegramParserService:
                 
                 self._update_progress("completed", message="Channel parsing completed successfully")
             except Exception as e:
+                if self._is_cancelled and self._current_group_id:
+                    # Delete the partially created group if cancelled
+                    crud.telegram.delete_group(db, group_id=self._current_group_id)
+                    self._current_group_id = None
+                    raise ValueError("Parsing cancelled by user")
                 self._update_progress("error", message=f"Error processing posts and comments: {str(e)}")
                 print(f"Error processing posts and comments: {e}")
-                # Don't raise the error - we still want to return the channel even if we can't get comments
+            
+            if self._is_cancelled:
+                # Delete the group if cancelled
+                if self._current_group_id:
+                    crud.telegram.delete_group(db, group_id=self._current_group_id)
+                    self._current_group_id = None
+                raise ValueError("Parsing cancelled by user")
             
             # Refresh the group to include any members that were added
             group = crud.telegram.get_group_by_id(db, group_id=group.id)
             return group
             
         except Exception as e:
+            # Delete the group if it was created and we got an error or cancellation
+            if self._is_cancelled and self._current_group_id:
+                crud.telegram.delete_group(db, group_id=self._current_group_id)
+                self._current_group_id = None
+            
             self._update_progress("error", message=f"Error parsing channel: {str(e)}")
             print(f"Error parsing channel: {e}")
             raise
         finally:
+            # Clean up in case of any unexpected exits
+            if self._is_cancelled and self._current_group_id:
+                try:
+                    crud.telegram.delete_group(db, group_id=self._current_group_id)
+                except:
+                    pass
             await self._disconnect()
             await asyncio.sleep(1)  # Give time for final progress update
-            self._reset_progress() 
+            self._reset_progress()
 
     async def list_dialogs(self, db: Session, user_id: int) -> List[Dict[str, Any]]:
         """List all available dialogs (groups and channels) for the user"""
@@ -644,6 +891,7 @@ class TelegramParserService:
                             name = f"{getattr(chat, 'first_name', '')} {getattr(chat, 'last_name', '')}".strip()
                             chat_type = 'user'
                             member_count = 2  # User chat always has 2 members
+                            is_public = False  # User chats are always private
                         else:
                             name = chat.title
                             chat_type = 'channel' if getattr(chat, 'broadcast', False) else 'group'
@@ -658,6 +906,13 @@ class TelegramParserService:
                                         member_count = 0
                                 except:
                                     member_count = 0
+                            
+                            # Check if channel/group is truly public
+                            is_public = (
+                                bool(getattr(chat, 'username', None)) and  # Has username
+                                not getattr(chat, 'restricted', False) and  # Not restricted
+                                not getattr(chat, 'private', False)  # Not private
+                            )
 
                         dialog_data = {
                             'id': str(chat.id),
@@ -665,7 +920,7 @@ class TelegramParserService:
                             'username': getattr(chat, 'username', None),
                             'type': chat_type,
                             'members_count': member_count,
-                            'is_public': bool(getattr(chat, 'username', None))
+                            'is_public': is_public
                         }
                         dialogs.append(dialog_data)
                 except Exception as e:

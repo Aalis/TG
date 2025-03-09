@@ -14,20 +14,22 @@ class User(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
+    can_parse = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    last_visit = Column(DateTime(timezone=True), nullable=True)
     
-    # Relationships
-    telegram_tokens = relationship("TelegramToken", back_populates="user")
-    parsed_groups = relationship("ParsedGroup", back_populates="user")
-    telegram_sessions = relationship("TelegramSession", back_populates="user")
+    # Relationships with cascade deletion
+    telegram_tokens = relationship("TelegramToken", back_populates="user", cascade="all, delete-orphan")
+    parsed_groups = relationship("ParsedGroup", back_populates="user", cascade="all, delete-orphan")
+    telegram_sessions = relationship("TelegramSession", back_populates="user", cascade="all, delete-orphan")
 
 
 class TelegramToken(Base):
     __tablename__ = "telegram_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     api_id = Column(String)
     api_hash = Column(String)
     phone = Column(String, nullable=True)
@@ -44,7 +46,7 @@ class ParsedGroup(Base):
     __tablename__ = "parsed_groups"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     group_id = Column(String, index=True)
     group_name = Column(String)
     group_username = Column(String, nullable=True)
@@ -53,17 +55,17 @@ class ParsedGroup(Base):
     is_channel = Column(Boolean, default=False)
     parsed_at = Column(DateTime(timezone=True), server_default=func.now())
     
-    # Relationships
+    # Relationships with cascade deletion
     user = relationship("User", back_populates="parsed_groups")
-    members = relationship("GroupMember", back_populates="group")
-    posts = relationship("ChannelPost", back_populates="group")
+    members = relationship("GroupMember", back_populates="group", cascade="all, delete-orphan")
+    posts = relationship("ChannelPost", back_populates="group", cascade="all, delete-orphan")
 
 
 class GroupMember(Base):
     __tablename__ = "group_members"
 
     id = Column(Integer, primary_key=True, index=True)
-    group_id = Column(Integer, ForeignKey("parsed_groups.id"))
+    group_id = Column(Integer, ForeignKey("parsed_groups.id", ondelete="CASCADE"))
     user_id = Column(String, index=True)
     username = Column(String, nullable=True)
     first_name = Column(String, nullable=True)
@@ -81,7 +83,7 @@ class TelegramSession(Base):
     __tablename__ = "telegram_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     phone = Column(String)
     session_string = Column(Text)
     is_active = Column(Boolean, default=True)
@@ -96,7 +98,7 @@ class ChannelPost(Base):
     __tablename__ = "channel_posts"
 
     id = Column(Integer, primary_key=True, index=True)
-    group_id = Column(Integer, ForeignKey("parsed_groups.id"))
+    group_id = Column(Integer, ForeignKey("parsed_groups.id", ondelete="CASCADE"))
     post_id = Column(String, index=True)
     message = Column(Text)
     views = Column(Integer, default=0)
@@ -105,22 +107,22 @@ class ChannelPost(Base):
     posted_at = Column(DateTime(timezone=True))
     parsed_at = Column(DateTime(timezone=True), server_default=func.now())
     
-    # Relationships
+    # Relationships with cascade deletion
     group = relationship("ParsedGroup", back_populates="posts")
-    comments = relationship("PostComment", back_populates="post")
+    comments = relationship("PostComment", back_populates="post", cascade="all, delete-orphan")
 
 
 class PostComment(Base):
     __tablename__ = "post_comments"
 
     id = Column(Integer, primary_key=True, index=True)
-    post_id = Column(Integer, ForeignKey("channel_posts.id"))
+    post_id = Column(Integer, ForeignKey("channel_posts.id", ondelete="CASCADE"))
     user_id = Column(String, index=True)
     username = Column(String, nullable=True)
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     message = Column(Text)
-    replied_to_id = Column(Integer, ForeignKey("post_comments.id"), nullable=True)
+    replied_to_id = Column(Integer, ForeignKey("post_comments.id", ondelete="SET NULL"), nullable=True)
     commented_at = Column(DateTime(timezone=True))
     parsed_at = Column(DateTime(timezone=True), server_default=func.now())
     

@@ -65,21 +65,24 @@ export const groupsAPI = {
     }),
   getParsingProgress: () => axios.get(`${API_URL}/telegram/parse-group/progress`),
   getDialogs: () => axios.get(`${API_URL}/telegram/dialogs/`),
+  cancelParsing: () => axios.post(`${API_URL}/telegram/parse-group/cancel`),
 };
 
 // Telegram Channels API
 export const channelsAPI = {
-  getAll: () => api.get('/telegram/parsed-channels/'),
-  getById: (id) => api.get(`/telegram/parsed-channels/${id}`),
-  deleteChannel: (id) => api.delete(`/telegram/parsed-channels/${id}`),
+  getAll: () => axios.get(`${API_URL}/telegram/parsed-channels/`),
+  getById: (id) => axios.get(`${API_URL}/telegram/parsed-channels/${id}`),
+  deleteChannel: (id) => axios.delete(`${API_URL}/telegram/parsed-channels/${id}`),
   parseChannel: (channelLink, postLimit = 100) => 
-    api.post('/telegram/parse-channel/', {
+    axios.post(`${API_URL}/telegram/parse-channel/`, {
       channel_link: channelLink,
       post_limit: postLimit
     }),
-  getPosts: (channelId) => api.get(`/telegram/groups/${channelId}/posts/`),
-  getComments: (postId) => api.get(`/telegram/posts/${postId}/comments/`),
-  getParsingProgress: () => api.get('/telegram/parse-channel/progress'),
+  getPosts: (channelId) => axios.get(`${API_URL}/telegram/groups/${channelId}/posts/`),
+  getComments: (postId) => axios.get(`${API_URL}/telegram/posts/${postId}/comments/`),
+  getParsingProgress: () => axios.get(`${API_URL}/telegram/parse-channel/progress`),
+  getDialogs: () => axios.get(`${API_URL}/telegram/dialogs/`),
+  cancelParsing: () => axios.post(`${API_URL}/telegram/parse-channel/cancel`),
 };
 
 // Telegram Sessions API

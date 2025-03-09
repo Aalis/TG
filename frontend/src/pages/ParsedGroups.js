@@ -31,6 +31,7 @@ import {
   LinearProgress,
   Divider,
 } from '@mui/material';
+import { LoadingButton } from '@mui/lab';
 import {
   Search as SearchIcon,
   Delete as DeleteIcon,
@@ -39,7 +40,6 @@ import {
   Send as SendIcon,
 } from '@mui/icons-material';
 import { groupsAPI } from '../services/api';
-import { LoadingButton } from '@mui/lab';
 import { useSnackbar } from 'notistack';
 
 const ParsedGroups = () => {
@@ -60,6 +60,7 @@ const ParsedGroups = () => {
   const [loadingDialogs, setLoadingDialogs] = useState(false);
   const [dialogError, setDialogError] = useState(null);
   const [selectedDialog, setSelectedDialog] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -222,6 +223,19 @@ const ParsedGroups = () => {
     }
   }, [parseDialogOpen]);
 
+  const handleCancelParsing = async () => {
+    try {
+      setIsCancelling(true);
+      await groupsAPI.cancelParsing();
+      // The progress polling will automatically stop when the backend reports is_parsing: false
+    } catch (err) {
+      console.error('Error cancelling parsing:', err);
+      enqueueSnackbar('Failed to cancel parsing', { variant: 'error' });
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   if (loading && groups.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -327,19 +341,26 @@ const ParsedGroups = () => {
                     {group.group_username ? `@${group.group_username}` : 'Private Group'}
                   </Typography>
                   
-                  <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, mb: 1 }}>
-                    <Chip 
-                      label={`${group.member_count} members`} 
-                      size="small" 
-                      color="primary" 
-                      variant="outlined"
-                    />
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Chip 
+                        label={`${group.member_count.toLocaleString()} total members`} 
+                        size="small" 
+                        color="primary" 
+                        variant="outlined"
+                      />
+                      <Chip 
+                        label={`${(group.members?.length || 0).toLocaleString()} users found`} 
+                        size="small" 
+                        color="info" 
+                        variant="outlined"
+                      />
+                    </Box>
                     <Chip 
                       label={group.is_public ? 'Public' : 'Private'} 
                       size="small" 
                       color={group.is_public ? 'success' : 'default'} 
                       variant="outlined"
-                      sx={{ ml: 1 }}
                     />
                   </Box>
                   
@@ -546,6 +567,16 @@ const ParsedGroups = () => {
             )}
           </Box>
         </DialogContent>
+        <DialogActions>
+          <LoadingButton
+            onClick={handleCancelParsing}
+            loading={isCancelling}
+            color="error"
+            variant="contained"
+          >
+            Cancel Parsing
+          </LoadingButton>
+        </DialogActions>
       </Dialog>
     </Box>
   );

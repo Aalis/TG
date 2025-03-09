@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,10 @@ def get_by_email(db: Session, email: str) -> Optional[User]:
 
 def get_by_username(db: Session, username: str) -> Optional[User]:
     return db.query(User).filter(User.username == username).first()
+
+
+def get_multi(db: Session, *, skip: int = 0, limit: int = 100) -> List[User]:
+    return db.query(User).offset(skip).limit(limit).all()
 
 
 def authenticate(db: Session, *, username: str, password: str) -> Optional[User]:
@@ -58,6 +62,13 @@ def update(
     db.commit()
     db.refresh(db_obj)
     return db_obj
+
+
+def remove(db: Session, *, id: int) -> None:
+    user = db.query(User).filter(User.id == id).first()
+    if user:
+        db.delete(user)
+        db.commit()
 
 
 def is_active(user: User) -> bool:

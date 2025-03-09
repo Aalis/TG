@@ -147,7 +147,7 @@ async def parse_group(
     *,
     db: Session = Depends(deps.get_db),
     request: GroupParseRequest,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.get_current_user_with_parse_permission),
 ) -> Any:
     """Parse a Telegram group"""
     try:
@@ -201,7 +201,7 @@ async def parse_channel(
     *,
     db: Session = Depends(deps.get_db),
     request: ChannelParseRequest,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.get_current_user_with_parse_permission),
 ) -> Any:
     """
     Parse a Telegram channel using the bot token pool.
@@ -373,4 +373,22 @@ async def list_dialogs(
         api_hash=settings.API_HASH
     )
     dialogs = await parser.list_dialogs(db, current_user.id)
-    return dialogs 
+    return dialogs
+
+
+@router.post("/parse-group/cancel")
+async def cancel_group_parsing(
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """Cancel the current group parsing operation"""
+    TelegramParserService.cancel_parsing()
+    return {"success": True, "message": "Parsing cancelled"}
+
+
+@router.post("/parse-channel/cancel")
+async def cancel_channel_parsing(
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """Cancel the current channel parsing operation"""
+    TelegramParserService.cancel_parsing()
+    return {"success": True, "message": "Parsing cancelled"} 

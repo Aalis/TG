@@ -32,6 +32,7 @@ import {
   Forum as ChannelsIcon,
   Person as ProfileIcon,
   Logout as LogoutIcon,
+  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -87,16 +88,6 @@ const MainLayout = () => {
       <List>
         <ListItem 
           button 
-          onClick={() => handleNavigate('/')}
-          selected={location.pathname === '/'}
-        >
-          <ListItemIcon>
-            <DashboardIcon />
-          </ListItemIcon>
-          <ListItemText primary="Dashboard" />
-        </ListItem>
-        <ListItem 
-          button 
           onClick={() => handleNavigate('/groups')}
           selected={location.pathname === '/groups'}
         >
@@ -115,9 +106,31 @@ const MainLayout = () => {
           </ListItemIcon>
           <ListItemText primary="Parsed Channels" />
         </ListItem>
+        <ListItem 
+          button 
+          onClick={() => handleNavigate('/')}
+          selected={location.pathname === '/'}
+        >
+          <ListItemIcon>
+            <DashboardIcon />
+          </ListItemIcon>
+          <ListItemText primary="Dashboard" />
+        </ListItem>
       </List>
       <Divider />
       <List>
+        {user?.is_superuser && (
+          <ListItem 
+            button 
+            onClick={() => handleNavigate('/admin')}
+            selected={location.pathname === '/admin'}
+          >
+            <ListItemIcon>
+              <AdminIcon />
+            </ListItemIcon>
+            <ListItemText primary="Admin Panel" />
+          </ListItem>
+        )}
         <ListItem 
           button 
           onClick={() => handleNavigate('/profile')}
