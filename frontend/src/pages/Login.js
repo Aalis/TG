@@ -1,104 +1,113 @@
-import React from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { Formik, Form, Field } from 'formik';
-import * as Yup from 'yup';
+import React, { useState } from 'react';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
+  Box,
   TextField,
   Button,
   Typography,
   Link,
-  Box,
-  Alert,
-  CircularProgress,
+  Paper,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
-
-// Validation schema
-const LoginSchema = Yup.object().shape({
-  username: Yup.string().required('Username is required'),
-  password: Yup.string().required('Password is required'),
-});
+import { useSnackbar } from 'notistack';
 
 const Login = () => {
-  const { login, error, setError, isLoading } = useAuth();
   const navigate = useNavigate();
-  
-  const handleSubmit = async (values, { setSubmitting }) => {
-    const success = await login(values.username, values.password);
-    
-    if (success) {
-      navigate('/');
+  const { login } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  const [formData, setFormData] = useState({
+    username: '',
+    password: '',
+  });
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const success = await login(formData.username, formData.password);
+      if (success) {
+        navigate('/');
+      }
+    } catch (error) {
+      enqueueSnackbar(error.response?.data?.detail || 'Login failed', { variant: 'error' });
     }
-    
-    setSubmitting(false);
   };
 
   return (
-    <Box sx={{ width: '100%' }}>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-      
-      <Formik
-        initialValues={{ username: '', password: '' }}
-        validationSchema={LoginSchema}
-        onSubmit={handleSubmit}
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 'calc(100vh - 120px)',
+      }}
+    >
+      <Paper
+        elevation={3}
+        sx={{
+          p: 3,
+          width: '100%',
+          maxWidth: '400px',
+          borderRadius: 2,
+        }}
       >
-        {({ errors, touched, isSubmitting }) => (
-          <Form>
-            <Field
-              as={TextField}
-              name="username"
-              label="Username"
-              fullWidth
-              variant="outlined"
-              margin="dense"
-              sx={{ mb: 2 }}
-              error={touched.username && Boolean(errors.username)}
-              helperText={touched.username && errors.username}
-              disabled={isLoading || isSubmitting}
-              autoComplete="username"
-            />
-            
-            <Field
-              as={TextField}
-              name="password"
-              label="Password"
-              type="password"
-              fullWidth
-              variant="outlined"
-              margin="dense"
-              sx={{ mb: 2 }}
-              error={touched.password && Boolean(errors.password)}
-              helperText={touched.password && errors.password}
-              disabled={isLoading || isSubmitting}
-              autoComplete="current-password"
-            />
-            
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              color="primary"
-              disabled={isLoading || isSubmitting}
-              sx={{ mt: 1, mb: 2 }}
-            >
-              {(isLoading || isSubmitting) ? <CircularProgress size={24} /> : 'Sign In'}
-            </Button>
-            
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="body2">
-                Don't have an account?{' '}
-                <Link component={RouterLink} to="/register" variant="body2">
-                  Sign Up
-                </Link>
-              </Typography>
-            </Box>
-          </Form>
-        )}
-      </Formik>
+        <Typography variant="h5" align="center" gutterBottom>
+          Sign In
+        </Typography>
+        <Box
+          component="form"
+          onSubmit={handleSubmit}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label="Username"
+            name="username"
+            value={formData.username}
+            onChange={handleChange}
+            autoComplete="username"
+          />
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label="Password"
+            name="password"
+            type="password"
+            value={formData.password}
+            onChange={handleChange}
+            autoComplete="current-password"
+          />
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            sx={{ mt: 1 }}
+          >
+            Sign In
+          </Button>
+          <Box sx={{ textAlign: 'center', mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Don't have an account?{' '}
+              <Link component={RouterLink} to="/register">
+                Register
+              </Link>
+            </Typography>
+          </Box>
+        </Box>
+      </Paper>
     </Box>
   );
 };

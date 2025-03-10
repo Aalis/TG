@@ -15,6 +15,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
     can_parse = Column(Boolean, default=False)
+    parse_permission_expires = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     last_visit = Column(DateTime(timezone=True), nullable=True)

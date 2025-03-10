@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     is_active: Optional[bool] = True
     is_superuser: bool = False
     can_parse: bool = False
+    parse_permission_expires: Optional[datetime] = None
 
 
 # Properties to receive via API on creation
@@ -23,6 +24,7 @@ class UserCreate(UserBase):
 class UserUpdate(UserBase):
     password: Optional[str] = None
     can_parse: Optional[bool] = None
+    parse_permission_expires: Optional[datetime] = None
 
 
 class UserInDBBase(UserBase):
@@ -42,4 +44,12 @@ class User(UserInDBBase):
 
 # Additional properties stored in DB
 class UserInDB(UserInDBBase):
-    hashed_password: str 
+    hashed_password: str
+
+
+class PaginatedUsers(BaseModel):
+    data: List[User]
+    total: int
+
+    class Config:
+        from_attributes = True 

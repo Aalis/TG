@@ -18,23 +18,38 @@ import {
     DialogContent,
     DialogContentText,
     DialogActions,
-    Button
+    Button,
+    Chip,
+    TextField,
+    InputAdornment,
+    TablePagination
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { adminService } from '../services/adminService';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { format, formatDistanceToNow } from 'date-fns';
+import TimerIcon from '@mui/icons-material/Timer';
+import SearchIcon from '@mui/icons-material/Search';
+import { format, formatDistanceToNow, isPast } from 'date-fns';
 
 export default function AdminPanel() {
     const [users, setUsers] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
     const [deleteDialog, setDeleteDialog] = useState({ open: false, userId: null, username: '' });
+    const [page, setPage] = useState(0);
+    const [totalUsers, setTotalUsers] = useState(0);
+    const rowsPerPage = 10;
     const { enqueueSnackbar } = useSnackbar();
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (search = searchQuery, currentPage = page) => {
         try {
-            const data = await adminService.getUsers();
+            const params = new URLSearchParams();
+            if (search) params.append('search', search);
+            params.append('skip', (currentPage * rowsPerPage).toString());
+            params.append('limit', rowsPerPage.toString());
+            const { data, total } = await adminService.getUsers(params);
             setUsers(data);
+            setTotalUsers(total);
         } catch (err) {
             enqueueSnackbar('Failed to fetch users', { variant: 'error' });
             console.error('Error fetching users:', err);
@@ -43,7 +58,28 @@ export default function AdminPanel() {
 
     useEffect(() => {
         fetchUsers();
-    }, []);
+        // Set up interval to refresh users list every minute
+        const interval = setInterval(() => fetchUsers(), 60000);
+        return () => clearInterval(interval);
+    }, [page]);
+
+    // Add debounced search effect
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            setPage(0); // Reset to first page when searching
+            fetchUsers(searchQuery, 0);
+        }, 300);
+
+        return () => clearTimeout(timeoutId);
+    }, [searchQuery]);
+
+    const handleSearchChange = (event) => {
+        setSearchQuery(event.target.value);
+    };
+
+    const handlePageChange = (event, newPage) => {
+        setPage(newPage);
+    };
 
     const handleToggleParsePermission = async (userId) => {
         try {
@@ -110,17 +146,60 @@ export default function AdminPanel() {
         }
     };
 
+    const formatParsePermission = (user) => {
+        if (!user.can_parse) return 'Disabled';
+        if (!user.parse_permission_expires) return 'Enabled';
+
+        const expiryDate = new Date(user.parse_permission_expires);
+        if (isPast(expiryDate)) {
+            return (
+                <Chip
+                    label="Expired"
+                    color="error"
+                    size="small"
+                    icon={<TimerIcon />}
+                />
+            );
+        }
+
+        return (
+            <Tooltip title={`Expires ${format(expiryDate, 'dd.MM.yyyy HH:mm')}`}>
+                <Chip
+                    label={`${formatDistanceToNow(expiryDate)} left`}
+                    color="success"
+                    size="small"
+                    icon={<TimerIcon />}
+                />
+            </Tooltip>
+        );
+    };
+
     return (
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h4" component="h1">
                     User Management
                 </Typography>
-                <Tooltip title="Refresh users list">
-                    <IconButton onClick={fetchUsers}>
-                        <RefreshIcon />
-                    </IconButton>
-                </Tooltip>
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <TextField
+                        size="small"
+                        placeholder="Search users..."
+                        value={searchQuery}
+                        onChange={handleSearchChange}
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <SearchIcon />
+                                </InputAdornment>
+                            ),
+                        }}
+                    />
+                    <Tooltip title="Refresh users list">
+                        <IconButton onClick={() => fetchUsers()}>
+                            <RefreshIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
             </Box>
 
             <TableContainer component={Paper}>
@@ -132,6 +211,7 @@ export default function AdminPanel() {
                             <TableCell>Email</TableCell>
                             <TableCell align="center">Active</TableCell>
                             <TableCell align="center">Can Parse</TableCell>
+                            <TableCell align="center">Parse Status</TableCell>
                             <TableCell align="center">Superuser</TableCell>
                             <TableCell align="right">Last Visit</TableCell>
                             <TableCell align="center">Actions</TableCell>
@@ -140,7 +220,7 @@ export default function AdminPanel() {
                     <TableBody>
                         {users.map((user, index) => (
                             <TableRow key={user.id}>
-                                <TableCell>{index + 1}</TableCell>
+                                <TableCell>{page * rowsPerPage + index + 1}</TableCell>
                                 <TableCell>{user.username}</TableCell>
                                 <TableCell>{user.email}</TableCell>
                                 <TableCell align="center">
@@ -156,6 +236,9 @@ export default function AdminPanel() {
                                         onChange={() => handleToggleParsePermission(user.id)}
                                         disabled={user.is_superuser}
                                     />
+                                </TableCell>
+                                <TableCell align="center">
+                                    {formatParsePermission(user)}
                                 </TableCell>
                                 <TableCell align="center">
                                     <Switch
@@ -184,6 +267,14 @@ export default function AdminPanel() {
                         ))}
                     </TableBody>
                 </Table>
+                <TablePagination
+                    component="div"
+                    count={totalUsers}
+                    page={page}
+                    onPageChange={handlePageChange}
+                    rowsPerPage={rowsPerPage}
+                    rowsPerPageOptions={[10]}
+                />
             </TableContainer>
 
             <Dialog

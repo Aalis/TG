@@ -1,132 +1,144 @@
-import React from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { Formik, Form, Field } from 'formik';
-import * as Yup from 'yup';
+import React, { useState } from 'react';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
+  Box,
   TextField,
   Button,
   Typography,
   Link,
-  Box,
-  Alert,
-  CircularProgress,
+  Paper,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
-
-// Validation schema
-const RegisterSchema = Yup.object().shape({
-  email: Yup.string()
-    .email('Invalid email address')
-    .required('Email is required'),
-  username: Yup.string()
-    .min(3, 'Username must be at least 3 characters')
-    .max(20, 'Username must be at most 20 characters')
-    .required('Username is required'),
-  password: Yup.string()
-    .min(6, 'Password must be at least 6 characters')
-    .required('Password is required'),
-  confirmPassword: Yup.string()
-    .oneOf([Yup.ref('password'), null], 'Passwords must match')
-    .required('Confirm password is required'),
-});
+import { useSnackbar } from 'notistack';
 
 const Register = () => {
-  const { register, error, setError, isLoading } = useAuth();
   const navigate = useNavigate();
-  
-  const handleSubmit = async (values, { setSubmitting }) => {
-    const success = await register(values.email, values.username, values.password);
-    
-    if (success) {
-      navigate('/login');
+  const { register } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  const [formData, setFormData] = useState({
+    email: '',
+    username: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (formData.password !== formData.confirmPassword) {
+      enqueueSnackbar('Passwords do not match', { variant: 'error' });
+      return;
     }
-    
-    setSubmitting(false);
+
+    try {
+      const { confirmPassword, ...registrationData } = formData;
+      const success = await register(registrationData.email, registrationData.username, registrationData.password);
+      if (success) {
+        enqueueSnackbar('Registration successful!', { variant: 'success' });
+        navigate('/login');
+      }
+    } catch (error) {
+      enqueueSnackbar(error.response?.data?.detail || 'Registration failed', { variant: 'error' });
+    }
   };
 
   return (
-    <Box sx={{ width: '100%' }}>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-      
-      <Formik
-        initialValues={{ email: '', username: '', password: '', confirmPassword: '' }}
-        validationSchema={RegisterSchema}
-        onSubmit={handleSubmit}
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 'calc(100vh - 120px)',
+      }}
+    >
+      <Paper
+        elevation={3}
+        sx={{
+          p: 3,
+          width: '100%',
+          maxWidth: '400px',
+          borderRadius: 2,
+        }}
       >
-        {({ errors, touched, isSubmitting }) => (
-          <Form>
-            <Field
-              as={TextField}
-              name="email"
-              label="Email"
-              fullWidth
-              margin="normal"
-              error={touched.email && Boolean(errors.email)}
-              helperText={touched.email && errors.email}
-              disabled={isLoading || isSubmitting}
-            />
-            
-            <Field
-              as={TextField}
-              name="username"
-              label="Username"
-              fullWidth
-              margin="normal"
-              error={touched.username && Boolean(errors.username)}
-              helperText={touched.username && errors.username}
-              disabled={isLoading || isSubmitting}
-            />
-            
-            <Field
-              as={TextField}
-              name="password"
-              label="Password"
-              type="password"
-              fullWidth
-              margin="normal"
-              error={touched.password && Boolean(errors.password)}
-              helperText={touched.password && errors.password}
-              disabled={isLoading || isSubmitting}
-            />
-            
-            <Field
-              as={TextField}
-              name="confirmPassword"
-              label="Confirm Password"
-              type="password"
-              fullWidth
-              margin="normal"
-              error={touched.confirmPassword && Boolean(errors.confirmPassword)}
-              helperText={touched.confirmPassword && errors.confirmPassword}
-              disabled={isLoading || isSubmitting}
-            />
-            
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              color="primary"
-              disabled={isLoading || isSubmitting}
-              sx={{ mt: 3, mb: 2 }}
-            >
-              {(isLoading || isSubmitting) ? <CircularProgress size={24} /> : 'Sign Up'}
-            </Button>
-            
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="body2">
-                Already have an account?{' '}
-                <Link component={RouterLink} to="/login" variant="body2">
-                  Sign In
-                </Link>
-              </Typography>
-            </Box>
-          </Form>
-        )}
-      </Formik>
+        <Typography variant="h5" align="center" gutterBottom>
+          Create Account
+        </Typography>
+        <Box
+          component="form"
+          onSubmit={handleSubmit}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label="Email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            autoComplete="email"
+          />
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label="Username"
+            name="username"
+            value={formData.username}
+            onChange={handleChange}
+            autoComplete="username"
+          />
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label="Password"
+            name="password"
+            type="password"
+            value={formData.password}
+            onChange={handleChange}
+            autoComplete="new-password"
+          />
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label="Confirm Password"
+            name="confirmPassword"
+            type="password"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            autoComplete="new-password"
+          />
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            sx={{ mt: 1 }}
+          >
+            Register
+          </Button>
+          <Box sx={{ textAlign: 'center', mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Already have an account?{' '}
+              <Link component={RouterLink} to="/login">
+                Sign In
+              </Link>
+            </Typography>
+          </Box>
+        </Box>
+      </Paper>
     </Box>
   );
 };

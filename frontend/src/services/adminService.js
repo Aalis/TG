@@ -1,23 +1,25 @@
 import api from './api';
 
-export const adminService = {
-    getUsers: async () => {
-        const response = await api.get('/admin/users');
+class AdminService {
+    async getUsers(params = new URLSearchParams()) {
+        const response = await api.get(`/admin/users?${params.toString()}`);
         return response.data;
-    },
+    }
 
-    updateUserPermissions: async (userId, permissions) => {
+    async updateUserPermissions(userId, permissions) {
         const response = await api.patch(`/admin/users/${userId}/permissions`, permissions);
         return response.data;
-    },
+    }
 
-    toggleParsePermission: async (userId) => {
+    async toggleParsePermission(userId) {
         const response = await api.patch(`/admin/users/${userId}/toggle-parse-permission`);
         return response.data;
-    },
+    }
 
-    deleteUser: async (userId) => {
+    async deleteUser(userId) {
         const response = await api.delete(`/admin/users/${userId}`);
         return response.data;
     }
-}; 
+}
+
+export const adminService = new AdminService(); 
