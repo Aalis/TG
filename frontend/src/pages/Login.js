@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link as RouterLink, useSearchParams } from 'react-router-dom';
 import {
   Box,
   TextField,
@@ -7,6 +7,7 @@ import {
   Typography,
   Link,
   Paper,
+  Alert,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { useSnackbar } from 'notistack';
@@ -15,10 +16,32 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     username: '',
     password: '',
   });
+
+  // Check for verification status and stored username
+  useEffect(() => {
+    const isVerified = searchParams.get('verified') === 'true';
+    const storedUsername = localStorage.getItem('lastRegisteredUsername');
+    
+    if (isVerified) {
+      enqueueSnackbar('Email verified successfully! Please log in.', { 
+        variant: 'success',
+        autoHideDuration: 6000
+      });
+    }
+    
+    if (storedUsername) {
+      setFormData(prev => ({
+        ...prev,
+        username: storedUsername
+      }));
+      localStorage.removeItem('lastRegisteredUsername'); // Clean up
+    }
+  }, [searchParams, enqueueSnackbar]);
 
   const handleChange = (e) => {
     setFormData({
@@ -60,6 +83,11 @@ const Login = () => {
         <Typography variant="h5" align="center" gutterBottom>
           Sign In
         </Typography>
+        {searchParams.get('verified') === 'true' && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            Email verified successfully! Please log in.
+          </Alert>
+        )}
         <Box
           component="form"
           onSubmit={handleSubmit}
@@ -90,6 +118,16 @@ const Login = () => {
             onChange={handleChange}
             autoComplete="current-password"
           />
+          <Box sx={{ width: '100%', textAlign: 'right' }}>
+            <Link
+              component={RouterLink}
+              to="/forgot-password"
+              variant="body2"
+              sx={{ textDecoration: 'none' }}
+            >
+              Forgot password?
+            </Link>
+          </Box>
           <Button
             type="submit"
             fullWidth

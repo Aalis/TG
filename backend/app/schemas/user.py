@@ -11,6 +11,11 @@ class UserBase(BaseModel):
     is_superuser: bool = False
     can_parse: bool = False
     parse_permission_expires: Optional[datetime] = None
+    email_verified: Optional[bool] = False
+    password_reset_token: Optional[str] = None
+    password_reset_expires: Optional[datetime] = None
+    verification_token: Optional[str] = None
+    verification_token_expires: Optional[datetime] = None
 
 
 # Properties to receive via API on creation
@@ -25,6 +30,10 @@ class UserUpdate(UserBase):
     password: Optional[str] = None
     can_parse: Optional[bool] = None
     parse_permission_expires: Optional[datetime] = None
+    password_reset_token: Optional[str] = None
+    password_reset_expires: Optional[datetime] = None
+    verification_token: Optional[str] = None
+    verification_token_expires: Optional[datetime] = None
 
 
 class UserInDBBase(UserBase):

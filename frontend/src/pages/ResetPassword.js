@@ -1,28 +1,28 @@
 import React, { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   TextField,
   Button,
   Typography,
-  Link,
   Paper,
   Alert,
 } from '@mui/material';
-import { useAuth } from '../context/AuthContext';
 import { useSnackbar } from 'notistack';
+import { authService } from '../services/authService';
 
-const Register = () => {
+const ResetPassword = () => {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const [searchParams] = useSearchParams();
   const { enqueueSnackbar } = useSnackbar();
-  const [isRegistered, setIsRegistered] = useState(false);
   const [formData, setFormData] = useState({
-    email: '',
-    username: '',
     password: '',
     confirmPassword: '',
   });
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const token = searchParams.get('token');
+  console.log('Reset token from URL:', token); // Debug log
 
   const handleChange = (e) => {
     setFormData({
@@ -33,29 +33,69 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!token) {
+      enqueueSnackbar('Invalid reset token', { variant: 'error' });
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       enqueueSnackbar('Passwords do not match', { variant: 'error' });
       return;
     }
 
     try {
-      const { confirmPassword, ...registrationData } = formData;
-      const success = await register(registrationData.email, registrationData.username, registrationData.password);
-      if (success) {
-        // Store username for login page
-        localStorage.setItem('lastRegisteredUsername', registrationData.username);
-        setIsRegistered(true);
-        enqueueSnackbar('Registration successful! Please check your email to verify your account.', { 
-          variant: 'success',
-          autoHideDuration: 8000
-        });
-      }
+      console.log('Attempting to reset password with token:', token); // Debug log
+      await authService.resetPassword(token, formData.password);
+      setIsSubmitted(true);
+      enqueueSnackbar('Password has been reset successfully', {
+        variant: 'success',
+      });
     } catch (error) {
-      enqueueSnackbar(error.response?.data?.detail || 'Registration failed', { variant: 'error' });
+      console.error('Reset password error:', error.response?.data); // Debug log
+      enqueueSnackbar(error.response?.data?.detail || 'Failed to reset password', {
+        variant: 'error',
+      });
     }
   };
 
-  if (isRegistered) {
+  if (!token) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: 'calc(100vh - 120px)',
+        }}
+      >
+        <Paper
+          elevation={3}
+          sx={{
+            p: 3,
+            width: '100%',
+            maxWidth: '400px',
+            borderRadius: 2,
+          }}
+        >
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Invalid Reset Link
+          </Alert>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            The password reset link is invalid or has expired. Please request a new password reset.
+          </Typography>
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={() => navigate('/forgot-password')}
+          >
+            Request New Reset Link
+          </Button>
+        </Paper>
+      </Box>
+    );
+  }
+
+  if (isSubmitted) {
     return (
       <Box
         sx={{
@@ -75,10 +115,10 @@ const Register = () => {
           }}
         >
           <Alert severity="success" sx={{ mb: 2 }}>
-            Registration successful!
+            Password Reset Successful
           </Alert>
           <Typography variant="body1" sx={{ mb: 2 }}>
-            A verification email has been sent to {formData.email}. Please check your inbox and click the verification link.
+            Your password has been reset successfully. You can now log in with your new password.
           </Typography>
           <Button
             fullWidth
@@ -111,7 +151,10 @@ const Register = () => {
         }}
       >
         <Typography variant="h5" align="center" gutterBottom>
-          Create Account
+          Reset Password
+        </Typography>
+        <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 2 }}>
+          Enter your new password below.
         </Typography>
         <Box
           component="form"
@@ -126,44 +169,21 @@ const Register = () => {
             required
             fullWidth
             size="small"
-            label="Email"
-            name="email"
-            type="email"
-            value={formData.email}
-            onChange={handleChange}
-            autoComplete="email"
-          />
-          <TextField
-            required
-            fullWidth
-            size="small"
-            label="Username"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            autoComplete="username"
-          />
-          <TextField
-            required
-            fullWidth
-            size="small"
-            label="Password"
+            label="New Password"
             name="password"
             type="password"
             value={formData.password}
             onChange={handleChange}
-            autoComplete="new-password"
           />
           <TextField
             required
             fullWidth
             size="small"
-            label="Confirm Password"
+            label="Confirm New Password"
             name="confirmPassword"
             type="password"
             value={formData.confirmPassword}
             onChange={handleChange}
-            autoComplete="new-password"
           />
           <Button
             type="submit"
@@ -171,20 +191,12 @@ const Register = () => {
             variant="contained"
             sx={{ mt: 1 }}
           >
-            Register
+            Reset Password
           </Button>
-          <Box sx={{ textAlign: 'center', mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Already have an account?{' '}
-              <Link component={RouterLink} to="/login">
-                Sign In
-              </Link>
-            </Typography>
-          </Box>
         </Box>
       </Paper>
     </Box>
   );
 };
 
-export default Register; 
+export default ResetPassword; 

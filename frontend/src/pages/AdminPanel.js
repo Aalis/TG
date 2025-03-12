@@ -22,7 +22,11 @@ import {
     Chip,
     TextField,
     InputAdornment,
-    TablePagination
+    TablePagination,
+    Menu,
+    MenuItem,
+    ListItemIcon,
+    ListItemText
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { adminService } from '../services/adminService';
@@ -30,7 +34,17 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import TimerIcon from '@mui/icons-material/Timer';
 import SearchIcon from '@mui/icons-material/Search';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
+
+const PARSE_DURATIONS = [
+    { value: '1_hour', label: '1 Hour', icon: <AccessTimeIcon /> },
+    { value: '1_day', label: '1 Day', icon: <AccessTimeIcon /> },
+    { value: '5_days', label: '5 Days', icon: <AccessTimeIcon /> },
+    { value: '20_days', label: '20 Days', icon: <AccessTimeIcon /> },
+];
 
 export default function AdminPanel() {
     const [users, setUsers] = useState([]);
@@ -38,6 +52,9 @@ export default function AdminPanel() {
     const [deleteDialog, setDeleteDialog] = useState({ open: false, userId: null, username: '' });
     const [page, setPage] = useState(0);
     const [totalUsers, setTotalUsers] = useState(0);
+    const [newClientDialog, setNewClientDialog] = useState({ open: false, credentials: null });
+    const [parseMenuAnchor, setParseMenuAnchor] = useState(null);
+    const [selectedUserId, setSelectedUserId] = useState(null);
     const rowsPerPage = 10;
     const { enqueueSnackbar } = useSnackbar();
 
@@ -58,18 +75,15 @@ export default function AdminPanel() {
 
     useEffect(() => {
         fetchUsers();
-        // Set up interval to refresh users list every minute
         const interval = setInterval(() => fetchUsers(), 60000);
         return () => clearInterval(interval);
     }, [page]);
 
-    // Add debounced search effect
     useEffect(() => {
         const timeoutId = setTimeout(() => {
-            setPage(0); // Reset to first page when searching
+            setPage(0);
             fetchUsers(searchQuery, 0);
         }, 300);
-
         return () => clearTimeout(timeoutId);
     }, [searchQuery]);
 
@@ -81,16 +95,56 @@ export default function AdminPanel() {
         setPage(newPage);
     };
 
-    const handleToggleParsePermission = async (userId) => {
+    const handleCreateClient = async () => {
         try {
-            const updatedUser = await adminService.toggleParsePermission(userId);
+            const credentials = await adminService.createClientAccount();
+            setNewClientDialog({ open: true, credentials });
+            await fetchUsers();
+            enqueueSnackbar('Client account created successfully', { variant: 'success' });
+        } catch (err) {
+            enqueueSnackbar('Failed to create client account', { variant: 'error' });
+            console.error('Error creating client account:', err);
+        }
+    };
+
+    const handleCopyCredentials = (text) => {
+        navigator.clipboard.writeText(text);
+        enqueueSnackbar('Copied to clipboard', { variant: 'success' });
+    };
+
+    const handleToggleParsePermission = async (userId, currentValue, event) => {
+        if (!currentValue) {
+            // Opening menu to enable parsing with duration
+            setSelectedUserId(userId);
+            setParseMenuAnchor(event.currentTarget);
+        } else {
+            // Directly disable parsing
+            try {
+                const updatedUser = await adminService.toggleParsePermission(userId, false);
+                setUsers(users.map(user => 
+                    user.id === userId ? updatedUser : user
+                ));
+                enqueueSnackbar('Parse permission disabled', { variant: 'success' });
+            } catch (err) {
+                enqueueSnackbar('Failed to update permission', { variant: 'error' });
+                console.error('Error updating permission:', err);
+            }
+        }
+    };
+
+    const handleSelectDuration = async (duration) => {
+        try {
+            const updatedUser = await adminService.toggleParsePermission(selectedUserId, true, duration);
             setUsers(users.map(user => 
-                user.id === userId ? updatedUser : user
+                user.id === selectedUserId ? updatedUser : user
             ));
-            enqueueSnackbar('Permission updated successfully', { variant: 'success' });
+            enqueueSnackbar('Parse permission enabled', { variant: 'success' });
         } catch (err) {
             enqueueSnackbar('Failed to update permission', { variant: 'error' });
             console.error('Error updating permission:', err);
+        } finally {
+            setParseMenuAnchor(null);
+            setSelectedUserId(null);
         }
     };
 
@@ -181,6 +235,13 @@ export default function AdminPanel() {
                     User Management
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <Button
+                        variant="contained"
+                        startIcon={<PersonAddIcon />}
+                        onClick={handleCreateClient}
+                    >
+                        Create Client Account
+                    </Button>
                     <TextField
                         size="small"
                         placeholder="Search users..."
@@ -233,7 +294,7 @@ export default function AdminPanel() {
                                 <TableCell align="center">
                                     <Switch
                                         checked={user.can_parse}
-                                        onChange={() => handleToggleParsePermission(user.id)}
+                                        onChange={(e) => handleToggleParsePermission(user.id, user.can_parse, e)}
                                         disabled={user.is_superuser}
                                     />
                                 </TableCell>
@@ -250,18 +311,13 @@ export default function AdminPanel() {
                                     {formatDate(user.last_visit)}
                                 </TableCell>
                                 <TableCell align="center">
-                                    <Tooltip title={user.is_superuser ? "Cannot delete superuser" : "Delete user"}>
-                                        <span>
-                                            <IconButton
-                                                onClick={() => handleDeleteClick(user.id, user.username)}
-                                                disabled={user.is_superuser}
-                                                color="error"
-                                                size="small"
-                                            >
-                                                <DeleteIcon />
-                                            </IconButton>
-                                        </span>
-                                    </Tooltip>
+                                    <IconButton
+                                        color="error"
+                                        onClick={() => handleDeleteClick(user.id, user.username)}
+                                        disabled={user.is_superuser}
+                                    >
+                                        <DeleteIcon />
+                                    </IconButton>
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -273,7 +329,7 @@ export default function AdminPanel() {
                     page={page}
                     onPageChange={handlePageChange}
                     rowsPerPage={rowsPerPage}
-                    rowsPerPageOptions={[10]}
+                    rowsPerPageOptions={[rowsPerPage]}
                 />
             </TableContainer>
 
@@ -281,7 +337,7 @@ export default function AdminPanel() {
                 open={deleteDialog.open}
                 onClose={handleDeleteCancel}
             >
-                <DialogTitle>Confirm Delete User</DialogTitle>
+                <DialogTitle>Confirm Delete</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
                         Are you sure you want to delete user "{deleteDialog.username}"? This action cannot be undone.
@@ -289,11 +345,86 @@ export default function AdminPanel() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleDeleteCancel}>Cancel</Button>
-                    <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-                        Delete
+                    <Button onClick={handleDeleteConfirm} color="error">Delete</Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={newClientDialog.open}
+                onClose={() => setNewClientDialog({ open: false, credentials: null })}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>New Client Account Created</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Please save these credentials. You won't be able to see them again:
+                    </DialogContentText>
+                    <Box sx={{ mt: 2, mb: 2 }}>
+                        <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="body1">
+                                    <strong>Username:</strong> {newClientDialog.credentials?.username}
+                                </Typography>
+                                <IconButton 
+                                    size="small"
+                                    onClick={() => handleCopyCredentials(newClientDialog.credentials?.username)}
+                                >
+                                    <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="body1">
+                                    <strong>Password:</strong> {newClientDialog.credentials?.password}
+                                </Typography>
+                                <IconButton 
+                                    size="small"
+                                    onClick={() => handleCopyCredentials(newClientDialog.credentials?.password)}
+                                >
+                                    <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                            </Box>
+                        </Paper>
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button 
+                        onClick={() => handleCopyCredentials(
+                            `Username: ${newClientDialog.credentials?.username}\nPassword: ${newClientDialog.credentials?.password}`
+                        )}
+                    >
+                        Copy All
+                    </Button>
+                    <Button 
+                        onClick={() => setNewClientDialog({ open: false, credentials: null })}
+                        variant="contained"
+                    >
+                        Close
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Parse Duration Menu */}
+            <Menu
+                anchorEl={parseMenuAnchor}
+                open={Boolean(parseMenuAnchor)}
+                onClose={() => {
+                    setParseMenuAnchor(null);
+                    setSelectedUserId(null);
+                }}
+            >
+                {PARSE_DURATIONS.map((duration) => (
+                    <MenuItem 
+                        key={duration.value}
+                        onClick={() => handleSelectDuration(duration.value)}
+                    >
+                        <ListItemIcon>
+                            {duration.icon}
+                        </ListItemIcon>
+                        <ListItemText primary={duration.label} />
+                    </MenuItem>
+                ))}
+            </Menu>
         </Container>
     );
 } 

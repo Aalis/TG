@@ -19,6 +19,11 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     last_visit = Column(DateTime(timezone=True), nullable=True)
+    email_verified = Column(Boolean, default=False)
+    verification_token = Column(String, nullable=True)
+    verification_token_expires = Column(DateTime(timezone=True), nullable=True)
+    password_reset_token = Column(String, nullable=True)
+    password_reset_expires = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships with cascade deletion
     telegram_tokens = relationship("TelegramToken", back_populates="user", cascade="all, delete-orphan")

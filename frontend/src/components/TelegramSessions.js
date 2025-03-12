@@ -30,6 +30,8 @@ import { format } from 'date-fns';
 const TelegramSessions = () => {
   const [sessions, setSessions] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [twoFactorPassword, setTwoFactorPassword] = useState('');
@@ -50,7 +52,11 @@ const TelegramSessions = () => {
   const fetchSessions = async () => {
     try {
       const { data } = await sessionsAPI.getAll();
-      setSessions(data);
+      // Sort sessions by creation date to maintain stable order
+      const sortedSessions = data.sort((a, b) => 
+        new Date(a.created_at) - new Date(b.created_at)
+      );
+      setSessions(sortedSessions);
     } catch (err) {
       setError('Failed to fetch sessions');
       console.error('Error fetching sessions:', err);
@@ -140,11 +146,23 @@ const TelegramSessions = () => {
     }
   };
 
-  const handleDeleteSession = async (sessionId) => {
+  const handleDeleteClick = (session) => {
+    setSessionToDelete(session);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteCancel = () => {
+    setSessionToDelete(null);
+    setDeleteDialogOpen(false);
+  };
+
+  const handleDeleteSession = async () => {
     try {
-      await sessionsAPI.delete(sessionId);
+      await sessionsAPI.delete(sessionToDelete.id);
       await fetchSessions();
       setSuccess('Session deleted successfully');
+      setDeleteDialogOpen(false);
+      setSessionToDelete(null);
     } catch (err) {
       setError('Failed to delete session');
       console.error('Error deleting session:', err);
@@ -155,7 +173,6 @@ const TelegramSessions = () => {
     try {
       await sessionsAPI.update(sessionId, !currentStatus);
       await fetchSessions();
-      setSuccess('Session status updated successfully');
     } catch (err) {
       setError('Failed to update session status');
       console.error('Error updating session status:', err);
@@ -251,66 +268,74 @@ const TelegramSessions = () => {
         </Button>
       </Box>
 
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+      
       {success && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
           {success}
         </Alert>
       )}
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
-
-      <TableContainer>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Phone Number</TableCell>
-              <TableCell>Created At</TableCell>
-              <TableCell>Updated At</TableCell>
-              <TableCell align="center">Active</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sessions.map((session) => (
-              <TableRow key={session.id}>
-                <TableCell>{session.phone}</TableCell>
-                <TableCell>
-                  {format(new Date(session.created_at), 'MMM d, yyyy HH:mm')}
-                </TableCell>
-                <TableCell>
-                  {format(new Date(session.updated_at), 'MMM d, yyyy HH:mm')}
-                </TableCell>
-                <TableCell align="center">
-                  <Switch
-                    checked={session.is_active}
-                    onChange={() => handleToggleStatus(session.id, session.is_active)}
-                    color="primary"
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    color="error"
-                    onClick={() => handleDeleteSession(session.id)}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-            {sessions.length === 0 && (
+      {sessions.length === 0 ? (
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="body1" color="text.secondary" gutterBottom>
+            No active sessions found
+          </Typography>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleAddSession}
+            sx={{ mt: 1 }}
+          >
+            Add Your First Session
+          </Button>
+        </Box>
+      ) : (
+        <TableContainer>
+          <Table>
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={5} align="center">
-                  No sessions found
-                </TableCell>
+                <TableCell>Phone</TableCell>
+                <TableCell>Created At</TableCell>
+                <TableCell align="center">Status</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {sessions.map((session) => (
+                <TableRow key={session.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                  <TableCell component="th" scope="row">
+                    {session.phone}
+                  </TableCell>
+                  <TableCell>
+                    {format(new Date(session.created_at), 'MMM d, yyyy HH:mm')}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Switch
+                      checked={session.is_active}
+                      onChange={() => handleToggleStatus(session.id, session.is_active)}
+                      color="primary"
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      color="error"
+                      onClick={() => handleDeleteClick(session)}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
@@ -324,6 +349,32 @@ const TelegramSessions = () => {
           </Stepper>
         </DialogTitle>
         {renderDialogContent()}
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Session</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete the session for phone number{' '}
+            {sessionToDelete?.phone}? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel}>Cancel</Button>
+          <Button
+            onClick={handleDeleteSession}
+            color="error"
+            variant="contained"
+          >
+            Delete
+          </Button>
+        </DialogActions>
       </Dialog>
     </Paper>
   );

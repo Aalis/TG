@@ -19,6 +19,14 @@ def get_by_username(db: Session, username: str) -> Optional[User]:
     return db.query(User).filter(User.username == username).first()
 
 
+def get_by_verification_token(db: Session, token: str) -> Optional[User]:
+    return db.query(User).filter(User.verification_token == token).first()
+
+
+def get_by_reset_token(db: Session, token: str) -> Optional[User]:
+    return db.query(User).filter(User.password_reset_token == token).first()
+
+
 def get_multi(db: Session, *, skip: int = 0, limit: int = 100) -> List[User]:
     return db.query(User).offset(skip).limit(limit).all()
 
@@ -32,13 +40,18 @@ def authenticate(db: Session, *, username: str, password: str) -> Optional[User]
     return user
 
 
-def create(db: Session, *, obj_in: UserCreate) -> User:
-    db_obj = User(
-        email=obj_in.email,
-        username=obj_in.username,
-        hashed_password=get_password_hash(obj_in.password),
-        is_superuser=obj_in.is_superuser,
-    )
+def create(db: Session, *, obj_in: Union[UserCreate, Dict[str, Any]]) -> User:
+    if isinstance(obj_in, dict):
+        create_data = obj_in
+    else:
+        create_data = obj_in.dict(exclude_unset=True)
+        
+    if "password" in create_data:
+        hashed_password = get_password_hash(create_data["password"])
+        del create_data["password"]
+        create_data["hashed_password"] = hashed_password
+    
+    db_obj = User(**create_data)
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
@@ -46,18 +59,25 @@ def create(db: Session, *, obj_in: UserCreate) -> User:
 
 
 def update(
-    db: Session, *, db_obj: User, obj_in: Union[UserUpdate, Dict[str, Any]]
+    db: Session,
+    *,
+    db_obj: User,
+    obj_in: Union[UserUpdate, Dict[str, Any]]
 ) -> User:
     if isinstance(obj_in, dict):
         update_data = obj_in
     else:
         update_data = obj_in.dict(exclude_unset=True)
-    if update_data.get("password"):
+    
+    if "password" in update_data:
         hashed_password = get_password_hash(update_data["password"])
         del update_data["password"]
         update_data["hashed_password"] = hashed_password
+    
     for field in update_data:
-        setattr(db_obj, field, update_data[field])
+        if hasattr(db_obj, field):
+            setattr(db_obj, field, update_data[field])
+    
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
