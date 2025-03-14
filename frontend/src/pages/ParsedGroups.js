@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -30,6 +30,7 @@ import {
   DialogContentText,
   LinearProgress,
   Divider,
+  Pagination,
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import {
@@ -61,8 +62,57 @@ const ParsedGroups = () => {
   const [dialogError, setDialogError] = useState(null);
   const [selectedDialog, setSelectedDialog] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  
+  // Pagination states
+  const ITEMS_PER_PAGE = 21;
+  const MAX_TOTAL_ITEMS = 42;
+  
   const navigate = useNavigate();
+  const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
+
+  // Get page from URL query parameter or default to 1
+  const getPageFromUrl = () => {
+    const searchParams = new URLSearchParams(location.search);
+    const pageParam = searchParams.get('page');
+    return pageParam ? parseInt(pageParam, 10) : 1;
+  };
+
+  // Initialize page from URL on component mount
+  const [page, setPage] = useState(getPageFromUrl());
+  const [paginatedGroups, setPaginatedGroups] = useState([]);
+  
+  // Sync URL with page state when page changes
+  const updateUrlWithPage = (newPage) => {
+    const searchParams = new URLSearchParams(location.search);
+    
+    if (newPage === 1) {
+      searchParams.delete('page');
+    } else {
+      searchParams.set('page', newPage.toString());
+    }
+    
+    const newSearch = searchParams.toString();
+    const newPath = location.pathname + (newSearch ? `?${newSearch}` : '');
+    
+    // Use push instead of replace to maintain browser history for back button
+    navigate(newPath, { replace: false });
+  };
+
+  // Handle page change from pagination component
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+    updateUrlWithPage(newPage);
+    window.scrollTo(0, 0);
+  };
+
+  // Sync page state with URL when URL changes (e.g., back button)
+  useEffect(() => {
+    const urlPage = getPageFromUrl();
+    if (page !== urlPage) {
+      setPage(urlPage);
+    }
+  }, [location.search]);
 
   // Fetch groups on component mount
   useEffect(() => {
@@ -82,7 +132,19 @@ const ParsedGroups = () => {
       );
       setFilteredGroups(filtered);
     }
+    // Reset to first page when search changes
+    if (page !== 1) {
+      setPage(1);
+      updateUrlWithPage(1);
+    }
   }, [searchTerm, groups]);
+
+  // Update paginated groups when filtered groups or page changes
+  useEffect(() => {
+    const startIndex = (page - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    setPaginatedGroups(filteredGroups.slice(startIndex, endIndex));
+  }, [filteredGroups, page]);
 
   // Add cleanup on unmount
   useEffect(() => {
@@ -169,6 +231,22 @@ const ParsedGroups = () => {
     try {
       // Start progress polling before making the parse request
       startProgressPolling();
+
+      // Check if we need to delete the oldest group
+      if (groups.length >= MAX_TOTAL_ITEMS) {
+        // Sort by parsed_at in ascending order to get the oldest
+        const sortedGroups = [...groups].sort((a, b) => 
+          new Date(a.parsed_at) - new Date(b.parsed_at)
+        );
+        const oldestGroup = sortedGroups[0];
+        
+        // Delete the oldest group
+        await groupsAPI.delete(oldestGroup.id);
+        enqueueSnackbar(`Oldest group "${oldestGroup.group_name}" was automatically deleted to maintain the limit of ${MAX_TOTAL_ITEMS} groups`, { 
+          variant: 'info',
+          autoHideDuration: 5000
+        });
+      }
 
       const response = await groupsAPI.parseGroup(
         selectedDialog ? selectedDialog.id : groupLink.trim(),
@@ -314,78 +392,90 @@ const ParsedGroups = () => {
           )}
         </Paper>
       ) : (
-        <Grid container spacing={3}>
-          {filteredGroups.map((group) => (
-            <Grid item xs={12} sm={6} md={4} key={group.id}>
-              <Card 
-                className="card-hover"
-                sx={{ 
-                  cursor: 'pointer',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    transition: 'transform 0.2s ease-in-out',
-                  }
-                }}
-                onClick={(e) => {
-                  // Prevent navigation if clicking delete button
-                  if (e.target.closest('button[data-delete]')) return;
-                  navigate(`/groups/${group.id}`);
-                }}
-              >
-                <CardContent>
-                  <Typography variant="h6" noWrap gutterBottom>
-                    {group.group_name}
-                  </Typography>
-                  
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    {group.group_username ? `@${group.group_username}` : 'Private Group'}
-                  </Typography>
-                  
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <>
+          <Grid container spacing={3}>
+            {paginatedGroups.map((group) => (
+              <Grid item xs={12} sm={6} md={4} key={group.id}>
+                <Card 
+                  className="card-hover"
+                  sx={{ 
+                    cursor: 'pointer',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      transition: 'transform 0.2s ease-in-out',
+                    }
+                  }}
+                  onClick={(e) => {
+                    // Prevent navigation if clicking delete button
+                    if (e.target.closest('button[data-delete]')) return;
+                    navigate(`/groups/${group.id}`);
+                  }}
+                >
+                  <CardContent>
+                    <Typography variant="h6" noWrap gutterBottom>
+                      {group.group_name}
+                    </Typography>
+                    
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {group.group_username ? `@${group.group_username}` : 'Private Group'}
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
                       <Chip 
-                        label={`${group.member_count.toLocaleString()} total members`} 
+                        label={`${group.member_count.toLocaleString()} members`} 
                         size="small" 
                         color="primary" 
                         variant="outlined"
                       />
                       <Chip 
-                        label={`${(group.members?.length || 0).toLocaleString()} users found`} 
+                        label={group.is_public ? 'Public' : 'Private'} 
                         size="small" 
-                        color="info" 
+                        color={group.is_public ? 'success' : 'default'} 
                         variant="outlined"
                       />
                     </Box>
-                    <Chip 
-                      label={group.is_public ? 'Public' : 'Private'} 
-                      size="small" 
-                      color={group.is_public ? 'success' : 'default'} 
-                      variant="outlined"
-                    />
-                  </Box>
+                    
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Parsed: {new Date(group.parsed_at).toLocaleString()}
+                    </Typography>
+                  </CardContent>
                   
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    Parsed: {new Date(group.parsed_at).toLocaleString()}
-                  </Typography>
-                </CardContent>
-                
-                <CardActions>
-                  <Box sx={{ flexGrow: 1 }} />
-                  
-                  <Tooltip title="Delete">
-                    <IconButton 
-                      color="error" 
-                      onClick={() => handleDeleteClick(group)}
-                      data-delete="true"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
-                </CardActions>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+                  <CardActions>
+                    <Box sx={{ flexGrow: 1 }} />
+                    
+                    <Tooltip title="Delete">
+                      <IconButton 
+                        color="error" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClick(group);
+                        }}
+                        data-delete="true"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+          
+          {/* Pagination */}
+          {filteredGroups.length > ITEMS_PER_PAGE && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+              <Pagination 
+                count={Math.ceil(filteredGroups.length / ITEMS_PER_PAGE)} 
+                page={page} 
+                onChange={handlePageChange}
+                color="primary"
+                size="large"
+                showFirstButton
+                showLastButton
+              />
+            </Box>
+          )}
+        </>
       )}
       
       {/* Delete Confirmation Dialog */}

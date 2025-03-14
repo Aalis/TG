@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -28,6 +28,7 @@ import {
   LinearProgress,
   DialogContentText,
   Divider,
+  Pagination,
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import {
@@ -72,8 +73,56 @@ const ParsedChannels = () => {
   const [selectedDialog, setSelectedDialog] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
   
+  // Pagination states
+  const ITEMS_PER_PAGE = 21;
+  const MAX_TOTAL_ITEMS = 42;
+  
   const navigate = useNavigate();
+  const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
+
+  // Get page from URL query parameter or default to 1
+  const getPageFromUrl = () => {
+    const searchParams = new URLSearchParams(location.search);
+    const pageParam = searchParams.get('page');
+    return pageParam ? parseInt(pageParam, 10) : 1;
+  };
+
+  // Initialize page from URL on component mount
+  const [page, setPage] = useState(getPageFromUrl());
+  const [paginatedChannels, setPaginatedChannels] = useState([]);
+  
+  // Sync URL with page state when page changes
+  const updateUrlWithPage = (newPage) => {
+    const searchParams = new URLSearchParams(location.search);
+    
+    if (newPage === 1) {
+      searchParams.delete('page');
+    } else {
+      searchParams.set('page', newPage.toString());
+    }
+    
+    const newSearch = searchParams.toString();
+    const newPath = location.pathname + (newSearch ? `?${newSearch}` : '');
+    
+    // Use push instead of replace to maintain browser history for back button
+    navigate(newPath, { replace: false });
+  };
+
+  // Handle page change from pagination component
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+    updateUrlWithPage(newPage);
+    window.scrollTo(0, 0);
+  };
+
+  // Sync page state with URL when URL changes (e.g., back button)
+  useEffect(() => {
+    const urlPage = getPageFromUrl();
+    if (page !== urlPage) {
+      setPage(urlPage);
+    }
+  }, [location.search]);
 
   // Fetch channels on component mount
   useEffect(() => {
@@ -93,7 +142,19 @@ const ParsedChannels = () => {
       );
       setFilteredChannels(filtered);
     }
+    // Reset to first page when search changes
+    if (page !== 1) {
+      setPage(1);
+      updateUrlWithPage(1);
+    }
   }, [searchTerm, channels]);
+
+  // Update paginated channels when filtered channels or page changes
+  useEffect(() => {
+    const startIndex = (page - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    setPaginatedChannels(filteredChannels.slice(startIndex, endIndex));
+  }, [filteredChannels, page]);
 
   // Add cleanup on unmount
   useEffect(() => {
@@ -185,6 +246,22 @@ const ParsedChannels = () => {
       
       // Start progress polling before making the parse request
       startProgressPolling();
+
+      // Check if we need to delete the oldest channel
+      if (channels.length >= MAX_TOTAL_ITEMS) {
+        // Sort by parsed_at in ascending order to get the oldest
+        const sortedChannels = [...channels].sort((a, b) => 
+          new Date(a.parsed_at) - new Date(b.parsed_at)
+        );
+        const oldestChannel = sortedChannels[0];
+        
+        // Delete the oldest channel
+        await channelsAPI.deleteChannel(oldestChannel.id);
+        enqueueSnackbar(`Oldest channel "${oldestChannel.group_name}" was automatically deleted to maintain the limit of ${MAX_TOTAL_ITEMS} channels`, { 
+          variant: 'info',
+          autoHideDuration: 5000
+        });
+      }
 
       await channelsAPI.parseChannel(
         selectedDialog ? selectedDialog.id : channelLink.trim(),
@@ -358,78 +435,98 @@ const ParsedChannels = () => {
           )}
         </Paper>
       ) : (
-        <Grid container spacing={3}>
-          {filteredChannels.map((channel) => (
-            <Grid item xs={12} sm={6} md={4} key={channel.id}>
-              <Card 
-                className="card-hover"
-                sx={{ 
-                  cursor: 'pointer',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    transition: 'transform 0.2s ease-in-out',
-                  }
-                }}
-                onClick={(e) => {
-                  // Prevent navigation if clicking delete button
-                  if (e.target.closest('button[data-delete]')) return;
-                  navigate(`/channels/${channel.id}`);
-                }}
-              >
-                <CardContent>
-                  <Typography variant="h6" noWrap gutterBottom>
-                    {channel.group_name}
-                  </Typography>
-                  
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    {channel.group_username ? `@${channel.group_username}` : 'Private Channel'}
-                  </Typography>
-                  
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <>
+          <Grid container spacing={3}>
+            {paginatedChannels.map((channel) => (
+              <Grid item xs={12} sm={6} md={4} key={channel.id}>
+                <Card 
+                  className="card-hover"
+                  sx={{ 
+                    cursor: 'pointer',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      transition: 'transform 0.2s ease-in-out',
+                    }
+                  }}
+                  onClick={(e) => {
+                    // Prevent navigation if clicking delete button
+                    if (e.target.closest('button[data-delete]')) return;
+                    navigate(`/channels/${channel.id}`);
+                  }}
+                >
+                  <CardContent>
+                    <Typography variant="h6" noWrap gutterBottom>
+                      {channel.group_name}
+                    </Typography>
+                    
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {channel.group_username ? `@${channel.group_username}` : 'Private Channel'}
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Chip 
+                          label={`${channel.member_count.toLocaleString()} subscribers`} 
+                          size="small" 
+                          color="primary" 
+                          variant="outlined"
+                        />
+                        <Chip 
+                          label={`${(channel.members?.length || 0).toLocaleString()} users found`} 
+                          size="small" 
+                          color="info" 
+                          variant="outlined"
+                        />
+                      </Box>
                       <Chip 
-                        label={`${channel.member_count.toLocaleString()} subscribers`} 
+                        label={channel.is_public ? 'Public' : 'Private'} 
                         size="small" 
-                        color="primary" 
-                        variant="outlined"
-                      />
-                      <Chip 
-                        label={`${(channel.members?.length || 0).toLocaleString()} users found`} 
-                        size="small" 
-                        color="info" 
+                        color={channel.is_public ? 'success' : 'default'} 
                         variant="outlined"
                       />
                     </Box>
-                    <Chip 
-                      label={channel.is_public ? 'Public' : 'Private'} 
-                      size="small" 
-                      color={channel.is_public ? 'success' : 'default'} 
-                      variant="outlined"
-                    />
-                  </Box>
+                    
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Parsed: {new Date(channel.parsed_at).toLocaleString()}
+                    </Typography>
+                  </CardContent>
                   
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    Parsed: {new Date(channel.parsed_at).toLocaleString()}
-                  </Typography>
-                </CardContent>
-                
-                <CardActions>
-                  <Box sx={{ flexGrow: 1 }} />
-                  
-                  <Tooltip title="Delete">
-                    <IconButton 
-                      color="error" 
-                      onClick={() => handleDeleteClick(channel)}
-                      data-delete="true"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
-                </CardActions>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+                  <CardActions>
+                    <Box sx={{ flexGrow: 1 }} />
+                    
+                    <Tooltip title="Delete">
+                      <IconButton 
+                        color="error" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClick(channel);
+                        }}
+                        data-delete="true"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+          
+          {/* Pagination */}
+          {filteredChannels.length > ITEMS_PER_PAGE && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+              <Pagination 
+                count={Math.ceil(filteredChannels.length / ITEMS_PER_PAGE)} 
+                page={page} 
+                onChange={handlePageChange}
+                color="primary"
+                size="large"
+                showFirstButton
+                showLastButton
+              />
+            </Box>
+          )}
+        </>
       )}
 
       {/* Parse Channel Dialog */}
@@ -455,7 +552,7 @@ const ParsedChannels = () => {
               <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
                 <CircularProgress size={24} />
               </Box>
-            ) : (
+            ) :
               <Box sx={{ maxHeight: '200px', overflowY: 'auto' }}>
                 {availableDialogs
                   .filter(dialog => dialog.type === 'channel')
@@ -488,7 +585,7 @@ const ParsedChannels = () => {
                     </Box>
                   ))}
               </Box>
-            )}
+            }
           </Box>
 
           <Divider sx={{ my: 2 }} />
@@ -496,11 +593,10 @@ const ParsedChannels = () => {
           <Typography variant="subtitle1" gutterBottom>
             Or Enter Channel Link Manually
           </Typography>
-
           <TextField
             fullWidth
             label="Channel Link"
-            placeholder="Enter channel link or username"
+            placeholder="https://t.me/channelname"
             value={channelLink}
             onChange={(e) => {
               setChannelLink(e.target.value);
@@ -511,25 +607,26 @@ const ParsedChannels = () => {
             variant="outlined"
             disabled={parsingStatus.loading}
           />
-          <TextField
-            fullWidth
-            label="Post Limit"
-            type="number"
-            value={postLimit}
-            onChange={(e) => setPostLimit(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
-            margin="normal"
-            variant="outlined"
-            disabled={parsingStatus.loading}
-            helperText="Maximum 100 posts"
-          />
+          
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Options
+            </Typography>
+            <TextField
+              label="Post Limit"
+              type="number"
+              value={postLimit}
+              onChange={(e) => setPostLimit(Math.max(1, parseInt(e.target.value) || 1))}
+              InputProps={{ inputProps: { min: 1 } }}
+              size="small"
+              disabled={parsingStatus.loading}
+              helperText="Maximum number of posts to parse"
+            />
+          </Box>
+
           {parsingStatus.error && (
             <Alert severity="error" sx={{ mt: 2 }}>
               {parsingStatus.error}
-            </Alert>
-          )}
-          {parsingStatus.success && (
-            <Alert severity="success" sx={{ mt: 2 }}>
-              Channel parsed successfully!
             </Alert>
           )}
         </DialogContent>
@@ -542,14 +639,28 @@ const ParsedChannels = () => {
           }} disabled={parsingStatus.loading}>
             Cancel
           </Button>
-          <Button
+          <LoadingButton
             onClick={handleParseChannel}
+            loading={parsingStatus.loading}
             variant="contained"
-            color="primary"
-            disabled={parsingStatus.loading}
-            startIcon={parsingStatus.loading ? <CircularProgress size={20} /> : <SendIcon />}
           >
-            {parsingStatus.loading ? 'Parsing...' : 'Parse Channel'}
+            Parse Channel
+          </LoadingButton>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this channel? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
@@ -574,9 +685,9 @@ const ParsedChannels = () => {
             <Typography variant="body2" color="text.secondary">
               Phase: {parsingProgress?.phase || 'initializing'}
             </Typography>
-            {parsingProgress?.total_members > 0 && (
+            {parsingProgress?.total_posts > 0 && (
               <Typography variant="body2" color="text.secondary">
-                Members: {parsingProgress.current_members} / {parsingProgress.total_members}
+                Posts: {parsingProgress.current_posts} / {parsingProgress.total_posts}
               </Typography>
             )}
           </Box>
@@ -590,22 +701,6 @@ const ParsedChannels = () => {
           >
             Cancel Parsing
           </LoadingButton>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-        <DialogTitle>Delete Channel</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete this channel? This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Delete
-          </Button>
         </DialogActions>
       </Dialog>
     </Box>

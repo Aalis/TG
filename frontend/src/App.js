@@ -5,6 +5,8 @@ import { useAuth } from './context/AuthContext';
 // Pages
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import ParsedGroups from './pages/ParsedGroups';
 import ParsedChannels from './pages/ParsedChannels';
 import GroupDetails from './pages/GroupDetails';
@@ -13,6 +15,7 @@ import Profile from './pages/Profile';
 import AdminPanel from './pages/AdminPanel';
 import Dashboard from './pages/Dashboard';
 import LandingPage from './pages/LandingPage';
+import Subscribe from './pages/Subscribe';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -32,6 +35,7 @@ function App() {
           <Route path="/channels" element={<ParsedChannels />} />
           <Route path="/channels/:id" element={<ChannelDetails />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/subscribe" element={<Subscribe />} />
           {user.is_superuser && (
             <Route path="/admin" element={<AdminPanel />} />
           )}
@@ -43,6 +47,8 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}

@@ -33,6 +33,7 @@ import {
   Person as ProfileIcon,
   Logout as LogoutIcon,
   AdminPanelSettings as AdminIcon,
+  ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -120,6 +121,16 @@ const MainLayout = () => {
       </List>
       <Divider />
       <List>
+        <ListItem 
+          button 
+          onClick={() => handleNavigate('/subscribe')}
+          selected={location.pathname === '/subscribe'}
+        >
+          <ListItemIcon>
+            <ShoppingCartIcon />
+          </ListItemIcon>
+          <ListItemText primary="Subscribe" />
+        </ListItem>
         {user?.is_superuser && (
           <ListItem 
             button 

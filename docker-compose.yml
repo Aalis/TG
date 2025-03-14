@@ -5,12 +5,15 @@ services:
     image: postgres:13
     volumes:
       - postgres_data:/var/lib/postgresql/data/
+      - ./postgres-config:/etc/postgresql/conf.d
     env_file:
       - ./backend/.env
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-telegram_parser}
+      - POSTGRES_MAX_CONNECTIONS=200
+    command: postgres -c max_connections=200
     ports:
       - "5432:5432"
     healthcheck:
@@ -31,7 +34,7 @@ services:
       db:
         condition: service_healthy
     command: >
-      bash -c "python init_db.py && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      bash -c "python init_db.py && gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"
 
   frontend:
     build: 

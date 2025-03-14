@@ -12,8 +12,19 @@ import {
   CircularProgress,
   Alert,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  InputAdornment,
+  IconButton,
 } from '@mui/material';
-import { Person as PersonIcon } from '@mui/icons-material';
+import { 
+  Person as PersonIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
+} from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
 // Validation schema
@@ -34,16 +45,41 @@ const ProfileSchema = Yup.object().shape({
 const Profile = () => {
   const { user, updateProfile, error, setError } = useAuth();
   const [success, setSuccess] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [pendingValues, setPendingValues] = useState(null);
+  const [pendingSetSubmitting, setPendingSetSubmitting] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const handleTogglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
+  const handleToggleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword(!showConfirmPassword);
+  };
 
   const handleSubmit = async (values, { setSubmitting }) => {
+    // Open confirmation dialog instead of immediately submitting
+    setPendingValues(values);
+    setPendingSetSubmitting(setSubmitting);
+    setConfirmDialogOpen(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    // Close the dialog
+    setConfirmDialogOpen(false);
+    
+    if (!pendingValues || !pendingSetSubmitting) return;
+    
     // Only include password if it's provided
     const updateData = {
-      email: values.email,
-      username: values.username,
+      email: pendingValues.email,
+      username: pendingValues.username,
     };
     
-    if (values.password) {
-      updateData.password = values.password;
+    if (pendingValues.password) {
+      updateData.password = pendingValues.password;
     }
     
     const success = await updateProfile(updateData);
@@ -57,7 +93,20 @@ const Profile = () => {
       }, 3000);
     }
     
-    setSubmitting(false);
+    pendingSetSubmitting(false);
+    
+    // Clear pending data
+    setPendingValues(null);
+    setPendingSetSubmitting(null);
+  };
+
+  const handleCancelSubmit = () => {
+    setConfirmDialogOpen(false);
+    if (pendingSetSubmitting) {
+      pendingSetSubmitting(false);
+    }
+    setPendingValues(null);
+    setPendingSetSubmitting(null);
   };
 
   return (
@@ -147,11 +196,24 @@ const Profile = () => {
                     as={TextField}
                     name="password"
                     label="New Password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     fullWidth
                     margin="normal"
                     error={touched.password && Boolean(errors.password)}
                     helperText={touched.password && errors.password}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            aria-label="toggle password visibility"
+                            onClick={handleTogglePasswordVisibility}
+                            edge="end"
+                          >
+                            {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
                   />
                 </Grid>
                 
@@ -160,11 +222,24 @@ const Profile = () => {
                     as={TextField}
                     name="confirmPassword"
                     label="Confirm New Password"
-                    type="password"
+                    type={showConfirmPassword ? "text" : "password"}
                     fullWidth
                     margin="normal"
                     error={touched.confirmPassword && Boolean(errors.confirmPassword)}
                     helperText={touched.confirmPassword && errors.confirmPassword}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            aria-label="toggle confirm password visibility"
+                            onClick={handleToggleConfirmPasswordVisibility}
+                            edge="end"
+                          >
+                            {showConfirmPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
                   />
                 </Grid>
               </Grid>
@@ -184,6 +259,33 @@ const Profile = () => {
           )}
         </Formik>
       </Paper>
+
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={handleCancelSubmit}
+        aria-labelledby="confirm-profile-update-dialog"
+      >
+        <DialogTitle id="confirm-profile-update-dialog">
+          Confirm Profile Update
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to save these changes to your profile?
+            {pendingValues?.password && (
+              <strong> This will also change your password.</strong>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelSubmit} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmSubmit} color="primary" variant="contained">
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

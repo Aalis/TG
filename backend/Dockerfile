@@ -14,5 +14,9 @@ COPY . .
 # Expose the port
 EXPOSE 8000
 
-# Command to run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+# Set environment variables for better performance
+ENV PYTHONUNBUFFERED=1
+ENV WORKERS=4
+
+# Command to run the application with Gunicorn and multiple workers
+CMD ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"] 
