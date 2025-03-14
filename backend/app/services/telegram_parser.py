@@ -120,7 +120,7 @@ class TelegramParserService:
         self.api_id = api_id
         self.api_hash = api_hash
         self.phone = phone
-        self.bot_token = bot_token or self.get_next_bot_token()
+        self.bot_token = bot_token
         self.session_string = session_string
         self.client = None
 
@@ -134,11 +134,14 @@ class TelegramParserService:
                 self.api_hash
             )
             await self.client.start()
-        else:
+        elif self.bot_token:
             # Fallback to bot token
             session_name = f"bot_session_{self.bot_token.split(':')[0]}"
             self.client = TelegramClient(session_name, int(self.api_id), self.api_hash)
             await self.client.start(bot_token=self.bot_token)
+        else:
+            # No credentials provided
+            raise ValueError("Either session_string or bot_token must be provided")
 
     async def _disconnect(self) -> None:
         """Disconnect from Telegram API"""
@@ -843,7 +846,7 @@ class TelegramParserService:
             ).first()
 
             if not session:
-                raise ValueError("No active Telegram session found. Please add a session first.")
+                return []  # Return empty list instead of raising an error
 
             # Use the session string - NEVER use bot token for dialogs
             self.session_string = session.session_string
