@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
 
+    # Redis
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_CLIENT_EXPIRY: int = 300  # 5 minutes in seconds
+
     # Telegram API
     API_ID: Optional[str] = None
     API_HASH: Optional[str] = None
