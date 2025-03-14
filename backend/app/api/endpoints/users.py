@@ -88,9 +88,7 @@ async def create_user(
 def update_user_me(
     *,
     db: Session = Depends(deps.get_db),
-    password: str = Body(None),
-    email: EmailStr = Body(None),
-    username: str = Body(None),
+    user_data: dict = Body(...),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
@@ -98,12 +96,14 @@ def update_user_me(
     """
     current_user_data = jsonable_encoder(current_user)
     user_in = UserUpdate(**current_user_data)
-    if password is not None:
-        user_in.password = password
-    if email is not None:
-        user_in.email = email
-    if username is not None:
-        user_in.username = username
+    
+    if "password" in user_data and user_data["password"]:
+        user_in.password = user_data["password"]
+    if "email" in user_data and user_data["email"]:
+        user_in.email = user_data["email"]
+    if "username" in user_data and user_data["username"]:
+        user_in.username = user_data["username"]
+    
     user = crud.user.update(db, db_obj=current_user, obj_in=user_in)
     return user
 

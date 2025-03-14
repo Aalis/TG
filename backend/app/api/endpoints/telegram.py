@@ -368,12 +368,17 @@ async def list_dialogs(
     """
     List all available Telegram dialogs (groups and channels) for the current user.
     """
-    parser = TelegramParserService(
-        api_id=settings.API_ID,
-        api_hash=settings.API_HASH
-    )
-    dialogs = await parser.list_dialogs(db, current_user.id)
-    return dialogs
+    try:
+        parser = TelegramParserService(
+            api_id=settings.API_ID,
+            api_hash=settings.API_HASH
+        )
+        dialogs = await parser.list_dialogs(db, current_user.id)
+        return dialogs
+    except Exception as e:
+        # Return empty list instead of raising an error
+        logging.error(f"Error listing dialogs: {str(e)}")
+        return []
 
 
 @router.post("/parse-group/cancel")
