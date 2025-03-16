@@ -28,24 +28,26 @@ import {
   Save as SaveIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 // Validation schema
-const ProfileSchema = Yup.object().shape({
+const getValidationSchema = (t) => Yup.object().shape({
   email: Yup.string()
-    .email('Invalid email address')
-    .required('Email is required'),
+    .email(t('validation.invalidEmail', 'Invalid email address'))
+    .required(t('validation.emailRequired', 'Email is required')),
   username: Yup.string()
-    .min(3, 'Username must be at least 3 characters')
-    .max(20, 'Username must be at most 20 characters')
-    .required('Username is required'),
+    .min(3, t('validation.usernameMinLength', 'Username must be at least 3 characters'))
+    .max(20, t('validation.usernameMaxLength', 'Username must be at most 20 characters'))
+    .required(t('validation.usernameRequired', 'Username is required')),
   password: Yup.string()
-    .min(6, 'Password must be at least 6 characters'),
+    .min(6, t('validation.passwordMinLength', 'Password must be at least 6 characters')),
   confirmPassword: Yup.string()
-    .oneOf([Yup.ref('password'), null], 'Passwords must match'),
+    .oneOf([Yup.ref('password'), null], t('validation.passwordsMustMatch', 'Passwords must match')),
 });
 
 const Profile = () => {
   const { user, updateProfile, error, setError, isLoading } = useAuth();
+  const { t } = useTranslation();
   const [success, setSuccess] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [formValues, setFormValues] = useState(null);
@@ -168,7 +170,7 @@ const Profile = () => {
   return (
     <Box>
       <Typography variant="h4" component="h1" gutterBottom>
-        Profile
+        {t('profile.title')}
       </Typography>
       
       <Paper sx={{ p: 3, mt: 3 }}>
@@ -207,14 +209,14 @@ const Profile = () => {
           anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         >
           <Alert onClose={handleCloseSuccessAlert} severity="success" sx={{ width: '100%' }}>
-            Profile updated successfully!
+            {t('profile.updateSuccess')}
           </Alert>
         </Snackbar>
         
         <Formik
           enableReinitialize
           initialValues={initialValues}
-          validationSchema={ProfileSchema}
+          validationSchema={getValidationSchema(t)}
           onSubmit={handleSubmit}
         >
           {({ errors, touched, isSubmitting, dirty, resetForm }) => (
@@ -224,7 +226,7 @@ const Profile = () => {
                   <Field
                     as={TextField}
                     name="email"
-                    label="Email"
+                    label={t('common.email')}
                     fullWidth
                     margin="normal"
                     error={touched.email && Boolean(errors.email)}
@@ -236,7 +238,7 @@ const Profile = () => {
                   <Field
                     as={TextField}
                     name="username"
-                    label="Username"
+                    label={t('common.username')}
                     fullWidth
                     margin="normal"
                     error={touched.username && Boolean(errors.username)}
@@ -246,10 +248,10 @@ const Profile = () => {
                 
                 <Grid item xs={12}>
                   <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
-                    Change Password
+                    {t('profile.changePassword')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Leave blank if you don't want to change your password.
+                    {t('profile.leaveBlankIfNoChange', 'Leave blank if you don\'t want to change your password.')}
                   </Typography>
                 </Grid>
                 
@@ -257,7 +259,7 @@ const Profile = () => {
                   <Field
                     as={TextField}
                     name="password"
-                    label="New Password"
+                    label={t('profile.newPassword')}
                     type={showPassword ? "text" : "password"}
                     fullWidth
                     margin="normal"
@@ -283,7 +285,7 @@ const Profile = () => {
                   <Field
                     as={TextField}
                     name="confirmPassword"
-                    label="Confirm New Password"
+                    label={t('profile.confirmNewPassword')}
                     type={showConfirmPassword ? "text" : "password"}
                     fullWidth
                     margin="normal"
@@ -314,7 +316,7 @@ const Profile = () => {
                   onClick={() => resetForm()}
                   disabled={!dirty || isSubmitting}
                 >
-                  Reset
+                  {t('common.reset', 'Reset')}
                 </Button>
                 
                 <Button
@@ -324,7 +326,7 @@ const Profile = () => {
                   disabled={isSubmitting || isLoading || !dirty}
                   startIcon={isSubmitting || isLoading ? <CircularProgress size={20} /> : <SaveIcon />}
                 >
-                  Save Changes
+                  {t('profile.saveChanges', 'Save Changes')}
                 </Button>
               </Box>
             </Form>
@@ -339,22 +341,22 @@ const Profile = () => {
         aria-labelledby="confirm-profile-update-dialog"
       >
         <DialogTitle id="confirm-profile-update-dialog">
-          Confirm Profile Update
+          {t('profile.confirmUpdate', 'Confirm Profile Update')}
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to save these changes to your profile?
+            {t('profile.confirmUpdateMessage', 'Are you sure you want to save these changes to your profile?')}
             {formValues?.password && (
-              <strong> This will also change your password.</strong>
+              <strong> {t('profile.confirmPasswordChange', 'This will also change your password.')}</strong>
             )}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCancelSubmit} color="primary">
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={handleConfirmSubmit} color="primary" variant="contained">
-            Confirm
+            {t('common.confirm')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -4,10 +4,13 @@ import { Container, Paper, Box, Typography, IconButton } from '@mui/material';
 import { Brightness4 as DarkModeIcon, Brightness7 as LightModeIcon } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 const AuthLayout = () => {
   const { isAuthenticated } = useAuth();
   const { darkMode, toggleTheme } = useTheme();
+  const { t } = useTranslation();
 
   // Redirect to dashboard if already authenticated
   if (isAuthenticated) {
@@ -25,10 +28,11 @@ const AuthLayout = () => {
           minHeight: '100vh',
         }}
       >
-        <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+        <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 1 }}>
           <IconButton onClick={toggleTheme} color="primary">
             {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
           </IconButton>
+          <LanguageSwitcher />
         </Box>
         
         <Paper
@@ -43,7 +47,7 @@ const AuthLayout = () => {
           }}
         >
           <Typography component="h1" variant="h4" sx={{ mb: 3 }}>
-            Telegram Group Parser
+            {t('common.welcome')}
           </Typography>
           
           <Outlet />

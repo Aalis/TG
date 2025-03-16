@@ -14,10 +14,13 @@ import {
   Brightness7 as LightModeIcon,
 } from '@mui/icons-material';
 import { useTheme } from '../context/ThemeContext';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 const PublicLayout = () => {
   const { darkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -32,7 +35,7 @@ const PublicLayout = () => {
               onClick={() => navigate('/')}
               style={{ cursor: 'pointer' }}
             >
-              Telegram Group Parser
+              {t('common.welcome')}
             </Typography>
             
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -40,7 +43,7 @@ const PublicLayout = () => {
                 color="inherit"
                 onClick={() => navigate('/register')}
               >
-                Register
+                {t('common.register')}
               </Button>
               <Button
                 color="inherit"
@@ -53,7 +56,7 @@ const PublicLayout = () => {
                   }
                 }}
               >
-                Log In
+                {t('common.login')}
               </Button>
               <IconButton 
                 sx={{ ml: 1 }} 
@@ -62,6 +65,7 @@ const PublicLayout = () => {
               >
                 {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
               </IconButton>
+              <LanguageSwitcher />
             </Box>
           </Toolbar>
         </Container>

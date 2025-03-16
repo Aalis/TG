@@ -38,6 +38,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import ParsePermissionCountdown from '../components/ParsePermissionCountdown';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 const drawerWidth = 240;
 
@@ -46,6 +48,7 @@ const MainLayout = () => {
   const { darkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorElUser, setAnchorElUser] = useState(null);
@@ -96,7 +99,7 @@ const MainLayout = () => {
           <ListItemIcon>
             <GroupsIcon />
           </ListItemIcon>
-          <ListItemText primary="Parsed Groups" />
+          <ListItemText primary={t('navigation.parsedGroups')} />
         </ListItem>
         <ListItem 
           button 
@@ -106,7 +109,7 @@ const MainLayout = () => {
           <ListItemIcon>
             <ChannelsIcon />
           </ListItemIcon>
-          <ListItemText primary="Parsed Channels" />
+          <ListItemText primary={t('navigation.parsedChannels')} />
         </ListItem>
         <ListItem 
           button 
@@ -116,7 +119,7 @@ const MainLayout = () => {
           <ListItemIcon>
             <DashboardIcon />
           </ListItemIcon>
-          <ListItemText primary="Dashboard" />
+          <ListItemText primary={t('navigation.dashboard')} />
         </ListItem>
       </List>
       <Divider />
@@ -129,7 +132,7 @@ const MainLayout = () => {
           <ListItemIcon>
             <ShoppingCartIcon />
           </ListItemIcon>
-          <ListItemText primary="Subscribe" />
+          <ListItemText primary={t('common.subscribe')} />
         </ListItem>
         {user?.is_superuser && (
           <ListItem 
@@ -140,7 +143,7 @@ const MainLayout = () => {
             <ListItemIcon>
               <AdminIcon />
             </ListItemIcon>
-            <ListItemText primary="Admin Panel" />
+            <ListItemText primary={t('navigation.admin')} />
           </ListItem>
         )}
         <ListItem 
@@ -151,13 +154,13 @@ const MainLayout = () => {
           <ListItemIcon>
             <ProfileIcon />
           </ListItemIcon>
-          <ListItemText primary="Profile" />
+          <ListItemText primary={t('navigation.profile')} />
         </ListItem>
         <ListItem button onClick={handleLogoutClick}>
           <ListItemIcon>
             <LogoutIcon />
           </ListItemIcon>
-          <ListItemText primary="Logout" />
+          <ListItemText primary={t('common.logout')} />
         </ListItem>
       </List>
     </div>
@@ -184,7 +187,7 @@ const MainLayout = () => {
               <MenuIcon />
             </IconButton>
             <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-              Telegram Group Parser
+              {t('common.welcome')}
             </Typography>
             
             <Box sx={{ flexGrow: 0, display: 'flex', alignItems: 'center' }}>
@@ -200,6 +203,7 @@ const MainLayout = () => {
                   <Avatar alt={user?.username} src="/static/images/avatar/2.jpg" />
                 </IconButton>
               </Tooltip>
+              <LanguageSwitcher />
               <Menu
                 sx={{ mt: '45px' }}
                 id="menu-appbar"
@@ -217,10 +221,10 @@ const MainLayout = () => {
                 onClose={handleCloseUserMenu}
               >
                 <MenuItem onClick={() => { handleCloseUserMenu(); navigate('/profile'); }}>
-                  <Typography textAlign="center">Profile</Typography>
+                  <Typography textAlign="center">{t('navigation.profile')}</Typography>
                 </MenuItem>
                 <MenuItem onClick={handleLogoutClick}>
-                  <Typography textAlign="center">Logout</Typography>
+                  <Typography textAlign="center">{t('common.logout')}</Typography>
                 </MenuItem>
               </Menu>
             </Box>
@@ -266,17 +270,17 @@ const MainLayout = () => {
         aria-labelledby="logout-dialog-title"
       >
         <DialogTitle id="logout-dialog-title">
-          Confirm Logout
+          {t('auth.confirmLogout', 'Confirm Logout')}
         </DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to log out? You will need to sign in again to access your account.
+            {t('auth.logoutConfirmMessage', 'Are you sure you want to log out? You will need to sign in again to access your account.')}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setLogoutDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setLogoutDialogOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleLogoutConfirm} color="error" variant="contained">
-            Logout
+            {t('common.logout')}
           </Button>
         </DialogActions>
       </Dialog>

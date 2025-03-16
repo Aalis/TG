@@ -13,7 +13,7 @@ const Dashboard = () => {
   return (
     <Box>
       <Typography variant="h4" component="h1" gutterBottom>
-        Welcome, {user?.username}!
+        Привет, {user?.username}!
       </Typography>
       
       <Grid container spacing={3}>
