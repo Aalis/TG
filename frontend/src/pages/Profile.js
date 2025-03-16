@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Formik, Form, Field } from 'formik';
 import * as Yup from 'yup';
 import {
@@ -19,11 +19,13 @@ import {
   DialogActions,
   InputAdornment,
   IconButton,
+  Snackbar,
 } from '@mui/material';
 import { 
   Person as PersonIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
+  Save as SaveIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
@@ -43,13 +45,31 @@ const ProfileSchema = Yup.object().shape({
 });
 
 const Profile = () => {
-  const { user, updateProfile, error, setError } = useAuth();
+  const { user, updateProfile, error, setError, isLoading } = useAuth();
   const [success, setSuccess] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [pendingValues, setPendingValues] = useState(null);
-  const [pendingSetSubmitting, setPendingSetSubmitting] = useState(null);
+  const [formValues, setFormValues] = useState(null);
+  const [formActions, setFormActions] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [initialValues, setInitialValues] = useState({
+    email: '',
+    username: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  // Update initial values when user data is available
+  useEffect(() => {
+    if (user) {
+      setInitialValues({
+        email: user.email || '',
+        username: user.username || '',
+        password: '',
+        confirmPassword: '',
+      });
+    }
+  }, [user]);
 
   const handleTogglePasswordVisibility = () => {
     setShowPassword(!showPassword);
@@ -59,10 +79,10 @@ const Profile = () => {
     setShowConfirmPassword(!showConfirmPassword);
   };
 
-  const handleSubmit = async (values, { setSubmitting }) => {
-    // Open confirmation dialog instead of immediately submitting
-    setPendingValues(values);
-    setPendingSetSubmitting(setSubmitting);
+  const handleSubmit = (values, actions) => {
+    // Store form values and actions for use after confirmation
+    setFormValues(values);
+    setFormActions(actions);
     setConfirmDialogOpen(true);
   };
 
@@ -70,44 +90,80 @@ const Profile = () => {
     // Close the dialog
     setConfirmDialogOpen(false);
     
-    if (!pendingValues || !pendingSetSubmitting) return;
+    if (!formValues || !formActions) return;
     
     // Only include password if it's provided
     const updateData = {
-      email: pendingValues.email,
-      username: pendingValues.username,
+      email: formValues.email,
+      username: formValues.username,
     };
     
-    if (pendingValues.password) {
-      updateData.password = pendingValues.password;
+    if (formValues.password) {
+      updateData.password = formValues.password;
     }
     
-    const success = await updateProfile(updateData);
-    
-    if (success) {
-      setSuccess(true);
+    try {
+      const result = await updateProfile(updateData);
       
-      // Hide success message after 3 seconds
-      setTimeout(() => {
-        setSuccess(false);
-      }, 3000);
+      if (result) {
+        setSuccess(true);
+        
+        // Reset password fields
+        formActions.setFieldValue('password', '');
+        formActions.setFieldValue('confirmPassword', '');
+        
+        // Update initial values with new data (except password)
+        setInitialValues(prev => ({
+          ...prev,
+          email: formValues.email,
+          username: formValues.username,
+          password: '',
+          confirmPassword: '',
+        }));
+        
+        // Hide success message after 3 seconds
+        setTimeout(() => {
+          setSuccess(false);
+        }, 3000);
+      }
+    } catch (err) {
+      console.error("Error updating profile:", err);
+    } finally {
+      formActions.setSubmitting(false);
+      
+      // Clear form state
+      setFormValues(null);
+      setFormActions(null);
     }
-    
-    pendingSetSubmitting(false);
-    
-    // Clear pending data
-    setPendingValues(null);
-    setPendingSetSubmitting(null);
   };
 
   const handleCancelSubmit = () => {
     setConfirmDialogOpen(false);
-    if (pendingSetSubmitting) {
-      pendingSetSubmitting(false);
+    
+    if (formActions) {
+      formActions.setSubmitting(false);
     }
-    setPendingValues(null);
-    setPendingSetSubmitting(null);
+    
+    // Clear form state
+    setFormValues(null);
+    setFormActions(null);
   };
+
+  const handleCloseSuccessAlert = () => {
+    setSuccess(false);
+  };
+
+  const handleCloseErrorAlert = () => {
+    setError(null);
+  };
+
+  if (!user) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box>
@@ -123,39 +179,45 @@ const Profile = () => {
           
           <Box>
             <Typography variant="h5">
-              {user?.username}
+              {user.username}
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              {user?.email}
+              {user.email}
             </Typography>
           </Box>
         </Box>
         
         <Divider sx={{ mb: 3 }} />
         
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+        <Snackbar 
+          open={error !== null} 
+          autoHideDuration={6000} 
+          onClose={handleCloseErrorAlert}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <Alert onClose={handleCloseErrorAlert} severity="error" sx={{ width: '100%' }}>
             {error}
           </Alert>
-        )}
+        </Snackbar>
         
-        {success && (
-          <Alert severity="success" sx={{ mb: 3 }}>
+        <Snackbar 
+          open={success} 
+          autoHideDuration={3000} 
+          onClose={handleCloseSuccessAlert}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <Alert onClose={handleCloseSuccessAlert} severity="success" sx={{ width: '100%' }}>
             Profile updated successfully!
           </Alert>
-        )}
+        </Snackbar>
         
         <Formik
-          initialValues={{
-            email: user?.email || '',
-            username: user?.username || '',
-            password: '',
-            confirmPassword: '',
-          }}
+          enableReinitialize
+          initialValues={initialValues}
           validationSchema={ProfileSchema}
           onSubmit={handleSubmit}
         >
-          {({ errors, touched, isSubmitting }) => (
+          {({ errors, touched, isSubmitting, dirty, resetForm }) => (
             <Form>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
@@ -244,13 +306,23 @@ const Profile = () => {
                 </Grid>
               </Grid>
               
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
+                <Button
+                  type="button"
+                  variant="outlined"
+                  color="secondary"
+                  onClick={() => resetForm()}
+                  disabled={!dirty || isSubmitting}
+                >
+                  Reset
+                </Button>
+                
                 <Button
                   type="submit"
                   variant="contained"
                   color="primary"
-                  disabled={isSubmitting}
-                  startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
+                  disabled={isSubmitting || isLoading || !dirty}
+                  startIcon={isSubmitting || isLoading ? <CircularProgress size={20} /> : <SaveIcon />}
                 >
                   Save Changes
                 </Button>
@@ -272,7 +344,7 @@ const Profile = () => {
         <DialogContent>
           <DialogContentText>
             Are you sure you want to save these changes to your profile?
-            {pendingValues?.password && (
+            {formValues?.password && (
               <strong> This will also change your password.</strong>
             )}
           </DialogContentText>

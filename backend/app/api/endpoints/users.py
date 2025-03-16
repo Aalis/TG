@@ -94,9 +94,32 @@ def update_user_me(
     """
     Update own user.
     """
+    # Log the update request for debugging
+    print(f"Update user request: {user_data}")
+    
+    # Check if email is already taken by another user
+    if "email" in user_data and user_data["email"] != current_user.email:
+        user_with_email = crud.user.get_by_email(db, email=user_data["email"])
+        if user_with_email and user_with_email.id != current_user.id:
+            raise HTTPException(
+                status_code=400,
+                detail="The email is already in use by another account.",
+            )
+    
+    # Check if username is already taken by another user
+    if "username" in user_data and user_data["username"] != current_user.username:
+        user_with_username = crud.user.get_by_username(db, username=user_data["username"])
+        if user_with_username and user_with_username.id != current_user.id:
+            raise HTTPException(
+                status_code=400,
+                detail="The username is already in use by another account.",
+            )
+    
+    # Create update object from current user data
     current_user_data = jsonable_encoder(current_user)
     user_in = UserUpdate(**current_user_data)
     
+    # Update fields from request
     if "password" in user_data and user_data["password"]:
         user_in.password = user_data["password"]
     if "email" in user_data and user_data["email"]:
@@ -104,8 +127,19 @@ def update_user_me(
     if "username" in user_data and user_data["username"]:
         user_in.username = user_data["username"]
     
-    user = crud.user.update(db, db_obj=current_user, obj_in=user_in)
-    return user
+    # Update user in database
+    try:
+        user = crud.user.update(db, db_obj=current_user, obj_in=user_in)
+        # Log success for debugging
+        print(f"User updated successfully: {user.id}")
+        return user
+    except Exception as e:
+        # Log error for debugging
+        print(f"Error updating user: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while updating the user: {str(e)}",
+        )
 
 
 @router.get("/me", response_model=UserSchema)

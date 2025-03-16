@@ -58,6 +58,8 @@ const ParsedChannels = () => {
   const [parseDialogOpen, setParseDialogOpen] = useState(false);
   const [channelLink, setChannelLink] = useState('');
   const [postLimit, setPostLimit] = useState(100);
+  const [customPostLimit, setCustomPostLimit] = useState(100);
+  const [isCustomPostLimit, setIsCustomPostLimit] = useState(false);
   const [parsingStatus, setParsingStatus] = useState({
     loading: false,
     success: false,
@@ -293,12 +295,65 @@ const ParsedChannels = () => {
     }
   }, [parseDialogOpen]);
 
+  // Update the onChange handler for the Select component
+  const handlePostLimitChange = (e) => {
+    const value = e.target.value;
+    if (value === 'custom') {
+      setIsCustomPostLimit(true);
+      // Keep the current postLimit value for the custom input initial value
+      setCustomPostLimit(postLimit === 'custom' ? 100 : postLimit);
+    } else {
+      setIsCustomPostLimit(false);
+      setPostLimit(value);
+    }
+  };
+
+  // Update the onChange handler for the custom input
+  const handleCustomPostLimitChange = (e) => {
+    const value = parseInt(e.target.value, 10);
+    if (!isNaN(value) && value > 0 && value <= 200) {
+      setCustomPostLimit(value);
+      setPostLimit(value);
+    }
+  };
+
+  // Update the reset form function
+  const resetForm = () => {
+    setChannelLink('');
+    setPostLimit(100);
+    setCustomPostLimit(100);
+    setIsCustomPostLimit(false);
+    setSelectedDialog(null);
+    setParsingStatus({
+      loading: false,
+      success: false,
+      error: null,
+    });
+  };
+
+  // Update the dialog close handler
+  const handleCloseParseDialog = () => {
+    setParseDialogOpen(false);
+    resetForm();
+  };
+
+  // Update the success handler in handleParseChannel
   const handleParseChannel = async () => {
     if (!channelLink && !selectedDialog) {
       setParsingStatus({
         loading: false,
         success: false,
         error: 'Please enter a channel link or select a channel from the list',
+      });
+      return;
+    }
+
+    // Validate post limit
+    if (typeof postLimit !== 'number' || postLimit <= 0 || postLimit > 200) {
+      setParsingStatus({
+        loading: false,
+        success: false,
+        error: 'Please select a valid post limit (between 1 and 200)',
       });
       return;
     }
@@ -345,9 +400,7 @@ const ParsedChannels = () => {
       
       // Close the dialog and reset form
       setParseDialogOpen(false);
-      setChannelLink('');
-      setPostLimit(100);
-      setSelectedDialog(null);
+      resetForm();
     } catch (err) {
       // Stop progress polling if there's an error
       resetParsingState();
@@ -658,14 +711,7 @@ const ParsedChannels = () => {
       )}
 
       {/* Parse Channel Dialog */}
-      <Dialog open={parseDialogOpen} onClose={() => {
-        if (!parsingStatus.loading) {
-          setParseDialogOpen(false);
-          setSelectedDialog(null);
-          setChannelLink('');
-          resetParsingState();
-        }
-      }} maxWidth="sm" fullWidth>
+      <Dialog open={parseDialogOpen} onClose={handleCloseParseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Parse New Channel</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
@@ -753,19 +799,36 @@ const ParsedChannels = () => {
           <FormControl fullWidth variant="outlined">
             <InputLabel>Post Limit</InputLabel>
             <Select
-              value={postLimit}
-              onChange={(e) => setPostLimit(e.target.value)}
+              value={isCustomPostLimit ? 'custom' : postLimit}
+              onChange={handlePostLimitChange}
               label="Post Limit"
               disabled={parsingStatus.loading}
             >
+              <MenuItem value={10}>Last 10 Posts</MenuItem>
               <MenuItem value={100}>Last 100 Posts</MenuItem>
-              <MenuItem value={1000}>Last 1,000 Posts</MenuItem>
-              <MenuItem value={5000}>Last 5,000 Posts</MenuItem>
+              <MenuItem value={200}>Last 200 Posts</MenuItem>
+              <MenuItem value="custom">Custom (up to 200)</MenuItem>
             </Select>
             <FormHelperText>
               Select how many recent posts to scan for user information
             </FormHelperText>
           </FormControl>
+
+          {isCustomPostLimit && (
+            <TextField
+              margin="dense"
+              label="Custom Post Limit"
+              type="number"
+              fullWidth
+              variant="outlined"
+              value={customPostLimit}
+              InputProps={{ inputProps: { min: 1, max: 200 } }}
+              onChange={handleCustomPostLimitChange}
+              helperText="Enter a number between 1 and 200"
+              sx={{ mt: 2 }}
+              autoFocus
+            />
+          )}
 
           {/* Subscription Expired Alert */}
           {parsingStatus.error && parsingStatus.error.includes("subscription has expired") && (
@@ -812,12 +875,7 @@ const ParsedChannels = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => {
-            setParseDialogOpen(false);
-            setSelectedDialog(null);
-            setChannelLink('');
-            resetParsingState();
-          }} disabled={parsingStatus.loading}>
+          <Button onClick={handleCloseParseDialog} disabled={parsingStatus.loading}>
             Cancel
           </Button>
           <LoadingButton

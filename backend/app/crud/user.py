@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional, Union, List
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -64,24 +65,47 @@ def update(
     db_obj: User,
     obj_in: Union[UserUpdate, Dict[str, Any]]
 ) -> User:
+    """
+    Update a user in the database.
+    
+    Args:
+        db: Database session
+        db_obj: User object from database
+        obj_in: User update data
+        
+    Returns:
+        Updated user object
+    """
+    # Convert input to dictionary if it's not already
     if isinstance(obj_in, dict):
         update_data = obj_in
     else:
         update_data = obj_in.dict(exclude_unset=True)
     
-    if "password" in update_data:
+    # Handle password hashing if password is provided
+    if "password" in update_data and update_data["password"]:
         hashed_password = get_password_hash(update_data["password"])
         del update_data["password"]
         update_data["hashed_password"] = hashed_password
     
-    for field in update_data:
-        if hasattr(db_obj, field):
-            setattr(db_obj, field, update_data[field])
-    
-    db.add(db_obj)
-    db.commit()
-    db.refresh(db_obj)
-    return db_obj
+    # Update user fields
+    try:
+        for field in update_data:
+            if hasattr(db_obj, field):
+                setattr(db_obj, field, update_data[field])
+        
+        # Update the updated_at timestamp
+        db_obj.updated_at = datetime.utcnow()
+        
+        # Commit changes to database
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+    except Exception as e:
+        db.rollback()
+        print(f"Error in user update: {str(e)}")
+        raise e
 
 
 def remove(db: Session, *, id: int) -> None:
