@@ -28,6 +28,7 @@ def generate_verification_token() -> tuple[str, datetime]:
 
 async def send_verification_email(email: EmailStr, token: str) -> None:
     """Send verification email to user"""
+    # Use the backend API endpoint for verification
     verification_url = f"{settings.SERVER_HOST}/api/v1/users/verify/{token}"
     
     message = MessageSchema(

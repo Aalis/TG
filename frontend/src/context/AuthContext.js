@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed. Please try again.');
       setIsLoading(false);
-      return false;
+      throw err; // Throw the error so it can be caught in the Register component
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -29,6 +29,11 @@ import {
   DialogContentText,
   Divider,
   Pagination,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormHelperText,
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import {
@@ -188,22 +193,60 @@ const ParsedChannels = () => {
     // Stop any existing polling
     if (progressPolling) {
       clearInterval(progressPolling);
+      setProgressPolling(null);
     }
+
+    // Reset any existing parsing progress
+    setParsingProgress(null);
+
+    // Set loading state but preserve any other state
+    setParsingStatus(prev => ({ ...prev, loading: true, error: null }));
+
+    // Initialize the parsing progress state
+    setParsingProgress({
+      is_parsing: true,
+      progress: 0,
+      phase: 'initializing',
+      message: 'Starting parsing process...'
+    });
 
     // Start new polling
     const pollInterval = setInterval(async () => {
       try {
         const response = await channelsAPI.getParsingProgress();
-        setParsingProgress(response.data);
         
-        // Stop polling if parsing is complete or errored
-        if (!response.data.is_parsing) {
+        // Only update if we're still parsing
+        if (response.data && response.data.is_parsing !== undefined) {
+          setParsingProgress(response.data);
+          
+          // Stop polling if parsing is complete or errored
+          if (!response.data.is_parsing) {
+            clearInterval(pollInterval);
+            setProgressPolling(null);
+            // Close the progress dialog when parsing is complete
+            setParsingProgress(null);
+            
+            // If parsing was cancelled by the backend, close the parse dialog too
+            if (response.data.message && response.data.message.includes('cancelled')) {
+              setParseDialogOpen(false);
+              // Reset all parsing-related state
+              resetParsingState();
+            }
+          }
+        } else {
+          // If we get an unexpected response, stop polling
           clearInterval(pollInterval);
           setProgressPolling(null);
           setParsingProgress(null);
         }
       } catch (err) {
         console.error('Error fetching parsing progress:', err);
+        // If there's an error polling, stop and clean up
+        clearInterval(pollInterval);
+        setProgressPolling(null);
+        setParsingProgress(null);
+        // Show error notification
+        enqueueSnackbar('Error tracking parsing progress', { variant: 'error' });
       }
     }, 1000); // Poll every second
 
@@ -227,7 +270,26 @@ const ParsedChannels = () => {
   // Fetch available dialogs when parse dialog opens
   useEffect(() => {
     if (parseDialogOpen) {
+      // Reset all parsing-related state when dialog opens
+      resetParsingState();
+      // Reset form fields
+      setSelectedDialog(null);
+      setChannelLink('');
+      // Fetch available dialogs
       fetchAvailableDialogs();
+      
+      // Add an extra check to hide any cancellation errors
+      const errorElements = document.querySelectorAll('.MuiAlert-standardError');
+      errorElements.forEach(el => {
+        if (el.textContent.includes('cancelled')) {
+          el.style.display = 'none';
+        }
+      });
+    } else {
+      // When dialog closes, ensure parsing progress is reset
+      if (parsingProgress && !parsingProgress.is_parsing) {
+        setParsingProgress(null);
+      }
     }
   }, [parseDialogOpen]);
 
@@ -242,11 +304,14 @@ const ParsedChannels = () => {
     }
 
     try {
+      // Reset any previous parsing state to ensure a clean start
+      resetParsingState();
+      
       setParsingStatus({ loading: true, success: false, error: null });
       
-      // Start progress polling before making the parse request
+      // Start progress polling before making the API call
       startProgressPolling();
-
+      
       // Check if we need to delete the oldest channel
       if (channels.length >= MAX_TOTAL_ITEMS) {
         // Sort by parsed_at in ascending order to get the oldest
@@ -263,7 +328,8 @@ const ParsedChannels = () => {
         });
       }
 
-      await channelsAPI.parseChannel(
+      // Make the API call
+      const response = await channelsAPI.parseChannel(
         selectedDialog ? selectedDialog.id : channelLink.trim(),
         postLimit
       );
@@ -283,10 +349,15 @@ const ParsedChannels = () => {
       setPostLimit(100);
       setSelectedDialog(null);
     } catch (err) {
+      // Stop progress polling if there's an error
+      resetParsingState();
+      
+      const errorMessage = err.response?.data?.detail || 'Failed to parse channel';
+      
       setParsingStatus({
         loading: false,
         success: false,
-        error: err.response?.data?.detail || 'Failed to parse channel',
+        error: errorMessage,
       });
     }
   };
@@ -348,13 +419,60 @@ const ParsedChannels = () => {
     try {
       setIsCancelling(true);
       await channelsAPI.cancelParsing();
-      // The progress polling will automatically stop when the backend reports is_parsing: false
+      
+      // Show a brief cancellation message
+      enqueueSnackbar('Parsing cancelled', { variant: 'info' });
+      
+      // Reset all parsing-related state
+      resetParsingState();
+      
+      // Also close the parse dialog if it's open
+      setParseDialogOpen(false);
+      
+      // Force a small delay to ensure UI updates properly
+      setTimeout(() => {
+        // Double-check that all error messages are cleared
+        setParsingStatus({ loading: false, success: false, error: null });
+        // Explicitly set parsingProgress to null to ensure the dialog closes
+        setParsingProgress(null);
+      }, 300);
     } catch (err) {
       console.error('Error cancelling parsing:', err);
       enqueueSnackbar('Failed to cancel parsing', { variant: 'error' });
     } finally {
       setIsCancelling(false);
     }
+  };
+
+  // Add resetParsingState function
+  const resetParsingState = () => {
+    // Clear all parsing-related state
+    setParsingStatus({ loading: false, success: false, error: null });
+    setParsingProgress(null);
+    
+    // Clear any polling intervals
+    if (progressPolling) {
+      clearInterval(progressPolling);
+      setProgressPolling(null);
+    }
+    
+    // Remove any error messages that might be in the DOM
+    const errorElements = document.querySelectorAll('.MuiAlert-standardError');
+    errorElements.forEach(el => {
+      if (el.textContent.includes('cancelled')) {
+        el.style.display = 'none';
+      }
+    });
+
+    // Ensure the parse dialog is closed if it was open
+    setIsCancelling(false);
+  };
+
+  // Add a helper function to filter out cancellation errors
+  const shouldShowError = (error) => {
+    if (!error) return false;
+    if (error.includes("cancelled")) return false;
+    return true;
   };
 
   if (loading && channels.length === 0) {
@@ -376,7 +494,17 @@ const ParsedChannels = () => {
           variant="contained"
           color="primary"
           startIcon={<AddIcon />}
-          onClick={() => setParseDialogOpen(true)}
+          onClick={() => {
+            // Reset all parsing-related state
+            resetParsingState();
+            // Clear any previous error messages when opening the dialog
+            setParsingStatus({ loading: false, success: false, error: null });
+            // Reset form fields
+            setSelectedDialog(null);
+            setChannelLink('');
+            // Open the dialog
+            setParseDialogOpen(true);
+          }}
         >
           Parse New Channel
         </Button>
@@ -530,7 +658,14 @@ const ParsedChannels = () => {
       )}
 
       {/* Parse Channel Dialog */}
-      <Dialog open={parseDialogOpen} onClose={() => setParseDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={parseDialogOpen} onClose={() => {
+        if (!parsingStatus.loading) {
+          setParseDialogOpen(false);
+          setSelectedDialog(null);
+          setChannelLink('');
+          resetParsingState();
+        }
+      }} maxWidth="sm" fullWidth>
         <DialogTitle>Parse New Channel</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
@@ -552,7 +687,7 @@ const ParsedChannels = () => {
               <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
                 <CircularProgress size={24} />
               </Box>
-            ) :
+            ) : availableDialogs.length > 0 ? (
               <Box sx={{ maxHeight: '200px', overflowY: 'auto' }}>
                 {availableDialogs
                   .filter(dialog => dialog.type === 'channel')
@@ -573,7 +708,7 @@ const ParsedChannels = () => {
                       onClick={() => {
                         setSelectedDialog(dialog);
                         setChannelLink('');
-                        setParsingStatus(prev => ({ ...prev, error: null }));
+                        setParsingStatus({ loading: false, success: false, error: null });
                       }}
                     >
                       <Typography variant="subtitle2">
@@ -585,7 +720,11 @@ const ParsedChannels = () => {
                     </Box>
                   ))}
               </Box>
-            }
+            ) : !dialogError && (
+              <Typography variant="body2" color="text.secondary">
+                No channels found. Make sure you have an active Telegram session.
+              </Typography>
+            )}
           </Box>
 
           <Divider sx={{ my: 2 }} />
@@ -593,38 +732,80 @@ const ParsedChannels = () => {
           <Typography variant="subtitle1" gutterBottom>
             Or Enter Channel Link Manually
           </Typography>
+          
           <TextField
-            fullWidth
+            margin="dense"
             label="Channel Link"
-            placeholder="https://t.me/channelname"
+            fullWidth
+            variant="outlined"
             value={channelLink}
             onChange={(e) => {
               setChannelLink(e.target.value);
               setSelectedDialog(null);
-              setParsingStatus(prev => ({ ...prev, error: null }));
+              setParsingStatus({ loading: false, success: false, error: null });
             }}
-            margin="normal"
-            variant="outlined"
             disabled={parsingStatus.loading}
+            error={shouldShowError(parsingStatus.error)}
+            helperText={shouldShowError(parsingStatus.error) ? parsingStatus.error : ' '}
+            sx={{ mb: 2 }}
           />
-          
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Options
-            </Typography>
-            <TextField
-              label="Post Limit"
-              type="number"
-              value={postLimit}
-              onChange={(e) => setPostLimit(Math.max(1, parseInt(e.target.value) || 1))}
-              InputProps={{ inputProps: { min: 1 } }}
-              size="small"
-              disabled={parsingStatus.loading}
-              helperText="Maximum number of posts to parse"
-            />
-          </Box>
 
-          {parsingStatus.error && (
+          <FormControl fullWidth variant="outlined">
+            <InputLabel>Post Limit</InputLabel>
+            <Select
+              value={postLimit}
+              onChange={(e) => setPostLimit(e.target.value)}
+              label="Post Limit"
+              disabled={parsingStatus.loading}
+            >
+              <MenuItem value={100}>Last 100 Posts</MenuItem>
+              <MenuItem value={1000}>Last 1,000 Posts</MenuItem>
+              <MenuItem value={5000}>Last 5,000 Posts</MenuItem>
+            </Select>
+            <FormHelperText>
+              Select how many recent posts to scan for user information
+            </FormHelperText>
+          </FormControl>
+
+          {/* Subscription Expired Alert */}
+          {parsingStatus.error && parsingStatus.error.includes("subscription has expired") && (
+            <Box sx={{ mt: 2, p: 1.5, bgcolor: 'error.light', borderRadius: 1, opacity: 0.9 }}>
+              <Typography variant="subtitle2" color="error.dark" gutterBottom>
+                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <span>⚠️</span> Your parsing subscription has expired
+                </Box>
+              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                <Button 
+                  variant="contained" 
+                  color="primary" 
+                  component={Link} 
+                  to="/subscribe"
+                  size="small"
+                  sx={{ fontSize: '0.75rem' }}
+                >
+                  Subscribe
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  size="small"
+                  sx={{ fontSize: '0.75rem' }}
+                  onClick={() => {
+                    setParseDialogOpen(false);
+                    setSelectedDialog(null);
+                    setChannelLink('');
+                    resetParsingState();
+                  }}
+                >
+                  Close
+                </Button>
+              </Box>
+            </Box>
+          )}
+
+          {/* Regular Error Alert - Don't show cancellation errors */}
+          {shouldShowError(parsingStatus.error) && 
+            !parsingStatus.error.includes("subscription has expired") && (
             <Alert severity="error" sx={{ mt: 2 }}>
               {parsingStatus.error}
             </Alert>
@@ -635,7 +816,7 @@ const ParsedChannels = () => {
             setParseDialogOpen(false);
             setSelectedDialog(null);
             setChannelLink('');
-            setParsingStatus({ loading: false, success: false, error: null });
+            resetParsingState();
           }} disabled={parsingStatus.loading}>
             Cancel
           </Button>
@@ -670,6 +851,12 @@ const ParsedChannels = () => {
         open={!!parsingProgress && parsingProgress.is_parsing} 
         maxWidth="sm" 
         fullWidth
+        onClose={() => {
+          // Only allow closing via the cancel button
+          if (!parsingProgress?.is_parsing) {
+            resetParsingState();
+          }
+        }}
       >
         <DialogTitle>Parsing Channel</DialogTitle>
         <DialogContent>

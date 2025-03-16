@@ -23,18 +23,42 @@ const Register = () => {
     password: '',
     confirmPassword: '',
   });
+  const [errors, setErrors] = useState({
+    email: '',
+    username: '',
+    password: '',
+    confirmPassword: '',
+  });
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
+    // Clear error for the field being changed
+    setErrors({
+      ...errors,
+      [e.target.name]: '',
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Reset all errors
+    setErrors({
+      email: '',
+      username: '',
+      password: '',
+      confirmPassword: '',
+    });
+    
+    // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
-      enqueueSnackbar('Passwords do not match', { variant: 'error' });
+      setErrors({
+        ...errors,
+        confirmPassword: 'Passwords do not match',
+      });
       return;
     }
 
@@ -51,7 +75,23 @@ const Register = () => {
         });
       }
     } catch (error) {
-      enqueueSnackbar(error.response?.data?.detail || 'Registration failed', { variant: 'error' });
+      const errorMessage = error.response?.data?.detail || 'Registration failed';
+      
+      // Handle specific error messages
+      if (errorMessage.includes('email already exists')) {
+        setErrors({
+          ...errors,
+          email: 'This email is already registered',
+        });
+      } else if (errorMessage.includes('username already exists')) {
+        setErrors({
+          ...errors,
+          username: 'This username is already taken',
+        });
+      } else {
+        // General error
+        enqueueSnackbar(errorMessage, { variant: 'error' });
+      }
     }
   };
 
@@ -132,6 +172,8 @@ const Register = () => {
             value={formData.email}
             onChange={handleChange}
             autoComplete="email"
+            error={!!errors.email}
+            helperText={errors.email}
           />
           <TextField
             required
@@ -142,6 +184,8 @@ const Register = () => {
             value={formData.username}
             onChange={handleChange}
             autoComplete="username"
+            error={!!errors.username}
+            helperText={errors.username}
           />
           <TextField
             required
@@ -153,6 +197,8 @@ const Register = () => {
             value={formData.password}
             onChange={handleChange}
             autoComplete="new-password"
+            error={!!errors.password}
+            helperText={errors.password}
           />
           <TextField
             required
@@ -164,6 +210,8 @@ const Register = () => {
             value={formData.confirmPassword}
             onChange={handleChange}
             autoComplete="new-password"
+            error={!!errors.confirmPassword}
+            helperText={errors.confirmPassword}
           />
           <Button
             type="submit"

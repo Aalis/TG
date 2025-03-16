@@ -94,14 +94,61 @@ def delete_token(
 
 
 @router.get("/parsed-groups/", response_model=List[ParsedGroup])
-def read_groups(
+async def read_groups(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Retrieve parsed Telegram groups.
     """
+    # Try to get groups from cache first
+    from app.core.redis_client import get_cached_parsed_groups, cache_parsed_groups
+    
+    cached_groups = await get_cached_parsed_groups(current_user.id)
+    if cached_groups:
+        # Return cached data if available
+        return cached_groups
+    
+    # If not in cache, fetch from database
     groups = crud.telegram.get_groups_by_user(db, user_id=current_user.id)
+    
+    # Convert SQLAlchemy models to dictionaries for caching
+    # We need to handle SQLAlchemy models properly
+    groups_data = []
+    for group in groups:
+        # Get the members for this group
+        members_data = []
+        for member in group.members:
+            member_dict = {
+                "id": member.id,
+                "group_id": member.group_id,
+                "user_id": member.user_id,
+                "username": member.username,
+                "first_name": member.first_name,
+                "last_name": member.last_name,
+                "is_bot": member.is_bot,
+                "is_admin": member.is_admin,
+                "is_premium": member.is_premium
+            }
+            members_data.append(member_dict)
+            
+        group_dict = {
+            "id": group.id,
+            "group_id": group.group_id,
+            "group_name": group.group_name,
+            "group_username": group.group_username,
+            "member_count": group.member_count,
+            "is_public": group.is_public,
+            "is_channel": group.is_channel,
+            "parsed_at": group.parsed_at,
+            "user_id": group.user_id,
+            "members": members_data
+        }
+        groups_data.append(group_dict)
+    
+    # Cache the results for future requests
+    await cache_parsed_groups(current_user.id, groups_data)
+    
     return groups
 
 
@@ -124,7 +171,7 @@ def read_group(
 
 
 @router.delete("/parsed-groups/{group_id}", response_model=dict)
-def delete_group(
+async def delete_group(
     *,
     db: Session = Depends(deps.get_db),
     group_id: int,
@@ -138,7 +185,13 @@ def delete_group(
         raise HTTPException(status_code=404, detail="Group not found")
     if group.user_id != current_user.id:
         raise HTTPException(status_code=400, detail="Not enough permissions")
+    
     crud.telegram.delete_group(db, group_id=group_id)
+    
+    # Invalidate cache after deletion
+    from app.core.redis_client import invalidate_parsed_groups_cache
+    await invalidate_parsed_groups_cache(current_user.id)
+    
     return {"success": True}
 
 
@@ -179,6 +232,10 @@ async def parse_group(
                 detail="Group was not properly saved to database"
             )
         
+        # Invalidate the groups cache after successful parsing
+        from app.core.redis_client import invalidate_parsed_groups_cache
+        await invalidate_parsed_groups_cache(current_user.id)
+        
         return {
             "success": True,
             "message": "Group parsed successfully",
@@ -218,6 +275,11 @@ async def parse_channel(
             user_id=current_user.id,
             post_limit=request.post_limit
         )
+        
+        # Invalidate the channels cache after successful parsing
+        from app.core.redis_client import invalidate_parsed_channels_cache
+        await invalidate_parsed_channels_cache(current_user.id)
+        
         return {
             "success": True,
             "message": f"Successfully parsed channel with {len(group.posts)} posts",
@@ -280,17 +342,64 @@ def read_post_comments(
 
 
 @router.get("/parsed-channels/", response_model=List[ParsedGroup])
-def read_channels(
+async def read_channels(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """Get all parsed channels for current user"""
+    # Try to get channels from cache first
+    from app.core.redis_client import get_cached_parsed_channels, cache_parsed_channels
+    
+    cached_channels = await get_cached_parsed_channels(current_user.id)
+    if cached_channels:
+        # Return cached data if available
+        return cached_channels
+    
+    # If not in cache, fetch from database
     channels = crud.telegram.get_channels_by_user(db, user_id=current_user.id)
+    
+    # Convert SQLAlchemy models to dictionaries for caching
+    # We need to handle SQLAlchemy models properly
+    channels_data = []
+    for channel in channels:
+        # Get the members for this channel
+        members_data = []
+        for member in channel.members:
+            member_dict = {
+                "id": member.id,
+                "group_id": member.group_id,
+                "user_id": member.user_id,
+                "username": member.username,
+                "first_name": member.first_name,
+                "last_name": member.last_name,
+                "is_bot": member.is_bot,
+                "is_admin": member.is_admin,
+                "is_premium": member.is_premium
+            }
+            members_data.append(member_dict)
+            
+        channel_dict = {
+            "id": channel.id,
+            "group_id": channel.group_id,
+            "group_name": channel.group_name,
+            "group_username": channel.group_username,
+            "member_count": channel.member_count,
+            "is_public": channel.is_public,
+            "is_channel": channel.is_channel,
+            "parsed_at": channel.parsed_at,
+            "user_id": channel.user_id,
+            "members": members_data
+        }
+        channels_data.append(channel_dict)
+    
+    # Cache the results for future requests
+    await cache_parsed_channels(current_user.id, channels_data)
+    
     return channels
 
 
 @router.delete("/parsed-channels/{channel_id}", response_model=dict)
-def delete_channel(
+async def delete_channel(
     *,
     db: Session = Depends(deps.get_db),
     channel_id: int,
@@ -304,7 +413,13 @@ def delete_channel(
         raise HTTPException(status_code=400, detail="Not enough permissions")
     if not channel.is_channel:
         raise HTTPException(status_code=400, detail="Specified ID is not a channel")
+    
     crud.telegram.delete_group(db, group_id=channel_id)
+    
+    # Invalidate cache after deletion
+    from app.core.redis_client import invalidate_parsed_channels_cache
+    await invalidate_parsed_channels_cache(current_user.id)
+    
     return {"success": True}
 
 

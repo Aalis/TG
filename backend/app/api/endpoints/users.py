@@ -176,6 +176,7 @@ async def verify_email(
     
     # Redirect to frontend login page with success message
     frontend_login_url = f"{settings.FRONTEND_URL}/login?verified=true"
+    print(f"Redirecting to: {frontend_login_url}")  # Debug log
     return RedirectResponse(url=frontend_login_url)
 
 

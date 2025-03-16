@@ -1,6 +1,6 @@
 import json
 import pickle
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List
 import redis.asyncio as redis
 from app.core.config import settings
 
@@ -95,4 +95,154 @@ async def get_phone_code_hash(phone_number: str) -> Optional[str]:
         return data.decode('utf-8')
     except Exception as e:
         print(f"Error retrieving phone code hash: {e}")
-        return None 
+        return None
+
+# Functions for caching parsed channels data
+
+async def cache_parsed_channels(user_id: int, channels_data: List[Dict[str, Any]], expiry: int = 3600) -> bool:
+    """
+    Cache parsed channels data in Redis.
+    
+    Args:
+        user_id: The user ID to associate with the cached data
+        channels_data: List of channel data to cache
+        expiry: Cache expiration time in seconds (default: 1 hour)
+        
+    Returns:
+        bool: True if caching was successful, False otherwise
+    """
+    try:
+        r = await get_redis_client()
+        key = f"parsed_channels:{user_id}"
+        
+        # Serialize the channels data using pickle for better object serialization
+        serialized_data = pickle.dumps(channels_data)
+        
+        # Store in Redis with expiry
+        await r.set(key, serialized_data, ex=expiry)
+        return True
+    except Exception as e:
+        print(f"Error caching parsed channels: {e}")
+        return False
+
+async def get_cached_parsed_channels(user_id: int) -> Optional[List[Dict[str, Any]]]:
+    """
+    Retrieve cached parsed channels data from Redis.
+    
+    Args:
+        user_id: The user ID associated with the cached data
+        
+    Returns:
+        Optional[List[Dict[str, Any]]]: The cached channels data or None if not found
+    """
+    try:
+        r = await get_redis_client()
+        key = f"parsed_channels:{user_id}"
+        
+        # Get from Redis
+        data = await r.get(key)
+        if not data:
+            return None
+        
+        # Deserialize the channels data
+        return pickle.loads(data)
+    except Exception as e:
+        print(f"Error retrieving cached parsed channels: {e}")
+        return None
+
+async def invalidate_parsed_channels_cache(user_id: int) -> bool:
+    """
+    Invalidate (delete) the cached parsed channels data for a user.
+    Should be called whenever channels are added, modified, or deleted.
+    
+    Args:
+        user_id: The user ID associated with the cached data
+        
+    Returns:
+        bool: True if invalidation was successful, False otherwise
+    """
+    try:
+        r = await get_redis_client()
+        key = f"parsed_channels:{user_id}"
+        
+        # Delete from Redis
+        await r.delete(key)
+        return True
+    except Exception as e:
+        print(f"Error invalidating parsed channels cache: {e}")
+        return False
+
+# Functions for caching parsed groups data
+
+async def cache_parsed_groups(user_id: int, groups_data: List[Dict[str, Any]], expiry: int = 3600) -> bool:
+    """
+    Cache parsed groups data in Redis.
+    
+    Args:
+        user_id: The user ID to associate with the cached data
+        groups_data: List of group data to cache
+        expiry: Cache expiration time in seconds (default: 1 hour)
+        
+    Returns:
+        bool: True if caching was successful, False otherwise
+    """
+    try:
+        r = await get_redis_client()
+        key = f"parsed_groups:{user_id}"
+        
+        # Serialize the groups data using pickle for better object serialization
+        serialized_data = pickle.dumps(groups_data)
+        
+        # Store in Redis with expiry
+        await r.set(key, serialized_data, ex=expiry)
+        return True
+    except Exception as e:
+        print(f"Error caching parsed groups: {e}")
+        return False
+
+async def get_cached_parsed_groups(user_id: int) -> Optional[List[Dict[str, Any]]]:
+    """
+    Retrieve cached parsed groups data from Redis.
+    
+    Args:
+        user_id: The user ID associated with the cached data
+        
+    Returns:
+        Optional[List[Dict[str, Any]]]: The cached groups data or None if not found
+    """
+    try:
+        r = await get_redis_client()
+        key = f"parsed_groups:{user_id}"
+        
+        # Get from Redis
+        data = await r.get(key)
+        if not data:
+            return None
+        
+        # Deserialize the groups data
+        return pickle.loads(data)
+    except Exception as e:
+        print(f"Error retrieving cached parsed groups: {e}")
+        return None
+
+async def invalidate_parsed_groups_cache(user_id: int) -> bool:
+    """
+    Invalidate (delete) the cached parsed groups data for a user.
+    Should be called whenever groups are added, modified, or deleted.
+    
+    Args:
+        user_id: The user ID associated with the cached data
+        
+    Returns:
+        bool: True if invalidation was successful, False otherwise
+    """
+    try:
+        r = await get_redis_client()
+        key = f"parsed_groups:{user_id}"
+        
+        # Delete from Redis
+        await r.delete(key)
+        return True
+    except Exception as e:
+        print(f"Error invalidating parsed groups cache: {e}")
+        return False 

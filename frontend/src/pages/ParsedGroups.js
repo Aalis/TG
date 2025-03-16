@@ -62,6 +62,11 @@ const ParsedGroups = () => {
   const [dialogError, setDialogError] = useState(null);
   const [selectedDialog, setSelectedDialog] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [parsingStatus, setParsingStatus] = useState({
+    loading: false,
+    success: false,
+    error: null,
+  });
   
   // Pagination states
   const ITEMS_PER_PAGE = 21;
@@ -199,22 +204,60 @@ const ParsedGroups = () => {
     // Stop any existing polling
     if (progressPolling) {
       clearInterval(progressPolling);
+      setProgressPolling(null);
     }
+
+    // Reset any existing parsing progress
+    setParsingProgress(null);
+
+    // Set loading state but preserve any other state
+    setParsingStatus(prev => ({ ...prev, loading: true, error: null }));
+
+    // Initialize the parsing progress state
+    setParsingProgress({
+      is_parsing: true,
+      progress: 0,
+      phase: 'initializing',
+      message: 'Starting parsing process...'
+    });
 
     // Start new polling
     const pollInterval = setInterval(async () => {
       try {
         const response = await groupsAPI.getParsingProgress();
-        setParsingProgress(response.data);
         
-        // Stop polling if parsing is complete or errored
-        if (!response.data.is_parsing) {
+        // Only update if we're still parsing
+        if (response.data && response.data.is_parsing !== undefined) {
+          setParsingProgress(response.data);
+          
+          // Stop polling if parsing is complete or errored
+          if (!response.data.is_parsing) {
+            clearInterval(pollInterval);
+            setProgressPolling(null);
+            // Close the progress dialog when parsing is complete
+            setParsingProgress(null);
+            
+            // If parsing was cancelled by the backend, close the parse dialog too
+            if (response.data.message && response.data.message.includes('cancelled')) {
+              setParseDialogOpen(false);
+              // Reset all parsing-related state
+              resetParsingState();
+            }
+          }
+        } else {
+          // If we get an unexpected response, stop polling
           clearInterval(pollInterval);
           setProgressPolling(null);
           setParsingProgress(null);
         }
       } catch (err) {
         console.error('Error fetching parsing progress:', err);
+        // If there's an error polling, stop and clean up
+        clearInterval(pollInterval);
+        setProgressPolling(null);
+        setParsingProgress(null);
+        // Show error notification
+        enqueueSnackbar('Error tracking parsing progress', { variant: 'error' });
       }
     }, 1000); // Poll every second
 
@@ -223,15 +266,23 @@ const ParsedGroups = () => {
 
   const handleParseGroup = async () => {
     if (!groupLink && !selectedDialog) {
-      setError('Please enter a group link or select a group from the list');
+      setParsingStatus({
+        loading: false,
+        success: false,
+        error: 'Please enter a group link or select a group from the list',
+      });
       return;
     }
 
-    setLoading(true);
     try {
-      // Start progress polling before making the parse request
+      // Reset any previous parsing state to ensure a clean start
+      resetParsingState();
+      
+      setParsingStatus({ loading: true, success: false, error: null });
+      
+      // Start progress polling before making the API call
       startProgressPolling();
-
+      
       // Check if we need to delete the oldest group
       if (groups.length >= MAX_TOTAL_ITEMS) {
         // Sort by parsed_at in ascending order to get the oldest
@@ -248,6 +299,7 @@ const ParsedGroups = () => {
         });
       }
 
+      // Make the API call
       const response = await groupsAPI.parseGroup(
         selectedDialog ? selectedDialog.id : groupLink.trim(),
         scanComments,
@@ -255,6 +307,12 @@ const ParsedGroups = () => {
       );
 
       if (response.data.success) {
+        setParsingStatus({
+          loading: false,
+          success: true,
+          error: null,
+        });
+        
         // Navigate to the group details page
         navigate(`/groups/${response.data.group.id}`);
         
@@ -267,14 +325,28 @@ const ParsedGroups = () => {
         fetchGroups();
         enqueueSnackbar('Group parsed successfully!', { variant: 'success' });
       } else {
-        setError(response.data.message);
+        setParsingStatus({
+          loading: false,
+          success: false,
+          error: response.data.message,
+        });
+        
+        // Clear progress dialog if parsing failed
+        resetParsingState();
       }
     } catch (err) {
+      // Stop progress polling if there's an error
+      resetParsingState();
+      
       const errorMessage = err.response?.data?.detail?.[0]?.msg || 
                           err.response?.data?.detail || 
                           'Failed to parse group. Please try again.';
       
-      setError(errorMessage);
+      setParsingStatus({
+        loading: false,
+        success: false,
+        error: errorMessage,
+      });
     } finally {
       setLoading(false);
     }
@@ -294,18 +366,52 @@ const ParsedGroups = () => {
     }
   };
 
-  // Fetch available dialogs when parse dialog opens
-  useEffect(() => {
-    if (parseDialogOpen) {
-      fetchAvailableDialogs();
+  // Update the resetParsingState function to be more thorough
+  const resetParsingState = () => {
+    // Clear all parsing-related state
+    setParsingStatus({ loading: false, success: false, error: null });
+    setParsingProgress(null);
+    
+    // Clear any polling intervals
+    if (progressPolling) {
+      clearInterval(progressPolling);
+      setProgressPolling(null);
     }
-  }, [parseDialogOpen]);
+    
+    // Remove any error messages that might be in the DOM
+    const errorElements = document.querySelectorAll('.MuiAlert-standardError');
+    errorElements.forEach(el => {
+      if (el.textContent.includes('cancelled')) {
+        el.style.display = 'none';
+      }
+    });
 
+    // Ensure the parse dialog is closed if it was open
+    setIsCancelling(false);
+  };
+
+  // Update the handleCancelParsing function to be more thorough
   const handleCancelParsing = async () => {
     try {
       setIsCancelling(true);
       await groupsAPI.cancelParsing();
-      // The progress polling will automatically stop when the backend reports is_parsing: false
+      
+      // Show a brief cancellation message
+      enqueueSnackbar('Parsing cancelled', { variant: 'info' });
+      
+      // Reset all parsing-related state
+      resetParsingState();
+      
+      // Also close the parse dialog if it's open
+      setParseDialogOpen(false);
+      
+      // Force a small delay to ensure UI updates properly
+      setTimeout(() => {
+        // Double-check that all error messages are cleared
+        setParsingStatus({ loading: false, success: false, error: null });
+        // Explicitly set parsingProgress to null to ensure the dialog closes
+        setParsingProgress(null);
+      }, 300);
     } catch (err) {
       console.error('Error cancelling parsing:', err);
       enqueueSnackbar('Failed to cancel parsing', { variant: 'error' });
@@ -313,6 +419,39 @@ const ParsedGroups = () => {
       setIsCancelling(false);
     }
   };
+
+  // Add a helper function to filter out cancellation errors
+  const shouldShowError = (error) => {
+    if (!error) return false;
+    if (error.includes("cancelled")) return false;
+    return true;
+  };
+
+  // Update the useEffect for parseDialogOpen
+  useEffect(() => {
+    if (parseDialogOpen) {
+      // Reset all parsing-related state when dialog opens
+      resetParsingState();
+      // Reset form fields
+      setSelectedDialog(null);
+      setGroupLink('');
+      // Fetch available dialogs
+      fetchAvailableDialogs();
+      
+      // Add an extra check to hide any cancellation errors
+      const errorElements = document.querySelectorAll('.MuiAlert-standardError');
+      errorElements.forEach(el => {
+        if (el.textContent.includes('cancelled')) {
+          el.style.display = 'none';
+        }
+      });
+    } else {
+      // When dialog closes, ensure parsing progress is reset
+      if (parsingProgress && !parsingProgress.is_parsing) {
+        setParsingProgress(null);
+      }
+    }
+  }, [parseDialogOpen]);
 
   if (loading && groups.length === 0) {
     return (
@@ -333,7 +472,17 @@ const ParsedGroups = () => {
           variant="contained"
           color="primary"
           startIcon={<AddIcon />}
-          onClick={() => setParseDialogOpen(true)}
+          onClick={() => {
+            // Reset all parsing-related state
+            resetParsingState();
+            // Clear any previous error messages when opening the dialog
+            setParsingStatus({ loading: false, success: false, error: null });
+            // Reset form fields
+            setSelectedDialog(null);
+            setGroupLink('');
+            // Open the dialog
+            setParseDialogOpen(true);
+          }}
         >
           Parse New Group
         </Button>
@@ -375,7 +524,11 @@ const ParsedGroups = () => {
                 variant="contained"
                 color="primary"
                 startIcon={<AddIcon />}
-                onClick={() => setParseDialogOpen(true)}
+                onClick={() => {
+                  // Clear any previous error messages when opening the dialog
+                  setParsingStatus({ loading: false, success: false, error: null });
+                  setParseDialogOpen(true);
+                }}
               >
                 Parse Your First Group
               </Button>
@@ -421,12 +574,20 @@ const ParsedGroups = () => {
                     </Typography>
                     
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
-                      <Chip 
-                        label={`${group.member_count.toLocaleString()} members`} 
-                        size="small" 
-                        color="primary" 
-                        variant="outlined"
-                      />
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Chip 
+                          label={`${group.member_count.toLocaleString()} members`} 
+                          size="small" 
+                          color="primary" 
+                          variant="outlined"
+                        />
+                        <Chip 
+                          label={`${(group.members?.length || 0).toLocaleString()} users found`} 
+                          size="small" 
+                          color="info" 
+                          variant="outlined"
+                        />
+                      </Box>
                       <Chip 
                         label={group.is_public ? 'Public' : 'Private'} 
                         size="small" 
@@ -495,7 +656,14 @@ const ParsedGroups = () => {
       </Dialog>
       
       {/* Parse Group Dialog */}
-      <Dialog open={parseDialogOpen} onClose={() => !loading && setParseDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={parseDialogOpen} onClose={() => {
+        if (!parsingStatus.loading) {
+          setParseDialogOpen(false);
+          setSelectedDialog(null);
+          setGroupLink('');
+          resetParsingState();
+        }
+      }} maxWidth="sm" fullWidth>
         <DialogTitle>Parse New Group</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
@@ -538,7 +706,7 @@ const ParsedGroups = () => {
                       onClick={() => {
                         setSelectedDialog(dialog);
                         setGroupLink('');
-                        setError(null);
+                        setParsingStatus({ loading: false, success: false, error: null });
                       }}
                     >
                       <Typography variant="subtitle2">
@@ -572,11 +740,11 @@ const ParsedGroups = () => {
             onChange={(e) => {
               setGroupLink(e.target.value);
               setSelectedDialog(null);
-              setError(null);
+              setParsingStatus({ loading: false, success: false, error: null });
             }}
-            disabled={loading}
-            error={!!error}
-            helperText={error}
+            disabled={parsingStatus.loading}
+            error={shouldShowError(parsingStatus.error)}
+            helperText={shouldShowError(parsingStatus.error) ? parsingStatus.error : ' '}
             sx={{ mb: 2 }}
           />
 
@@ -585,7 +753,7 @@ const ParsedGroups = () => {
               <Switch
                 checked={scanComments}
                 onChange={(e) => setScanComments(e.target.checked)}
-                disabled={loading}
+                disabled={parsingStatus.loading}
               />
             }
             label="Scan comments for additional users"
@@ -599,7 +767,7 @@ const ParsedGroups = () => {
                 value={commentLimit}
                 onChange={(e) => setCommentLimit(e.target.value)}
                 label="Comment Scan Limit"
-                disabled={loading}
+                disabled={parsingStatus.loading}
               >
                 <MenuItem value={100}>Last 100 Comments</MenuItem>
                 <MenuItem value={1000}>Last 1,000 Comments</MenuItem>
@@ -610,19 +778,63 @@ const ParsedGroups = () => {
               </FormHelperText>
             </FormControl>
           )}
+
+          {/* Subscription Expired Alert */}
+          {parsingStatus.error && parsingStatus.error.includes("subscription has expired") && (
+            <Box sx={{ mt: 2, p: 1.5, bgcolor: 'error.light', borderRadius: 1, opacity: 0.9 }}>
+              <Typography variant="subtitle2" color="error.dark" gutterBottom>
+                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <span>⚠️</span> Your parsing subscription has expired
+                </Box>
+              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                <Button 
+                  variant="contained" 
+                  color="primary" 
+                  component={RouterLink} 
+                  to="/subscribe"
+                  size="small"
+                  sx={{ fontSize: '0.75rem' }}
+                >
+                  Subscribe
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  size="small"
+                  sx={{ fontSize: '0.75rem' }}
+                  onClick={() => {
+                    setParseDialogOpen(false);
+                    setSelectedDialog(null);
+                    setGroupLink('');
+                    resetParsingState();
+                  }}
+                >
+                  Close
+                </Button>
+              </Box>
+            </Box>
+          )}
+
+          {/* Regular Error Alert - Don't show cancellation errors */}
+          {shouldShowError(parsingStatus.error) && 
+            !parsingStatus.error.includes("subscription has expired") && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {parsingStatus.error}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => {
             setParseDialogOpen(false);
             setSelectedDialog(null);
             setGroupLink('');
-            setError(null);
-          }} disabled={loading}>
+            resetParsingState();
+          }} disabled={parsingStatus.loading}>
             Cancel
           </Button>
           <LoadingButton
             onClick={handleParseGroup}
-            loading={loading}
+            loading={parsingStatus.loading}
             variant="contained"
           >
             Parse Group
@@ -635,6 +847,12 @@ const ParsedGroups = () => {
         open={!!parsingProgress && parsingProgress.is_parsing} 
         maxWidth="sm" 
         fullWidth
+        onClose={() => {
+          // Only allow closing via the cancel button
+          if (!parsingProgress?.is_parsing) {
+            resetParsingState();
+          }
+        }}
       >
         <DialogTitle>Parsing Group</DialogTitle>
         <DialogContent>
