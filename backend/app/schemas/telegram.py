@@ -86,8 +86,8 @@ class GroupParseRequest(BaseModel):
 
     @validator('comment_limit')
     def validate_comment_limit(cls, v):
-        if v not in [100, 1000, 5000]:
-            raise ValueError('Comment limit must be either 100, 1000, or 5000')
+        if v not in [100, 1000, 5000, 10000]:
+            raise ValueError('Comment limit must be either 100, 1000, 5000, or 10000')
         return v
 
 
