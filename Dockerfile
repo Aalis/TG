@@ -196,6 +196,22 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'echo "Environment variables:"' >> /app/start.sh && \
     echo 'echo "SECRET_KEY set: ${SECRET_KEY:+true}"' >> /app/start.sh && \
     echo 'echo "DATABASE_URL set: ${DATABASE_URL:+true}"' >> /app/start.sh && \
+    echo '# Initialize the database' >> /app/start.sh && \
+    echo 'if [[ -n "$DATABASE_URL" && "$SKIP_DB_INIT" != "true" ]]; then' >> /app/start.sh && \
+    echo '  echo "Initializing database..."' >> /app/start.sh && \
+    echo '  set +e  # Temporarily disable exit on error' >> /app/start.sh && \
+    echo '  cd /app/backend && python init_db.py' >> /app/start.sh && \
+    echo '  DB_INIT_RESULT=$?' >> /app/start.sh && \
+    echo '  set -e  # Re-enable exit on error' >> /app/start.sh && \
+    echo '  if [ $DB_INIT_RESULT -ne 0 ]; then' >> /app/start.sh && \
+    echo '    echo "Warning: Database initialization failed with exit code $DB_INIT_RESULT"' >> /app/start.sh && \
+    echo '    echo "Will continue to start the application anyway"' >> /app/start.sh && \
+    echo '  else' >> /app/start.sh && \
+    echo '    echo "Database initialization completed successfully"' >> /app/start.sh && \
+    echo '  fi' >> /app/start.sh && \
+    echo 'else' >> /app/start.sh && \
+    echo '  echo "Skipping database initialization"' >> /app/start.sh && \
+    echo 'fi' >> /app/start.sh && \
     echo 'echo "Starting application..."' >> /app/start.sh && \
     echo 'if [ -f /app/backend/app/main.py ]; then' >> /app/start.sh && \
     echo '  echo "Starting with app wrapper to handle database issues"' >> /app/start.sh && \
