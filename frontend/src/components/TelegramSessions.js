@@ -29,7 +29,7 @@ import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
 const TelegramSessions = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [sessions, setSessions] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -49,6 +49,14 @@ const TelegramSessions = () => {
     t('telegram.verifyCode'),
     t('common.complete')
   ];
+
+  // Force language refresh on component mount
+  useEffect(() => {
+    const currentLang = localStorage.getItem('i18nextLng') || 'en';
+    if (i18n.language !== currentLang) {
+      i18n.changeLanguage(currentLang);
+    }
+  }, [i18n]);
 
   // Fetch sessions on component mount
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   Button, 
@@ -17,7 +17,13 @@ const LanguageSwitcher = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
   
-  const currentLanguage = i18n.language;
+  // Get current language from i18n
+  const [currentLanguage, setCurrentLanguage] = useState(i18n.language || 'en');
+  
+  // Update current language when i18n.language changes
+  useEffect(() => {
+    setCurrentLanguage(i18n.language);
+  }, [i18n.language]);
   
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
@@ -29,6 +35,8 @@ const LanguageSwitcher = () => {
   
   const changeLanguage = (language) => {
     i18n.changeLanguage(language);
+    localStorage.setItem('i18nextLng', language);
+    setCurrentLanguage(language);
     handleClose();
   };
   
