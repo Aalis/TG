@@ -16,7 +16,7 @@ EXPOSE 8000
 
 # Set environment variables for better performance
 ENV PYTHONUNBUFFERED=1
-ENV WORKERS=4
+ENV WORKERS=2
 
 # Command to run the application with Gunicorn and multiple workers
-CMD ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"] 
+CMD ["gunicorn", "app.main:app", "--workers", "2", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"] 
