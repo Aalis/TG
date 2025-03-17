@@ -48,11 +48,22 @@ fallback_app = FastAPI()\n\
 \n\
 @fallback_app.get("/health")\n\
 def health_check():\n\
-    return {"status": "ok", "mode": "fallback"}\n\
-\n\
-@fallback_app.get("/")\n\
-def root():\n\
-    return {"message": "Hello World - Running in fallback mode due to database connection issues"}\n\
+    # Log database connection info to help debug\n\
+    db_url = os.environ.get("DATABASE_URL", "Not set")\n\
+    pg_host = os.environ.get("PGHOST", "Not set")\n\
+    pg_user = os.environ.get("PGUSER", "Not set")\n\
+    pg_db = os.environ.get("PGDATABASE", "Not set")\n\
+    print(f"DATABASE_URL: {db_url}")\n\
+    print(f"PGHOST: {pg_host}, PGUSER: {pg_user}, PGDATABASE: {pg_db}")\n\
+    return {\n\
+        "message": "Hello World - Running in fallback mode due to database connection issues",\n\
+        "db_diagnostics": {\n\
+            "database_url": db_url.replace(os.environ.get("PGPASSWORD", ""), "****") if "PGPASSWORD" in os.environ else db_url,\n\
+            "pg_host": pg_host,\n\
+            "pg_user": pg_user,\n\
+            "pg_database": pg_db\n\
+        }\n\
+    }\n\
 \n\
 try:\n\
     # Try to import the original app\n\
@@ -72,6 +83,7 @@ RUN echo 'import sys\n\
 import builtins\n\
 import importlib.abc\n\
 import types\n\
+import os\n\
 from importlib.machinery import ModuleSpec\n\
 \n\
 # Store original import\n\
@@ -81,6 +93,15 @@ def patched_import(name, globals=None, locals=None, fromlist=(), level=0):\n\
     # Intercept specific imports that might cause database operations\n\
     if name in ["sqlalchemy", "databases"]:\n\
         print(f"Note: Import of {name} detected - connections may be intercepted if DISABLE_DB=true")\n\
+        # Print all the environment variables that might affect database connections\n\
+        print("Debug - Database Environment Variables:")\n\
+        for var in sorted(os.environ.keys()):\n\
+            if var.startswith("PG") or "DB" in var or "SQL" in var:\n\
+                # Hide passwords\n\
+                if "PASSWORD" in var or "PWD" in var:\n\
+                    print(f"  {var}: ****")\n\
+                else:\n\
+                    print(f"  {var}: {os.environ.get(var)}")\n\
     \n\
     # Let the original import proceed\n\
     return original_import(name, globals, locals, fromlist, level)\n\
@@ -135,17 +156,23 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'ls -la' >> /app/start.sh && \
     echo 'echo "Creating default .env file if needed"' >> /app/start.sh && \
     echo '/app/create_default_env.sh' >> /app/start.sh && \
-    echo '# Dump environment variables for debugging' >> /app/start.sh && \
-    echo 'env | sort' >> /app/start.sh && \
+    echo '# Dump ALL environment variables for debugging (with passwords hidden)' >> /app/start.sh && \
+    echo 'env | grep -v PASSWORD | grep -v SECRET | sort' >> /app/start.sh && \
     echo '# Skip database initialization for now to prevent startup failures' >> /app/start.sh && \
     echo 'export SKIP_DB_INIT=true' >> /app/start.sh && \
     echo 'export DISABLE_DB=true' >> /app/start.sh && \
+    echo '# List all database-related environment variables' >> /app/start.sh && \
+    echo 'echo "=== DATABASE ENVIRONMENT VARIABLES ==="' >> /app/start.sh && \
+    echo 'env | grep -i "db\|database\|pg\|sql" | grep -v PASSWORD | grep -v SECRET | sort' >> /app/start.sh && \
     echo '# Handle Railway PostgreSQL connection' >> /app/start.sh && \
     echo 'if [[ -n "$DATABASE_URL" ]]; then' >> /app/start.sh && \
     echo '  echo "Using provided DATABASE_URL"' >> /app/start.sh && \
     echo 'elif [[ -n "$PGHOST" && -n "$PGUSER" && -n "$PGPASSWORD" && -n "$PGDATABASE" ]]; then' >> /app/start.sh && \
     echo '  echo "Constructing DATABASE_URL from PG* variables"' >> /app/start.sh && \
     echo '  export DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT:-5432}/${PGDATABASE}"' >> /app/start.sh && \
+    echo 'elif [[ -n "$POSTGRES_HOST" && -n "$POSTGRES_USER" && -n "$POSTGRES_PASSWORD" && -n "$POSTGRES_DB" ]]; then' >> /app/start.sh && \
+    echo '  echo "Constructing DATABASE_URL from POSTGRES_* variables"' >> /app/start.sh && \
+    echo '  export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}"' >> /app/start.sh && \
     echo 'fi' >> /app/start.sh && \
     echo 'echo "Attempting to verify database connection:"' >> /app/start.sh && \
     echo 'if [[ -n "$DATABASE_URL" ]]; then' >> /app/start.sh && \
@@ -158,6 +185,9 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo '      export DISABLE_DB=false' >> /app/start.sh && \
     echo '    else' >> /app/start.sh && \
     echo '      echo "Could not ping database host - will run in database-free mode"' >> /app/start.sh && \
+    echo '      # Try to resolve the hostname using the Railway internal DNS' >> /app/start.sh && \
+    echo '      echo "Attempting to lookup host: $HOST"' >> /app/start.sh && \
+    echo '      getent hosts $HOST || echo "Could not resolve hostname"' >> /app/start.sh && \
     echo '    fi' >> /app/start.sh && \
     echo '  fi' >> /app/start.sh && \
     echo 'fi' >> /app/start.sh && \
