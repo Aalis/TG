@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+# Explicitly set email-related environment variables
+ENV MAIL_TLS=true
+ENV MAIL_SSL=false
 
 # Create a simple app for testing
 RUN mkdir -p /app/simple_app
@@ -55,8 +58,8 @@ MAIL_PASSWORD=password\n\
 MAIL_FROM=noreply@example.com\n\
 MAIL_PORT=587\n\
 MAIL_SERVER=smtp.example.com\n\
-MAIL_TLS=True\n\
-MAIL_SSL=False\n\
+MAIL_TLS=true\n\
+MAIL_SSL=false\n\
 EOL\n\
 fi' > /app/create_default_env.sh
 RUN chmod +x /app/create_default_env.sh
@@ -69,6 +72,9 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'ls -la' >> /app/start.sh && \
     echo 'echo "Creating default .env file if needed"' >> /app/start.sh && \
     echo '/app/create_default_env.sh' >> /app/start.sh && \
+    echo '# Ensure correct format for boolean environment variables' >> /app/start.sh && \
+    echo 'export MAIL_TLS=true' >> /app/start.sh && \
+    echo 'export MAIL_SSL=false' >> /app/start.sh && \
     echo 'echo "Checking for existence of app directory:"' >> /app/start.sh && \
     echo 'if [ -d /app/backend/app ]; then' >> /app/start.sh && \
     echo '  echo "App directory exists"' >> /app/start.sh && \
@@ -88,6 +94,8 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'echo "Environment variables:"' >> /app/start.sh && \
     echo 'echo "SECRET_KEY set: ${SECRET_KEY:+true}"' >> /app/start.sh && \
     echo 'echo "DATABASE_URL set: ${DATABASE_URL:+true}"' >> /app/start.sh && \
+    echo 'echo "MAIL_TLS set: $MAIL_TLS"' >> /app/start.sh && \
+    echo 'echo "MAIL_SSL set: $MAIL_SSL"' >> /app/start.sh && \
     echo 'echo "Waiting for database..."' >> /app/start.sh && \
     echo 'sleep 5' >> /app/start.sh && \
     echo 'echo "Database initialization step skipped for initial deployment"' >> /app/start.sh && \
