@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y \
     gcc \
     curl \
     netcat-openbsd \
+    dnsutils \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the entire project
@@ -77,7 +79,7 @@ try:\n\
     print("Successfully imported the original application")\n\
 except Exception as e:\n\
     # If there are any exceptions, use the fallback app\n\
-    print(f"Error importing original app: {e}")\n\
+    print(f"Error importing original app: {e}")\n
     app = fallback_app\n\
     print("Using fallback application due to import error")\n\
 ' > /app/backend/app_wrapper.py
@@ -88,6 +90,7 @@ import builtins\n\
 import importlib.abc\n\
 import types\n\
 import os\n\
+import re\n\
 from importlib.machinery import ModuleSpec\n\
 \n\
 # Store original import\n\
@@ -95,7 +98,7 @@ original_import = builtins.__import__\n\
 \n\
 def patched_import(name, globals=None, locals=None, fromlist=(), level=0):\n\
     # Intercept specific imports that might cause database operations\n\
-    if name in ["sqlalchemy", "databases"]:\n\
+    if name in ["sqlalchemy", "databases", "psycopg2"]:\n\
         print(f"Note: Import of {name} detected - connections may be intercepted if DISABLE_DB=true")\n\
         # Print all the environment variables that might affect database connections\n\
         print("Debug - Database Environment Variables:")\n\
@@ -106,6 +109,38 @@ def patched_import(name, globals=None, locals=None, fromlist=(), level=0):\n\
                     print(f"  {var}: ****")\n\
                 else:\n\
                     print(f"  {var}: {os.environ.get(var)}")\n\
+        \n\
+        # Intercept and patch psycopg2 if it fails with "postgres.railway.internal"\n\
+        if name == "psycopg2" and fromlist and "OperationalError" in fromlist:\n\
+            # Get the original module\n\
+            psycopg2_module = original_import(name, globals, locals, fromlist, level)\n\
+            \n\
+            # Store the original OperationalError\n\
+            original_error = psycopg2_module.OperationalError\n\
+            \n\
+            # Create a patched version\n\
+            def patched_error(*args, **kwargs):\n\
+                error_msg = args[0] if args else ""\n\
+                if isinstance(error_msg, str) and "could not translate host name" in error_msg and "railway.internal" in error_msg:\n\
+                    print("\\n\\nDETECTED RAILWAY POSTGRES CONNECTION ISSUE!")\n\
+                    print("The application is trying to connect to Railway PostgreSQL using the internal hostname.")\n\
+                    print("This may be due to missing environment variables or incorrect configuration.")\n\
+                    print("\\nTrying to fix the issue by checking environment variables...")\n\
+                    \n\
+                    # Check for Railway PG environment variables\n\
+                    pg_vars = {k: v for k, v in os.environ.items() if k.startswith("PG") and "PASSWORD" not in k}\n\
+                    print(f"Railway PostgreSQL variables: {pg_vars}")\n\
+                    \n\
+                    # Suggest possible fixes\n\
+                    print("\\nPOSSIBLE SOLUTIONS:")\n\
+                    print("1. Make sure PGHOST is set to the correct hostname in Railway")\n\
+                    print("2. Set DATABASE_URL explicitly with the correct hostname")\n\
+                    print("3. Check the Railway dashboard for the correct PostgreSQL connection details")\n\
+                return original_error(*args, **kwargs)\n\
+            \n\
+            # Replace the OperationalError with our patched version\n\
+            psycopg2_module.OperationalError = patched_error\n\
+            return psycopg2_module\n\
     \n\
     # Let the original import proceed\n\
     return original_import(name, globals, locals, fromlist, level)\n\
@@ -171,12 +206,42 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo '# Handle Railway PostgreSQL connection' >> /app/start.sh && \
     echo 'if [[ -n "$DATABASE_URL" ]]; then' >> /app/start.sh && \
     echo '  echo "Using provided DATABASE_URL"' >> /app/start.sh && \
+    echo 'elif [[ -n "$RAILWAY_ENVIRONMENT" ]]; then' >> /app/start.sh && \
+    echo '  echo "Running in Railway environment"' >> /app/start.sh && \
+    echo '  # Railway provides PGHOST, PGDATABASE, PGUSER, PGPASSWORD, PGPORT variables' >> /app/start.sh && \
+    echo '  if [[ -n "$PGUSER" && -n "$PGPASSWORD" && -n "$PGDATABASE" && -n "$PGHOST" ]]; then' >> /app/start.sh && \
+    echo '    echo "Using Railway-provided PG* variables"' >> /app/start.sh && \
+    echo '    export DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT:-5432}/${PGDATABASE}"' >> /app/start.sh && \
+    echo '  fi' >> /app/start.sh && \
     echo 'elif [[ -n "$POSTGRES_USER" && -n "$POSTGRES_PASSWORD" && -n "$POSTGRES_DB" ]]; then' >> /app/start.sh && \
-    echo '  echo "Constructing DATABASE_URL from Railway POSTGRES_* variables"' >> /app/start.sh && \
-    echo '  export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql.railway.app:5432/${POSTGRES_DB}"' >> /app/start.sh && \
+    echo '  echo "Constructing DATABASE_URL from POSTGRES_* variables"' >> /app/start.sh && \
+    echo '  # Railway might use different hostnames' >> /app/start.sh && \
+    echo '  POSTGRES_HOST=${PGHOST:-"postgresql.railway.app"}' >> /app/start.sh && \
+    echo '  POSTGRES_PORT=${PGPORT:-5432}' >> /app/start.sh && \
+    echo '  export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"' >> /app/start.sh && \
     echo 'fi' >> /app/start.sh && \
     echo 'echo "DATABASE_URL: ${DATABASE_URL:-not set} (password hidden)"' >> /app/start.sh && \
     echo 'echo "DISABLE_DB: ${DISABLE_DB}"' >> /app/start.sh && \
+    echo '# Test connectivity to PostgreSQL' >> /app/start.sh && \
+    echo 'if [[ -n "$DATABASE_URL" ]]; then' >> /app/start.sh && \
+    echo '  echo "Testing PostgreSQL connectivity..."' >> /app/start.sh && \
+    echo '  # Extract host and port from DATABASE_URL' >> /app/start.sh && \
+    echo '  DB_HOST=$(echo $DATABASE_URL | sed -n "s/.*@\([^:]*\).*/\1/p")' >> /app/start.sh && \
+    echo '  DB_PORT=$(echo $DATABASE_URL | sed -n "s/.*:\([0-9]*\)\/.*/\1/p")' >> /app/start.sh && \
+    echo '  echo "Extracted DB_HOST=$DB_HOST DB_PORT=$DB_PORT"' >> /app/start.sh && \
+    echo '  # Try to ping the host' >> /app/start.sh && \
+    echo '  echo "Trying to ping $DB_HOST..."' >> /app/start.sh && \
+    echo '  ping -c 1 $DB_HOST || echo "Ping failed, but this might be expected"' >> /app/start.sh && \
+    echo '  # Try to connect using nc' >> /app/start.sh && \
+    echo '  echo "Trying netcat to $DB_HOST:$DB_PORT..."' >> /app/start.sh && \
+    echo '  nc -z -v -w5 $DB_HOST $DB_PORT || echo "Netcat connection failed"' >> /app/start.sh && \
+    echo '  # DNS lookup' >> /app/start.sh && \
+    echo '  echo "DNS lookup for $DB_HOST..."' >> /app/start.sh && \
+    echo '  nslookup $DB_HOST || echo "DNS lookup failed"' >> /app/start.sh && \
+    echo '  # Environment variables that might affect PostgreSQL connections' >> /app/start.sh && \
+    echo '  echo "PostgreSQL environment variables:"' >> /app/start.sh && \
+    echo '  env | grep -i "pg\|postgres\|sql" | grep -v PASSWORD' >> /app/start.sh && \
+    echo 'fi' >> /app/start.sh && \
     echo 'echo "Checking for existence of app directory:"' >> /app/start.sh && \
     echo 'if [ -d /app/backend/app ]; then' >> /app/start.sh && \
     echo '  echo "App directory exists"' >> /app/start.sh && \
