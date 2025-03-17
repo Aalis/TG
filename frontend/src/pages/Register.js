@@ -11,11 +11,13 @@ import {
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { useSnackbar } from 'notistack';
+import { useTranslation } from 'react-i18next';
 
 const Register = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
+  const { t } = useTranslation();
   const [isRegistered, setIsRegistered] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -57,7 +59,7 @@ const Register = () => {
     if (formData.password !== formData.confirmPassword) {
       setErrors({
         ...errors,
-        confirmPassword: 'Passwords do not match',
+        confirmPassword: t('validation.passwordsMustMatch'),
       });
       return;
     }
@@ -69,24 +71,24 @@ const Register = () => {
         // Store username for login page
         localStorage.setItem('lastRegisteredUsername', registrationData.username);
         setIsRegistered(true);
-        enqueueSnackbar('Registration successful! Please check your email to verify your account.', { 
+        enqueueSnackbar(t('auth.registerSuccess'), { 
           variant: 'success',
           autoHideDuration: 8000
         });
       }
     } catch (error) {
-      const errorMessage = error.response?.data?.detail || 'Registration failed';
+      const errorMessage = error.response?.data?.detail || t('auth.registerError');
       
       // Handle specific error messages
       if (errorMessage.includes('email already exists')) {
         setErrors({
           ...errors,
-          email: 'This email is already registered',
+          email: t('validation.emailAlreadyExists'),
         });
       } else if (errorMessage.includes('username already exists')) {
         setErrors({
           ...errors,
-          username: 'This username is already taken',
+          username: t('validation.usernameAlreadyExists'),
         });
       } else {
         // General error
@@ -115,17 +117,17 @@ const Register = () => {
           }}
         >
           <Alert severity="success" sx={{ mb: 2 }}>
-            Registration successful!
+            {t('auth.registerSuccess')}
           </Alert>
           <Typography variant="body1" sx={{ mb: 2 }}>
-            A verification email has been sent to {formData.email}. Please check your inbox and click the verification link.
+            {t('auth.verificationEmailSent', { email: formData.email })}
           </Typography>
           <Button
             fullWidth
             variant="contained"
             onClick={() => navigate('/login')}
           >
-            Go to Login
+            {t('auth.goToLogin')}
           </Button>
         </Paper>
       </Box>
@@ -151,7 +153,7 @@ const Register = () => {
         }}
       >
         <Typography variant="h5" align="center" gutterBottom>
-          Create Account
+          {t('auth.registerTitle')}
         </Typography>
         <Box
           component="form"
@@ -166,7 +168,7 @@ const Register = () => {
             required
             fullWidth
             size="small"
-            label="Email"
+            label={t('common.email')}
             name="email"
             type="email"
             value={formData.email}
@@ -179,7 +181,7 @@ const Register = () => {
             required
             fullWidth
             size="small"
-            label="Username"
+            label={t('common.username')}
             name="username"
             value={formData.username}
             onChange={handleChange}
@@ -191,7 +193,7 @@ const Register = () => {
             required
             fullWidth
             size="small"
-            label="Password"
+            label={t('common.password')}
             name="password"
             type="password"
             value={formData.password}
@@ -204,7 +206,7 @@ const Register = () => {
             required
             fullWidth
             size="small"
-            label="Confirm Password"
+            label={t('common.confirmPassword')}
             name="confirmPassword"
             type="password"
             value={formData.confirmPassword}
@@ -219,13 +221,13 @@ const Register = () => {
             variant="contained"
             sx={{ mt: 1 }}
           >
-            Register
+            {t('common.register')}
           </Button>
           <Box sx={{ textAlign: 'center', mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Already have an account?{' '}
+              {t('auth.haveAccount')}{' '}
               <Link component={RouterLink} to="/login">
-                Sign In
+                {t('auth.signIn')}
               </Link>
             </Typography>
           </Box>

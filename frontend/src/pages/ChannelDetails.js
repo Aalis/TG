@@ -42,10 +42,14 @@ import {
   SmartToy as BotIcon,
   Send as SendIcon,
   Verified as VerifiedIcon,
+  Add as AddIcon,
+  Telegram as TelegramIcon,
 } from '@mui/icons-material';
 import { channelsAPI } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const ChannelDetails = () => {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   
@@ -63,6 +67,7 @@ const ChannelDetails = () => {
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [showBots, setShowBots] = useState(true);
 
   // Fetch channel details and posts on component mount
   useEffect(() => {
@@ -245,13 +250,33 @@ const ChannelDetails = () => {
 
   return (
     <Box>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate('/channels')}
-        sx={{ mb: 3 }}
-      >
-        Back to Channels
-      </Button>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 3,
+        backgroundColor: 'background.default',
+        py: 1
+      }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/channels')}
+          variant="outlined"
+          size="medium"
+        >
+          {t('common.back')}
+        </Button>
+        
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => navigate('/channels', { state: { openParseDialog: true } })}
+          size="medium"
+        >
+          {t('telegram.parseNewChannel')}
+        </Button>
+      </Box>
       
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -422,7 +447,7 @@ const ChannelDetails = () => {
                           rel="noopener noreferrer"
                           sx={{ width: '32px', height: '32px' }}
                         >
-                          <SendIcon sx={{ fontSize: '20px' }} />
+                          <TelegramIcon sx={{ fontSize: '20px' }} />
                         </IconButton>
                       </Tooltip>
                     </TableCell>

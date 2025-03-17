@@ -13,7 +13,7 @@ import GroupDetails from './pages/GroupDetails';
 import ChannelDetails from './pages/ChannelDetails';
 import Profile from './pages/Profile';
 import AdminPanel from './pages/AdminPanel';
-import Dashboard from './pages/Dashboard';
+import Sessions from './pages/Sessions';
 import LandingPage from './pages/LandingPage';
 import Subscribe from './pages/Subscribe';
 
@@ -29,7 +29,7 @@ function App() {
       {user ? (
         // Protected routes
         <Route element={<MainLayout />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<Sessions />} />
           <Route path="/groups" element={<ParsedGroups />} />
           <Route path="/groups/:id" element={<GroupDetails />} />
           <Route path="/channels" element={<ParsedChannels />} />

@@ -33,10 +33,15 @@ import {
   Download as DownloadIcon,
   Send as SendIcon,
   Verified as VerifiedIcon,
+  Add as AddIcon,
+  Telegram as TelegramIcon,
 } from '@mui/icons-material';
 import { groupsAPI } from '../services/api';
+import { useTranslation } from 'react-i18next';
+import ParseButtonHeader from '../components/ParseButtonHeader';
 
 const GroupDetails = () => {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   
@@ -49,6 +54,7 @@ const GroupDetails = () => {
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [showBots, setShowBots] = useState(true);
 
   // Fetch group details on component mount
   useEffect(() => {
@@ -189,13 +195,33 @@ const GroupDetails = () => {
 
   return (
     <Box>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate('/groups')}
-        sx={{ mb: 3 }}
-      >
-        Back to Groups
-      </Button>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 3,
+        backgroundColor: 'background.default',
+        py: 1
+      }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/groups')}
+          variant="outlined"
+          size="medium"
+        >
+          {t('common.back')}
+        </Button>
+        
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => navigate('/groups', { state: { openParseDialog: true } })}
+          size="medium"
+        >
+          {t('telegram.parseNewGroup')}
+        </Button>
+      </Box>
       
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -380,7 +406,7 @@ const GroupDetails = () => {
                           rel="noopener noreferrer"
                           sx={{ width: '32px', height: '32px' }}
                         >
-                          <SendIcon sx={{ fontSize: '20px' }} />
+                          <TelegramIcon sx={{ fontSize: '20px' }} />
                         </IconButton>
                       </Tooltip>
                     </TableCell>

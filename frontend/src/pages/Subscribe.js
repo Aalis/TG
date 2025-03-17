@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Typography,
@@ -18,6 +19,7 @@ import {
   Alert,
   Paper,
   Divider,
+  Link,
 } from '@mui/material';
 import {
   ShoppingCart as ShoppingCartIcon,
@@ -25,9 +27,11 @@ import {
   QrCode2 as QrCodeIcon,
   Close as CloseIcon,
   CheckCircle as CheckCircleIcon,
+  Telegram as TelegramIcon,
 } from '@mui/icons-material';
 
 const Subscribe = () => {
+  const { t } = useTranslation();
   const [selectedNetwork, setSelectedNetwork] = useState(0);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -35,21 +39,21 @@ const Subscribe = () => {
   
   const plans = [
     {
-      title: 'Basic Plan',
+      title: t('subscription.basicPlan'),
       price: '$2',
-      duration: '1 Day Access',
+      duration: t('subscription.oneDayAccess'),
       amount: 2
     },
     {
-      title: 'Standard Plan',
+      title: t('subscription.standardPlan'),
       price: '$5',
-      duration: '5 Days Access',
+      duration: t('subscription.fiveDaysAccess'),
       amount: 5
     },
     {
-      title: 'Premium Plan',
+      title: t('subscription.premiumPlan'),
       price: '$10',
-      duration: '20 Days Access',
+      duration: t('subscription.twentyDaysAccess'),
       amount: 10
     }
   ];
@@ -59,7 +63,7 @@ const Subscribe = () => {
       name: 'USDT TRC20',
       address: 'TQihkZKkPdRjGX1QN7GxmoQTtsiPQtbehQ',
       protocol: 'tron',
-      info: 'TRON Network (Lowest fees)',
+      info: t('subscription.tronNetwork'),
       color: '#FF060A',
       qrPrefix: 'tron:',
       icon: '💎'
@@ -68,7 +72,7 @@ const Subscribe = () => {
       name: 'BTC',
       address: 'bc1q0r3nmn4fwxeesagnsh4sukhv9ankdpyu56zzzs',
       protocol: 'bitcoin',
-      info: 'Bitcoin Network',
+      info: t('subscription.bitcoinNetwork'),
       color: '#F7931A',
       qrPrefix: 'bitcoin:',
       icon: '₿'
@@ -77,7 +81,7 @@ const Subscribe = () => {
       name: 'ETH',
       address: '0xDd2C0e3B2E144717eAFD97251D4939a2ee5ECa0f',
       protocol: 'ethereum',
-      info: 'Ethereum Network',
+      info: t('subscription.ethereumNetwork'),
       color: '#627EEA',
       qrPrefix: 'ethereum:',
       icon: 'Ξ'
@@ -117,10 +121,36 @@ const Subscribe = () => {
     <Container maxWidth="lg">
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Subscription Plans
+          {t('subscription.subscriptionPlans')}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Choose a plan that works best for you
+          {t('subscription.choosePlan').split('@aalis92').map((part, index) => {
+            if (index === 0) {
+              return (
+                <React.Fragment key={index}>
+                  {part}
+                  <Link 
+                    href="https://t.me/aalis92" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    sx={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center',
+                      mx: 0.5,
+                      textDecoration: 'none',
+                      '&:hover': {
+                        textDecoration: 'underline'
+                      }
+                    }}
+                  >
+                    <TelegramIcon fontSize="small" sx={{ mr: 0.5 }} />
+                    @aalis92
+                  </Link>
+                </React.Fragment>
+              );
+            }
+            return part;
+          })}
         </Typography>
       </Box>
 
@@ -190,7 +220,7 @@ const Subscribe = () => {
                         href={`${networks[selectedNetwork].qrPrefix}${networks[selectedNetwork].address}?amount=${plan.amount}`}
                         sx={{ height: '100%' }}
                       >
-                        Pay with {networks[selectedNetwork].icon}
+                        {t('subscription.payWith')} {networks[selectedNetwork].icon}
                       </Button>
                     </Grid>
                     <Grid item xs={4}>
@@ -218,7 +248,7 @@ const Subscribe = () => {
                     }}
                   >
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                      {networks[selectedNetwork].name} Address:
+                      {networks[selectedNetwork].name} {t('subscription.address')}:
                     </Typography>
                     
                     <Box sx={{ 
@@ -241,7 +271,7 @@ const Subscribe = () => {
                       >
                         {networks[selectedNetwork].address}
                       </Typography>
-                      <Tooltip title="Copy Address" placement="top">
+                      <Tooltip title={t('subscription.copyAddress')} placement="top">
                         <IconButton 
                           size="small"
                           onClick={() => handleCopyAddress(networks[selectedNetwork].address)}
@@ -252,18 +282,6 @@ const Subscribe = () => {
                         </IconButton>
                       </Tooltip>
                     </Box>
-                    
-                    <Typography 
-                      variant="caption" 
-                      color="text.secondary" 
-                      sx={{ 
-                        display: 'block', 
-                        mt: 1,
-                        fontStyle: 'italic'
-                      }}
-                    >
-                      {networks[selectedNetwork].info}
-                    </Typography>
                   </Paper>
                 </Box>
               </CardContent>
@@ -272,167 +290,112 @@ const Subscribe = () => {
         ))}
       </Grid>
 
-      <Paper sx={{ mt: 4, p: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-        <Typography variant="subtitle1" color="text.primary" gutterBottom>
-          Important Notes:
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-        <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2 }}>
-          <li>Please send the exact amount in the selected cryptocurrency</li>
-          <li>USDT TRC20 (TRON) has the lowest transaction fees</li>
-          <li>After payment, your subscription will be activated manually within 24 hours</li>
-          <li>Make sure to use the correct network for your transaction</li>
-        </Typography>
-      </Paper>
+      <Box sx={{ mt: 6, mb: 4 }}>
+        <Paper sx={{ p: 3, bgcolor: 'background.default' }}>
+          <Typography variant="h6" gutterBottom>
+            {t('subscription.importantNotes')}:
+          </Typography>
+          <Box component="ul" sx={{ pl: 2 }}>
+            <Box component="li" sx={{ mb: 1 }}>
+              {t('subscription.sendExactAmount')}
+            </Box>
+            <Box component="li" sx={{ mb: 1 }}>
+              {t('subscription.lowestFees')}
+            </Box>
+            <Box component="li" sx={{ mb: 1 }}>
+              {t('subscription.activationTime')}
+            </Box>
+            <Box component="li">
+              {t('subscription.useCorrectNetwork')}
+            </Box>
+          </Box>
+        </Paper>
+      </Box>
 
       {/* QR Code Dialog */}
-      <Dialog 
-        open={qrDialogOpen} 
-        onClose={handleCloseQR}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2
-          }
-        }}
-      >
+      <Dialog open={qrDialogOpen} onClose={handleCloseQR} maxWidth="xs" fullWidth>
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">
-              {networks[selectedNetwork].icon} {networks[selectedNetwork].name} Payment
+              {selectedPlan?.title} - {networks[selectedNetwork].name}
             </Typography>
-            <IconButton onClick={handleCloseQR} size="small">
+            <IconButton edge="end" color="inherit" onClick={handleCloseQR} aria-label="close">
               <CloseIcon />
             </IconButton>
           </Box>
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center',
-            p: 2 
-          }}>
-            <Paper 
-              elevation={3} 
-              sx={{ 
-                p: 3, 
-                borderRadius: 2, 
-                width: '100%', 
-                mb: 3,
-                textAlign: 'center'
-              }}
-            >
-              <Typography variant="h5" color="primary" gutterBottom>
-                ${selectedPlan?.amount}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {selectedPlan?.duration}
-              </Typography>
-            </Paper>
+          <Box sx={{ textAlign: 'center', py: 2 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              {t('subscription.scanQRCode')}
+            </Typography>
             
-            <Paper 
-              elevation={0} 
+            <Box 
+              component="img" 
+              src={selectedPlan ? getQRCodeUrl(networks[selectedNetwork], selectedPlan.amount) : ''} 
+              alt="QR Code"
               sx={{ 
-                bgcolor: 'white', 
-                p: 3, 
-                borderRadius: 2,
-                mb: 3,
+                width: '100%', 
+                maxWidth: 200, 
+                height: 'auto', 
+                margin: '0 auto',
+                display: 'block',
                 border: '1px solid',
                 borderColor: 'divider',
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center'
-              }}
-            >
-              <img 
-                src={selectedPlan ? getQRCodeUrl(networks[selectedNetwork], selectedPlan.amount) : ''}
-                alt="QR Code"
-                style={{ 
-                  width: '200px',
-                  height: '200px',
-                  display: 'block'
-                }}
-              />
-            </Paper>
-            
-            <Paper 
-              elevation={0} 
-              sx={{ 
-                p: 2, 
-                borderRadius: 1, 
-                width: '100%',
-                bgcolor: 'background.default',
-                border: '1px solid',
-                borderColor: 'divider'
-              }}
-            >
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                Wallet Address:
-              </Typography>
-              
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                bgcolor: 'background.paper',
-                p: 1.5,
                 borderRadius: 1,
-                border: '1px solid',
-                borderColor: 'divider'
-              }}>
-                <Typography 
-                  variant="body2" 
-                  sx={{ 
-                    wordBreak: 'break-all',
-                    mr: 1,
-                    maxWidth: 'calc(100% - 40px)'
-                  }}
-                >
-                  {networks[selectedNetwork].address}
-                </Typography>
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={() => handleCopyAddress(networks[selectedNetwork].address)}
-                  startIcon={<CopyIcon />}
-                  sx={{ flexShrink: 0 }}
-                >
-                  Copy
-                </Button>
-              </Box>
-              
-              <Typography 
-                variant="caption" 
-                color="text.secondary" 
+                p: 2,
+                bgcolor: 'background.paper'
+              }}
+            />
+            
+            <Typography variant="h6" sx={{ mt: 2, color: 'primary.main' }}>
+              {selectedPlan?.price}
+            </Typography>
+            
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {networks[selectedNetwork].name} {t('subscription.address')}:
+              </Typography>
+              <Paper 
+                variant="outlined" 
                 sx={{ 
-                  display: 'block', 
-                  mt: 2,
-                  textAlign: 'center'
+                  p: 1.5, 
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
                 }}
               >
-                Scan this QR code with your {networks[selectedNetwork].name} wallet app
-              </Typography>
-            </Paper>
+                <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                  {networks[selectedNetwork].address}
+                </Typography>
+                <IconButton 
+                  size="small" 
+                  onClick={() => handleCopyAddress(networks[selectedNetwork].address)}
+                  color="primary"
+                >
+                  <CopyIcon fontSize="small" />
+                </IconButton>
+              </Paper>
+            </Box>
           </Box>
         </DialogContent>
       </Dialog>
 
       {/* Copy Success Snackbar */}
-      <Snackbar 
-        open={copySnackbar} 
-        autoHideDuration={3000} 
+      <Snackbar
+        open={copySnackbar}
+        autoHideDuration={3000}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert 
           onClose={handleCloseSnackbar} 
-          severity="success" 
+          severity="success"
+          variant="filled"
           sx={{ width: '100%' }}
           icon={<CheckCircleIcon fontSize="inherit" />}
         >
-          Address copied to clipboard!
+          {t('subscription.addressCopied')}
         </Alert>
       </Snackbar>
     </Container>

@@ -11,10 +11,12 @@ import {
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { authService } from '../services/authService';
+import { useTranslation } from 'react-i18next';
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -23,11 +25,11 @@ const ForgotPassword = () => {
     try {
       await authService.forgotPassword(email);
       setIsSubmitted(true);
-      enqueueSnackbar('If the email exists, password reset instructions will be sent.', {
+      enqueueSnackbar(t('auth.resetInstructionsSent'), {
         variant: 'success',
       });
     } catch (error) {
-      enqueueSnackbar(error.response?.data?.detail || 'Failed to process request', {
+      enqueueSnackbar(error.response?.data?.detail || t('auth.resetRequestFailed'), {
         variant: 'error',
       });
     }
@@ -53,17 +55,17 @@ const ForgotPassword = () => {
           }}
         >
           <Alert severity="success" sx={{ mb: 2 }}>
-            Check your email
+            {t('auth.checkYourEmail')}
           </Alert>
           <Typography variant="body1" sx={{ mb: 2 }}>
-            If an account exists with the email {email}, you will receive password reset instructions.
+            {t('auth.resetEmailSent', { email: email })}
           </Typography>
           <Button
             fullWidth
             variant="contained"
             onClick={() => navigate('/login')}
           >
-            Return to Login
+            {t('auth.returnToLogin')}
           </Button>
         </Paper>
       </Box>
@@ -89,10 +91,10 @@ const ForgotPassword = () => {
         }}
       >
         <Typography variant="h5" align="center" gutterBottom>
-          Forgot Password
+          {t('auth.forgotPasswordTitle')}
         </Typography>
         <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 2 }}>
-          Enter your email address and we'll send you instructions to reset your password.
+          {t('auth.forgotPasswordInstructions')}
         </Typography>
         <Box
           component="form"
@@ -107,7 +109,7 @@ const ForgotPassword = () => {
             required
             fullWidth
             size="small"
-            label="Email"
+            label={t('common.email')}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -118,13 +120,13 @@ const ForgotPassword = () => {
             variant="contained"
             sx={{ mt: 1 }}
           >
-            Send Reset Instructions
+            {t('auth.sendResetInstructions')}
           </Button>
           <Box sx={{ textAlign: 'center', mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Remember your password?{' '}
+              {t('auth.rememberPassword')}{' '}
               <Link component={RouterLink} to="/login">
-                Sign in
+                {t('auth.signIn')}
               </Link>
             </Typography>
           </Box>

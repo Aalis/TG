@@ -11,12 +11,14 @@ import {
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { useSnackbar } from 'notistack';
+import { useTranslation } from 'react-i18next';
 
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const [searchParams] = useSearchParams();
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -28,7 +30,7 @@ const Login = () => {
     const storedUsername = localStorage.getItem('lastRegisteredUsername');
     
     if (isVerified) {
-      enqueueSnackbar('Email verified successfully! Please log in.', { 
+      enqueueSnackbar(t('auth.emailVerified', 'Email verified successfully! Please log in.'), { 
         variant: 'success',
         autoHideDuration: 6000
       });
@@ -41,7 +43,7 @@ const Login = () => {
       }));
       localStorage.removeItem('lastRegisteredUsername'); // Clean up
     }
-  }, [searchParams, enqueueSnackbar]);
+  }, [searchParams, enqueueSnackbar, t]);
 
   const handleChange = (e) => {
     setFormData({
@@ -58,7 +60,7 @@ const Login = () => {
         navigate('/');
       }
     } catch (error) {
-      enqueueSnackbar(error.response?.data?.detail || 'Login failed', { variant: 'error' });
+      enqueueSnackbar(error.response?.data?.detail || t('auth.loginError'), { variant: 'error' });
     }
   };
 
@@ -81,11 +83,11 @@ const Login = () => {
         }}
       >
         <Typography variant="h5" align="center" gutterBottom>
-          Sign In
+          {t('auth.loginTitle')}
         </Typography>
         {searchParams.get('verified') === 'true' && (
           <Alert severity="success" sx={{ mb: 2 }}>
-            Email verified successfully! Please log in.
+            {t('auth.emailVerified', 'Email verified successfully! Please log in.')}
           </Alert>
         )}
         <Box
@@ -101,7 +103,7 @@ const Login = () => {
             required
             fullWidth
             size="small"
-            label="Username"
+            label={t('common.username')}
             name="username"
             value={formData.username}
             onChange={handleChange}
@@ -111,7 +113,7 @@ const Login = () => {
             required
             fullWidth
             size="small"
-            label="Password"
+            label={t('common.password')}
             name="password"
             type="password"
             value={formData.password}
@@ -125,7 +127,7 @@ const Login = () => {
               variant="body2"
               sx={{ textDecoration: 'none' }}
             >
-              Forgot password?
+              {t('auth.forgotPassword')}
             </Link>
           </Box>
           <Button
@@ -134,13 +136,13 @@ const Login = () => {
             variant="contained"
             sx={{ mt: 1 }}
           >
-            Sign In
+            {t('auth.signIn')}
           </Button>
           <Box sx={{ textAlign: 'center', mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Don't have an account?{' '}
+              {t('auth.noAccount')}{' '}
               <Link component={RouterLink} to="/register">
-                Register
+                {t('common.register')}
               </Link>
             </Typography>
           </Box>

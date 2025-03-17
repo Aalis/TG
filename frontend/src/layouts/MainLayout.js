@@ -27,13 +27,15 @@ import {
   Menu as MenuIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
-  Dashboard as DashboardIcon,
+  ChevronLeft as ChevronLeftIcon,
   Group as GroupsIcon,
   Forum as ChannelsIcon,
   Person as ProfileIcon,
   Logout as LogoutIcon,
   AdminPanelSettings as AdminIcon,
   ShoppingCart as ShoppingCartIcon,
+  AccountCircle as AccountCircleIcon,
+  History as SessionsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -117,9 +119,9 @@ const MainLayout = () => {
           selected={location.pathname === '/'}
         >
           <ListItemIcon>
-            <DashboardIcon />
+            <SessionsIcon />
           </ListItemIcon>
-          <ListItemText primary={t('navigation.dashboard')} />
+          <ListItemText primary={t('navigation.sessions')} />
         </ListItem>
       </List>
       <Divider />
