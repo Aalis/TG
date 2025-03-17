@@ -1,4 +1,5 @@
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
+import os
 
 from pydantic import AnyHttpUrl, PostgresDsn, validator
 from pydantic_settings import BaseSettings
@@ -25,10 +26,35 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     # Database
-    DATABASE_URL: PostgresDsn
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_DB: str
+    DATABASE_URL: Optional[PostgresDsn] = None
+    POSTGRES_USER: Optional[str] = None
+    POSTGRES_PASSWORD: Optional[str] = None
+    POSTGRES_DB: Optional[str] = None
+    
+    @validator("DATABASE_URL", pre=True)
+    def assemble_db_url(cls, v: Optional[str], values: dict) -> Any:
+        if v is not None:
+            return v
+        
+        # For Railway deployment
+        if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_STATIC_URL"):
+            # Use Railway PostgreSQL
+            user = values.get("POSTGRES_USER") or os.environ.get("POSTGRES_USER") or "postgres"
+            password = values.get("POSTGRES_PASSWORD") or os.environ.get("POSTGRES_PASSWORD") or ""
+            db = values.get("POSTGRES_DB") or os.environ.get("POSTGRES_DB") or "railway"
+            
+            # Use the Railway PostgreSQL hostname
+            return f"postgresql://{user}:{password}@postgresql.railway.app:5432/{db}"
+
+        # Local development or other environments
+        user = values.get("POSTGRES_USER")
+        password = values.get("POSTGRES_PASSWORD")
+        db = values.get("POSTGRES_DB")
+        
+        if not all([user, password, db]):
+            return None
+            
+        return f"postgresql://{user}:{password}@localhost:5432/{db}"
 
     # Redis
     REDIS_HOST: str = "localhost"
@@ -48,6 +74,8 @@ class Settings(BaseSettings):
     MAIL_FROM: str
     MAIL_PORT: int = 587
     MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_TLS: bool = True
+    MAIL_SSL: bool = False
 
     class Config:
         env_file = ".env"

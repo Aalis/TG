@@ -27,16 +27,6 @@ ENV PYTHONUNBUFFERED=1
 ENV MAIL_TLS=true
 ENV MAIL_SSL=false
 
-# Fix the config.py file to handle mail_tls and mail_ssl correctly
-RUN if [ -f /app/backend/app/core/config.py ]; then \
-      echo "Patching config.py to handle mail variables correctly"; \
-      # First backup the original file
-      cp /app/backend/app/core/config.py /app/backend/app/core/config.py.bak; \
-      # Remove mail_tls and mail_ssl from environment variables being processed
-      sed -i 's/mail_tls/MAIL_TLS_DISABLED/g' /app/backend/app/core/config.py; \
-      sed -i 's/mail_ssl/MAIL_SSL_DISABLED/g' /app/backend/app/core/config.py; \
-    fi
-
 # Create a database connection patch to handle connection issues
 RUN echo 'import os\n\
 import sys\n\
@@ -172,9 +162,9 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo '/app/create_default_env.sh' >> /app/start.sh && \
     echo '# Dump ALL environment variables for debugging (with passwords hidden)' >> /app/start.sh && \
     echo 'env | grep -v PASSWORD | grep -v SECRET | sort' >> /app/start.sh && \
-    echo '# Skip database initialization for now to prevent startup failures' >> /app/start.sh && \
-    echo 'export SKIP_DB_INIT=true' >> /app/start.sh && \
-    echo 'export DISABLE_DB=true' >> /app/start.sh && \
+    echo '# Do not skip database operations anymore' >> /app/start.sh && \
+    echo 'export SKIP_DB_INIT=false' >> /app/start.sh && \
+    echo 'export DISABLE_DB=false' >> /app/start.sh && \
     echo '# List all database-related environment variables' >> /app/start.sh && \
     echo 'echo "=== DATABASE ENVIRONMENT VARIABLES ==="' >> /app/start.sh && \
     echo 'env | grep -i "db\|database\|pg\|sql\|postgres" | grep -v PASSWORD | grep -v SECRET | sort' >> /app/start.sh && \
