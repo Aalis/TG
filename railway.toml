@@ -3,9 +3,28 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-healthcheckDisabled = true
+numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
-[phases.setup]
-nixPkgs = ["python39", "postgresql", "redis"] 
+[var]
+DISABLE_DB = "false"
+PORT = "8080"
+
+# Configure database connection - uncomment and adjust as needed
+# DATABASE_URL = "${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+
+[service]
+internal_port = 8080
+auto_deploy = true
+
+[[services]]
+name = "PostgreSQL"
+auto_create = true
+type = "postgres"
+
+[services.var]
+# These will be used by your application
+POSTGRES_USER = "postgres"
+POSTGRES_PASSWORD = "auto_generated"
+POSTGRES_DB = "telegram_parser" 
