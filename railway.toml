@@ -10,23 +10,21 @@ restartPolicyMaxRetries = 10
 [var]
 DISABLE_DB = "false"
 PORT = "8080"
-
-# Configure database connection - uncomment and adjust as needed
-# DATABASE_URL = "${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+# Explicitly set the connection details
+DATABASE_URL = "postgresql://postgres:${POSTGRES_PASSWORD}@postgresql.railway.app:5432/railway"
 
 # This section defines your main application service
 [service]
 internal_port = 8080
 auto_deploy = true
 
-# Create and configure a PostgreSQL service
+# Reference the PostgreSQL information for the main app
 [[plugins]]
+name = "PostgreSQL"
 type = "postgresql"
 
 # Reference the PostgreSQL variables in your main service
 [plugins.var]
 # These are used by the postgres plugin
-PGUSER = "postgres"
-PGDATABASE = "telegram_parser"
-POSTGRES_DB = "telegram_parser"
-POSTGRES_USER = "postgres" 
+POSTGRES_USER = "postgres"
+POSTGRES_DB = "railway" 
