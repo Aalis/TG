@@ -168,9 +168,18 @@ def override_postgres_connection():
     
     # Determine the correct PostgreSQL host
     pg_host = None
-    if "PGHOST" in os.environ:
-        print(f"Using PGHOST: {os.environ['PGHOST']}")
+    
+    # Check for Railway public domain which we should use instead of internal hostnames
+    if "RAILWAY_PUBLIC_DOMAIN" in os.environ:
+        pg_host = os.environ["RAILWAY_PUBLIC_DOMAIN"].split('.')[0] + ".railway.app"
+        print(f"Using RAILWAY_PUBLIC_DOMAIN-derived host: {pg_host}")
+    elif "RAILWAY_STATIC_URL" in os.environ:
+        pg_host = os.environ["RAILWAY_STATIC_URL"].split('.')[0] + ".railway.app"
+        print(f"Using RAILWAY_STATIC_URL-derived host: {pg_host}")
+    # Only use PGHOST as fallback
+    elif "PGHOST" in os.environ:
         pg_host = os.environ["PGHOST"]
+        print(f"Using PGHOST: {pg_host}")
     elif "DATABASE_URL" in os.environ:
         # Extract host from DATABASE_URL
         import re
@@ -178,49 +187,73 @@ def override_postgres_connection():
         if match:
             pg_host = match.group(1)
             print(f"Extracted host from DATABASE_URL: {pg_host}")
+            
+            # Check if this is an internal hostname and needs replacing
+            if "railway.internal" in pg_host:
+                print(f"Warning: Found internal Railway hostname: {pg_host}")
+                # Try to find a public hostname from environment variables
+                if "RAILWAY_PUBLIC_DOMAIN" in os.environ:
+                    new_host = os.environ["RAILWAY_PUBLIC_DOMAIN"].split('.')[0] + ".railway.app"
+                    print(f"Replacing with public hostname derived from RAILWAY_PUBLIC_DOMAIN: {new_host}")
+                    pg_host = new_host
     
-    if pg_host:
-        # Create a custom create_engine function to override connections
-        def patch_sqlalchemy():
-            # Try to import sqlalchemy safely
-            try:
-                import sqlalchemy
-                import sqlalchemy.engine
-                
-                # Store the original create_engine
-                original_create_engine = sqlalchemy.create_engine
-                
-                def patched_create_engine(url, *args, **kwargs):
-                    """Replace any postgres.railway.internal with the correct host."""
-                    url_str = str(url)
-                    if "postgres.railway.internal" in url_str:
-                        print("\n\nIntercepting connection to postgres.railway.internal!")
-                        print(f"Original URL: {url_str}")
-                        # Replace the host
-                        new_url = url_str.replace("postgres.railway.internal", pg_host)
-                        print(f"New URL: {new_url}")
-                        return original_create_engine(new_url, *args, **kwargs)
-                    return original_create_engine(url, *args, **kwargs)
-                
-                # Replace the create_engine method
-                sqlalchemy.create_engine = patched_create_engine
-                print("Successfully patched SQLAlchemy create_engine!")
-            except Exception as e:
-                print(f"Error patching SQLAlchemy: {e}")
-        
-        # Patch sqlalchemy immediately if already imported
-        if "sqlalchemy" in sys.modules:
-            print("SQLAlchemy already imported, patching now...")
-            patch_sqlalchemy()
-        
-        # Also modify the DATABASE_URL if it uses postgres.railway.internal
-        if "DATABASE_URL" in os.environ and "postgres.railway.internal" in os.environ["DATABASE_URL"]:
-            print("\nFixing DATABASE_URL environment variable...")
-            old_url = os.environ["DATABASE_URL"]
-            os.environ["DATABASE_URL"] = old_url.replace("postgres.railway.internal", pg_host)
-            print(f"Updated DATABASE_URL to use host: {pg_host}")
-    else:
+    if not pg_host:
         print("\nWARNING: Could not determine correct PostgreSQL host!")
+        return
+        
+    # If we got an internal hostname, warn but continue
+    if "railway.internal" in pg_host:
+        print(f"WARNING: Using internal Railway hostname: {pg_host} - this may cause connection issues!")
+        print("The application may not be able to connect to the database using this hostname.")
+    
+    print(f"Final PostgreSQL host to use: {pg_host}")
+    
+    # Replace any internal hostnames with the public one in DATABASE_URL
+    if "DATABASE_URL" in os.environ:
+        old_url = os.environ["DATABASE_URL"]
+        if "railway.internal" in old_url:
+            print(f"Found internal hostname in DATABASE_URL: {old_url.replace(os.environ.get('POSTGRES_PASSWORD', 'password'), '****')}")
+            # Create a pattern to match any *.railway.internal hostname
+            import re
+            new_url = re.sub(r'@([^:]+?)\.railway\.internal', f'@{pg_host}', old_url)
+            if new_url != old_url:
+                os.environ["DATABASE_URL"] = new_url
+                print(f"Updated DATABASE_URL to use host: {pg_host}")
+                print(f"New DATABASE_URL: {new_url.replace(os.environ.get('POSTGRES_PASSWORD', 'password'), '****')}")
+    
+    # Create a custom create_engine function to override connections
+    def patch_sqlalchemy():
+        # Try to import sqlalchemy safely
+        try:
+            import sqlalchemy
+            import sqlalchemy.engine
+            
+            # Store the original create_engine
+            original_create_engine = sqlalchemy.create_engine
+            
+            def patched_create_engine(url, *args, **kwargs):
+                """Replace any railway.internal with the correct host."""
+                url_str = str(url)
+                if "railway.internal" in url_str:
+                    print("\n\nIntercepting connection to railway.internal hostname!")
+                    print(f"Original URL: {url_str.replace(os.environ.get('POSTGRES_PASSWORD', 'password'), '****')}")
+                    # Replace the internal hostname with our public one
+                    import re
+                    new_url = re.sub(r'@([^:]+?)\.railway\.internal', f'@{pg_host}', url_str)
+                    print(f"New URL: {new_url.replace(os.environ.get('POSTGRES_PASSWORD', 'password'), '****')}")
+                    return original_create_engine(new_url, *args, **kwargs)
+                return original_create_engine(url, *args, **kwargs)
+            
+            # Replace the create_engine method
+            sqlalchemy.create_engine = patched_create_engine
+            print("Successfully patched SQLAlchemy create_engine!")
+        except Exception as e:
+            print(f"Error patching SQLAlchemy: {e}")
+    
+    # Patch sqlalchemy immediately if already imported
+    if "sqlalchemy" in sys.modules:
+        print("SQLAlchemy already imported, patching now...")
+        patch_sqlalchemy()
 
 def patched_import(name, globals=None, locals=None, fromlist=(), level=0):
     # Intercept specific imports that might cause database operations
@@ -267,11 +300,20 @@ def patched_import(name, globals=None, locals=None, fromlist=(), level=0):
                     pg_vars = {k: v for k, v in os.environ.items() if k.startswith("PG") and "PASSWORD" not in k}
                     print(f"Railway PostgreSQL variables: {pg_vars}")
                     
+                    # Try to derive proper hostname from environment variables
+                    proper_host = None
+                    if "RAILWAY_PUBLIC_DOMAIN" in os.environ:
+                        proper_host = os.environ["RAILWAY_PUBLIC_DOMAIN"].split('.')[0] + ".railway.app"
+                        print(f"Use this host instead: {proper_host}")
+                    
                     # Suggest possible fixes
                     print("\nPOSSIBLE SOLUTIONS:")
-                    print("1. Make sure PGHOST is set to the correct hostname in Railway")
-                    print("2. Set DATABASE_URL explicitly with the correct hostname")
+                    print("1. Make sure to use the external Railway hostname, not the internal one")
+                    print("2. Set DATABASE_URL explicitly with the correct external hostname")
                     print("3. Check the Railway dashboard for the correct PostgreSQL connection details")
+                    
+                    if proper_host:
+                        print(f"\nTry this DATABASE_URL format: postgresql://username:password@{proper_host}:5432/database_name")
                 return original_error(*args, **kwargs)
             
             # Replace the OperationalError with our patched version
@@ -349,19 +391,35 @@ set -e
 echo "Current directory: $(pwd)"
 echo "Listing files in current directory:"
 ls -la
-# Early PostgreSQL hostname fix - replace postgres.railway.internal with appropriate hostname
-if [[ -n "$PGHOST" ]]; then
-  echo "EARLY FIX: Setting up DATABASE_URL with correct PostgreSQL host ($PGHOST)"
+# Early PostgreSQL hostname fix - replace internal Railway hostnames with public ones
+if [[ -n "$RAILWAY_PUBLIC_DOMAIN" ]]; then
+  PUBLIC_HOST="${RAILWAY_PUBLIC_DOMAIN%%.*}.railway.app"
+  echo "EARLY FIX: Deriving public PostgreSQL hostname: $PUBLIC_HOST from RAILWAY_PUBLIC_DOMAIN"
+  if [[ -n "$DATABASE_URL" && "$DATABASE_URL" == *"railway.internal"* ]]; then
+    OLD_URL="$DATABASE_URL"
+    # Replace any *.railway.internal with the public hostname
+    export DATABASE_URL=$(echo "$DATABASE_URL" | sed "s/[^@]*\.railway\.internal/$PUBLIC_HOST/g")
+    echo "Updated DATABASE_URL from internal to public hostname"
+  fi
+  
   if [[ -n "$PGUSER" && -n "$PGPASSWORD" && -n "$PGDATABASE" ]]; then
-    export DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT:-5432}/${PGDATABASE}"
-    echo "Set DATABASE_URL using PGHOST and Railway PostgreSQL variables"
+    if [[ -n "$PGHOST" && "$PGHOST" == *"railway.internal"* ]]; then
+      echo "Using public hostname instead of internal PGHOST"
+      export PGHOST="$PUBLIC_HOST"
+    fi
+    
+    # Also set DATABASE_URL explicitly based on our known good values
+    export DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST:-$PUBLIC_HOST}:${PGPORT:-5432}/${PGDATABASE}"
+    echo "Set DATABASE_URL using public PostgreSQL hostname"
   fi
 fi
+
 # Create a fix for SQLALCHEMY_DATABASE_URI environment variable if present
 if [[ -n "$DATABASE_URL" ]]; then
   export SQLALCHEMY_DATABASE_URI="$DATABASE_URL"
-  echo "Set SQLALCHEMY_DATABASE_URI=$SQLALCHEMY_DATABASE_URI (password hidden)"
+  echo "Set SQLALCHEMY_DATABASE_URI from DATABASE_URL (password hidden)"
 fi
+
 echo "Creating default .env file if needed"
 /app/create_default_env.sh
 # Dump ALL environment variables for debugging (with passwords hidden)
@@ -380,16 +438,28 @@ elif [[ -n "$RAILWAY_ENVIRONMENT" ]]; then
   # Railway provides PGHOST, PGDATABASE, PGUSER, PGPASSWORD, PGPORT variables
   if [[ -n "$PGUSER" && -n "$PGPASSWORD" && -n "$PGDATABASE" && -n "$PGHOST" ]]; then
     echo "Using Railway-provided PG* variables"
+    # Check if PGHOST is an internal hostname and replace if needed
+    if [[ "$PGHOST" == *"railway.internal"* && -n "$RAILWAY_PUBLIC_DOMAIN" ]]; then
+      PUBLIC_HOST="${RAILWAY_PUBLIC_DOMAIN%%.*}.railway.app"
+      echo "Converting internal PGHOST to public hostname: $PUBLIC_HOST"
+      export PGHOST="$PUBLIC_HOST"
+    fi
     export DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT:-5432}/${PGDATABASE}"
   fi
 elif [[ -n "$POSTGRES_USER" && -n "$POSTGRES_PASSWORD" && -n "$POSTGRES_DB" ]]; then
   echo "Constructing DATABASE_URL from POSTGRES_* variables"
-  # Railway might use different hostnames
-  POSTGRES_HOST=${PGHOST:-"postgresql.railway.app"}
+  # Use public hostname if available
+  if [[ -n "$RAILWAY_PUBLIC_DOMAIN" ]]; then
+    POSTGRES_HOST="${RAILWAY_PUBLIC_DOMAIN%%.*}.railway.app"
+    echo "Using public hostname from RAILWAY_PUBLIC_DOMAIN: $POSTGRES_HOST"
+  else
+    POSTGRES_HOST=${PGHOST:-"postgresql.railway.app"}
+  fi
   POSTGRES_PORT=${PGPORT:-5432}
   export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
 fi
-echo "DATABASE_URL: ${DATABASE_URL:-not set} (password hidden)"
+echo "DATABASE_URL: (password hidden) host part shown below:"
+echo "$(echo $DATABASE_URL | sed -n 's/.*@\(.*\)$/\1/p')"
 echo "DISABLE_DB: ${DISABLE_DB}"
 # Test connectivity to PostgreSQL
 if [[ -n "$DATABASE_URL" ]]; then
