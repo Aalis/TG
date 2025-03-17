@@ -25,12 +25,50 @@ ENV PYTHONUNBUFFERED=1
 RUN mkdir -p /app/simple_app
 RUN echo 'from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get("/health")\ndef health_check():\n    return {"status": "ok"}\n\n@app.get("/")\ndef root():\n    return {"message": "Hello World"}\n' > /app/simple_app/main.py
 
+# Create default .env file if it doesn't exist
+RUN echo '# Create default .env file with placeholder values\n\
+if [ ! -f /app/backend/.env ]; then\n\
+  echo "Creating default .env file with placeholder values..."\n\
+  cat > /app/backend/.env << EOL\n\
+# Database configuration\n\
+DATABASE_URL=postgresql://postgres:password@localhost:5432/telegram_parser\n\
+POSTGRES_USER=postgres\n\
+POSTGRES_PASSWORD=password\n\
+POSTGRES_DB=telegram_parser\n\
+\n\
+# JWT Authentication\n\
+SECRET_KEY=temporarysecretkey123456789\n\
+ALGORITHM=HS256\n\
+ACCESS_TOKEN_EXPIRE_MINUTES=10080\n\
+\n\
+# Application settings\n\
+BACKEND_CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000"]\n\
+\n\
+# Telegram API credentials\n\
+API_ID=0000000\n\
+API_HASH=temporaryapihash\n\
+TELEGRAM_BOT_TOKENS=["token1"]\n\
+\n\
+# Email settings\n\
+MAIL_USERNAME=user@example.com\n\
+MAIL_PASSWORD=password\n\
+MAIL_FROM=noreply@example.com\n\
+MAIL_PORT=587\n\
+MAIL_SERVER=smtp.example.com\n\
+MAIL_TLS=True\n\
+MAIL_SSL=False\n\
+EOL\n\
+fi' > /app/create_default_env.sh
+RUN chmod +x /app/create_default_env.sh
+
 # Create a startup script with error handling and diagnostics
 RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'set -e' >> /app/start.sh && \
     echo 'echo "Current directory: $(pwd)"' >> /app/start.sh && \
     echo 'echo "Listing files in current directory:"' >> /app/start.sh && \
     echo 'ls -la' >> /app/start.sh && \
+    echo 'echo "Creating default .env file if needed"' >> /app/start.sh && \
+    echo '/app/create_default_env.sh' >> /app/start.sh && \
     echo 'echo "Checking for existence of app directory:"' >> /app/start.sh && \
     echo 'if [ -d /app/backend/app ]; then' >> /app/start.sh && \
     echo '  echo "App directory exists"' >> /app/start.sh && \
@@ -47,6 +85,9 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'fi' >> /app/start.sh && \
     echo 'echo "PORT=$PORT"' >> /app/start.sh && \
     echo 'export PORT=${PORT:-8000}' >> /app/start.sh && \
+    echo 'echo "Environment variables:"' >> /app/start.sh && \
+    echo 'echo "SECRET_KEY set: ${SECRET_KEY:+true}"' >> /app/start.sh && \
+    echo 'echo "DATABASE_URL set: ${DATABASE_URL:+true}"' >> /app/start.sh && \
     echo 'echo "Waiting for database..."' >> /app/start.sh && \
     echo 'sleep 5' >> /app/start.sh && \
     echo 'echo "Database initialization step skipped for initial deployment"' >> /app/start.sh && \
