@@ -35,9 +35,17 @@ ENV PORT=8000
 COPY <<EOF /app/backend/app_wrapper.py
 import os
 import sys
+import logging
 import monkeypatch
 import re
 from fastapi import FastAPI
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("app_wrapper")
+
+# Add backend directory to path
+sys.path.append('/app/backend')
 
 # Create a simple application fallback
 fallback_app = FastAPI()
@@ -45,7 +53,7 @@ fallback_app = FastAPI()
 # Try to fix any hardcoded database URLs in already loaded modules
 def fix_hardcoded_urls():
     """Attempt to patch already loaded modules that might have hardcoded database URLs."""
-    print("\nLooking for modules with hardcoded database URLs...")
+    logger.info("\nLooking for modules with hardcoded database URLs...")
     pg_host = None
     if "PGHOST" in os.environ:
         pg_host = os.environ["PGHOST"]
@@ -55,10 +63,10 @@ def fix_hardcoded_urls():
             pg_host = match.group(1)
     
     if not pg_host:
-        print("Cannot determine proper PostgreSQL host, skipping URL fixes")
+        logger.warning("Cannot determine proper PostgreSQL host, skipping URL fixes")
         return
     
-    print(f"Using PostgreSQL host: {pg_host}")
+    logger.info(f"Using PostgreSQL host: {pg_host}")
     
     # Look through all loaded modules for SQLAlchemy engine or URL attributes
     for module_name, module in list(sys.modules.items()):
@@ -70,14 +78,14 @@ def fix_hardcoded_urls():
                         try:
                             attr = getattr(module, attr_name)
                             if isinstance(attr, str) and "postgres.railway.internal" in attr:
-                                print(f"Found hardcoded URL in {module_name}.{attr_name}")
+                                logger.info(f"Found hardcoded URL in {module_name}.{attr_name}")
                                 new_value = attr.replace("postgres.railway.internal", pg_host)
                                 setattr(module, attr_name, new_value)
-                                print(f"Updated {module_name}.{attr_name} to use {pg_host}")
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+                                logger.info(f"Updated {module_name}.{attr_name} to use {pg_host}")
+                        except Exception as e:
+                            logger.debug(f"Error checking attribute {attr_name}: {e}")
+            except Exception as e:
+                logger.debug(f"Error checking module {module_name}: {e}")
     
     # Check if SQLAlchemy has an engine already created
     if "sqlalchemy" in sys.modules:
@@ -86,12 +94,15 @@ def fix_hardcoded_urls():
             engine_module = sys.modules.get("sqlalchemy.engine", None)
             if engine_module:
                 # Try to patch any existing engines
-                print("Looking for existing SQLAlchemy engines to patch...")
+                logger.info("Looking for existing SQLAlchemy engines to patch...")
         except Exception as e:
-            print(f"Error checking SQLAlchemy engine: {e}")
+            logger.error(f"Error checking SQLAlchemy engine: {e}")
 
 # Attempt to fix hardcoded URLs before trying to import the app
-fix_hardcoded_urls()
+try:
+    fix_hardcoded_urls()
+except Exception as e:
+    logger.error(f"Error in fix_hardcoded_urls: {e}")
 
 @fallback_app.get("/health")
 def health_check():
@@ -105,8 +116,8 @@ def health_check():
     if db_url != "Not set" and "POSTGRES_PASSWORD" in os.environ:
         safe_db_url = db_url.replace(os.environ.get("POSTGRES_PASSWORD", ""), "****")
     
-    print(f"DATABASE_URL: {safe_db_url}")
-    print(f"POSTGRES_USER: {postgres_user}, POSTGRES_DB: {postgres_db}")
+    logger.info(f"DATABASE_URL: {safe_db_url}")
+    logger.info(f"POSTGRES_USER: {postgres_user}, POSTGRES_DB: {postgres_db}")
     
     # Get all environment variables for debugging
     all_env_vars = {k: v for k, v in os.environ.items() if "PASSWORD" not in k and "SECRET" not in k}
@@ -124,19 +135,56 @@ def health_check():
 
 @fallback_app.get("/")
 def root():
-    return {"message": "Hello from the fallback app! Database connection had issues."}
+    error_msg = getattr(fallback_app, "error_message", "Unknown error")
+    logger.warning(f"Using fallback app due to error: {error_msg}")
+    return {
+        "message": "Hello from the fallback app! Database connection had issues.",
+        "error": error_msg
+    }
+
+# Try multiple import paths for the app
+logger.info("Attempting to import the original application...")
+app = None
+error_message = ""
 
 try:
-    # Try to import the original app
+    # Try to import with the current path
+    logger.info("Trying import path: from app.main import app")
     from app.main import app as original_app
-    # If successful, use the original app
     app = original_app
-    print("Successfully imported the original application")
+    logger.info("Successfully imported the original application from app.main")
+except ImportError as e:
+    error_message = f"Import error from app.main: {str(e)}"
+    logger.warning(error_message)
+    try:
+        # Add app to path and try again
+        sys.path.append('/app/backend/app')
+        logger.info("Trying alternative import path after adding /app/backend/app to sys.path")
+        from main import app as original_app
+        app = original_app
+        logger.info("Successfully imported the original application from main")
+    except ImportError as e2:
+        error_message += f" | Import error from main: {str(e2)}"
+        logger.warning(f"Second import attempt failed: {e2}")
+        try:
+            # Try one more path
+            logger.info("Trying import from backend.app.main")
+            from backend.app.main import app as original_app
+            app = original_app
+            logger.info("Successfully imported the original application from backend.app.main")
+        except ImportError as e3:
+            error_message += f" | Import error from backend.app.main: {str(e3)}"
+            logger.warning(f"Third import attempt failed: {e3}")
 except Exception as e:
-    # If there are any exceptions, use the fallback app
-    print(f"Error importing original app: {e}")
+    error_message = f"General error importing app: {str(e)}"
+    logger.error(error_message)
+
+# If all imports failed, use the fallback app
+if app is None:
+    logger.error(f"All import attempts failed. Using fallback application. Errors: {error_message}")
     app = fallback_app
-    print("Using fallback application due to import error")
+    # Store the error message on the app for debugging
+    fallback_app.error_message = error_message
 EOF
 
 # Create a monkeypatch module to intercept database operations
@@ -518,26 +566,139 @@ echo "Final PORT=$PORT"
 echo "Environment variables:"
 echo "SECRET_KEY set: ${SECRET_KEY:+true}"
 echo "DATABASE_URL set: ${DATABASE_URL:+true}"
-# Initialize the database
+
+# Initialize the database - we need to make sure the database is properly set up
 if [[ -n "$DATABASE_URL" && "$SKIP_DB_INIT" != "true" ]]; then
-  echo "Initializing database..."
-  set +e  # Temporarily disable exit on error
-  cd /app/backend && python init_db.py
-  DB_INIT_RESULT=$?
-  set -e  # Re-enable exit on error
-  if [ $DB_INIT_RESULT -ne 0 ]; then
-    echo "Warning: Database initialization failed with exit code $DB_INIT_RESULT"
-    echo "Will continue to start the application anyway"
+  echo "========== DATABASE INITIALIZATION =========="
+  cd /app/backend
+  
+  # Check for init_db.py and run it if it exists
+  if [ -f init_db.py ]; then
+    echo "Running init_db.py to initialize database..."
+    set +e  # Temporarily disable exit on error
+    python init_db.py
+    DB_INIT_RESULT=$?
+    set -e  # Re-enable exit on error
+    if [ $DB_INIT_RESULT -ne 0 ]; then
+      echo "Warning: Database initialization with init_db.py failed with exit code $DB_INIT_RESULT"
+    else
+      echo "Database initialization with init_db.py completed successfully"
+    fi
   else
-    echo "Database initialization completed successfully"
+    echo "init_db.py not found, looking for alternative initialization methods"
   fi
+  
+  # Look for and run alembic migrations if they exist
+  if [ -d alembic ] && [ -f alembic.ini ]; then
+    echo "Found Alembic migration files, running migrations..."
+    set +e
+    pip install --no-cache-dir alembic
+    alembic upgrade head
+    ALEMBIC_RESULT=$?
+    set -e
+    if [ $ALEMBIC_RESULT -ne 0 ]; then
+      echo "Warning: Alembic migrations failed with exit code $ALEMBIC_RESULT"
+    else
+      echo "Alembic migrations completed successfully"
+    fi
+  else 
+    echo "No Alembic migration files found"
+  fi
+  
+  # Try to use SQLAlchemy's create_all() via a Python snippet if other methods failed
+  echo "Running SQLAlchemy create_all() to ensure tables exist..."
+  set +e
+  python -c "
+import os
+import sys
+sys.path.append('/app/backend')
+try:
+    from app.database.base import Base
+    from app.database.session import engine
+    print('Creating database tables using SQLAlchemy Base.metadata.create_all()')
+    Base.metadata.create_all(bind=engine)
+    print('Successfully created all tables')
+except Exception as e:
+    print(f'Error creating tables via SQLAlchemy: {e}')
+    try:
+        # Try alternative import paths
+        sys.path.append('/app/backend/app')
+        from database.base import Base
+        from database.session import engine
+        print('Creating database tables using alternative import paths')
+        Base.metadata.create_all(bind=engine)
+        print('Successfully created all tables')
+    except Exception as e2:
+        print(f'Error in alternative table creation: {e2}')
+"
+  SQLALCHEMY_RESULT=$?
+  set -e
+  if [ $SQLALCHEMY_RESULT -ne 0 ]; then
+    echo "Warning: SQLAlchemy table creation failed with exit code $SQLALCHEMY_RESULT"
+  fi
+  
+  # Check that tables were actually created
+  echo "Verifying database tables exist..."
+  set +e
+  python -c "
+import os
+import sys
+import psycopg2
+import psycopg2.extras
+
+try:
+    # Connect to the database
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    
+    # List all tables
+    cur.execute(\"\"\"
+        SELECT tablename FROM pg_catalog.pg_tables
+        WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';
+    \"\"\")
+    
+    tables = cur.fetchall()
+    if not tables:
+        print('Warning: No tables found in the database!')
+    else:
+        print(f'Found {len(tables)} tables in the database:')
+        for table in tables:
+            print(f' - {table[0]}')
+    
+    conn.close()
+except Exception as e:
+    print(f'Error checking database tables: {e}')
+"
+  TABLE_CHECK_RESULT=$?
+  set -e
+  
+  # Continue even if database initialization fails
+  echo "Database initialization process complete"
+  cd /app
 else
   echo "Skipping database initialization"
 fi
+
+# Make sure we use the right application module
 echo "Starting application with PORT=$PORT..."
 if [ -f /app/backend/app/main.py ]; then
   echo "Starting with app wrapper to handle database issues"
-  cd /app/backend && gunicorn app_wrapper:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug
+  cd /app/backend 
+  set +e
+  
+  # First try to import the app directly to test if there are any issues
+  python -c "
+import sys
+sys.path.append('/app/backend')
+try:
+    from app.main import app
+    print('Successfully imported app from app.main')
+except Exception as e:
+    print(f'Error importing app: {e}')
+"
+  
+  # Start with app_wrapper which has fallback capabilities
+  gunicorn app_wrapper:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug
 else
   echo "Main app not found, running simple test app instead..."
   cd /app/simple_app && gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug
