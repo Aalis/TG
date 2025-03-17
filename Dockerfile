@@ -336,116 +336,116 @@ fi" > /app/create_default_env.sh
 RUN chmod +x /app/create_default_env.sh
 
 # Create a startup script with error handling and diagnostics
-RUN echo '#!/bin/bash' > /app/start.sh && \
-    echo 'set -e' >> /app/start.sh && \
-    echo 'echo "Current directory: $(pwd)"' >> /app/start.sh && \
-    echo 'echo "Listing files in current directory:"' >> /app/start.sh && \
-    echo 'ls -la' >> /app/start.sh && \
-    echo '# Early PostgreSQL hostname fix - replace postgres.railway.internal with appropriate hostname' >> /app/start.sh && \
-    echo 'if [[ -n "$PGHOST" ]]; then' >> /app/start.sh && \
-    echo '  echo "EARLY FIX: Setting up DATABASE_URL with correct PostgreSQL host ($PGHOST)"' >> /app/start.sh && \
-    echo '  if [[ -n "$PGUSER" && -n "$PGPASSWORD" && -n "$PGDATABASE" ]]; then' >> /app/start.sh && \
-    echo '    export DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT:-5432}/${PGDATABASE}"' >> /app/start.sh && \
-    echo '    echo "Set DATABASE_URL using PGHOST and Railway PostgreSQL variables"' >> /app/start.sh && \
-    echo '  fi' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo '# Create a fix for SQLALCHEMY_DATABASE_URI environment variable if present' >> /app/start.sh && \
-    echo 'if [[ -n "$DATABASE_URL" ]]; then' >> /app/start.sh && \
-    echo '  export SQLALCHEMY_DATABASE_URI="$DATABASE_URL"' >> /app/start.sh && \
-    echo '  echo "Set SQLALCHEMY_DATABASE_URI=$SQLALCHEMY_DATABASE_URI (password hidden)"' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo 'echo "Creating default .env file if needed"' >> /app/start.sh && \
-    echo '/app/create_default_env.sh' >> /app/start.sh && \
-    echo '# Dump ALL environment variables for debugging (with passwords hidden)' >> /app/start.sh && \
-    echo 'env | grep -v PASSWORD | grep -v SECRET | sort' >> /app/start.sh && \
-    echo '# Do not skip database operations anymore' >> /app/start.sh && \
-    echo 'export SKIP_DB_INIT=false' >> /app/start.sh && \
-    echo 'export DISABLE_DB=false' >> /app/start.sh && \
-    echo '# List all database-related environment variables' >> /app/start.sh && \
-    echo 'echo "=== DATABASE ENVIRONMENT VARIABLES ==="' >> /app/start.sh && \
-    echo 'env | grep -i "db\|database\|pg\|sql\|postgres" | grep -v PASSWORD | grep -v SECRET | sort' >> /app/start.sh && \
-    echo '# Handle Railway PostgreSQL connection' >> /app/start.sh && \
-    echo 'if [[ -n "$DATABASE_URL" ]]; then' >> /app/start.sh && \
-    echo '  echo "Using provided DATABASE_URL"' >> /app/start.sh && \
-    echo 'elif [[ -n "$RAILWAY_ENVIRONMENT" ]]; then' >> /app/start.sh && \
-    echo '  echo "Running in Railway environment"' >> /app/start.sh && \
-    echo '  # Railway provides PGHOST, PGDATABASE, PGUSER, PGPASSWORD, PGPORT variables' >> /app/start.sh && \
-    echo '  if [[ -n "$PGUSER" && -n "$PGPASSWORD" && -n "$PGDATABASE" && -n "$PGHOST" ]]; then' >> /app/start.sh && \
-    echo '    echo "Using Railway-provided PG* variables"' >> /app/start.sh && \
-    echo '    export DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT:-5432}/${PGDATABASE}"' >> /app/start.sh && \
-    echo '  fi' >> /app/start.sh && \
-    echo 'elif [[ -n "$POSTGRES_USER" && -n "$POSTGRES_PASSWORD" && -n "$POSTGRES_DB" ]]; then' >> /app/start.sh && \
-    echo '  echo "Constructing DATABASE_URL from POSTGRES_* variables"' >> /app/start.sh && \
-    echo '  # Railway might use different hostnames' >> /app/start.sh && \
-    echo '  POSTGRES_HOST=${PGHOST:-"postgresql.railway.app"}' >> /app/start.sh && \
-    echo '  POSTGRES_PORT=${PGPORT:-5432}' >> /app/start.sh && \
-    echo '  export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo 'echo "DATABASE_URL: ${DATABASE_URL:-not set} (password hidden)"' >> /app/start.sh && \
-    echo 'echo "DISABLE_DB: ${DISABLE_DB}"' >> /app/start.sh && \
-    echo '# Test connectivity to PostgreSQL' >> /app/start.sh && \
-    echo 'if [[ -n "$DATABASE_URL" ]]; then' >> /app/start.sh && \
-    echo '  echo "Testing PostgreSQL connectivity..."' >> /app/start.sh && \
-    echo '  # Extract host and port from DATABASE_URL' >> /app/start.sh && \
-    echo '  DB_HOST=$(echo $DATABASE_URL | sed -n "s/.*@\([^:]*\).*/\1/p")' >> /app/start.sh && \
-    echo '  DB_PORT=$(echo $DATABASE_URL | sed -n "s/.*:\([0-9]*\)\/.*/\1/p")' >> /app/start.sh && \
-    echo '  echo "Extracted DB_HOST=$DB_HOST DB_PORT=$DB_PORT"' >> /app/start.sh && \
-    echo '  # Try to ping the host' >> /app/start.sh && \
-    echo '  echo "Trying to ping $DB_HOST..."' >> /app/start.sh && \
-    echo '  ping -c 1 $DB_HOST || echo "Ping failed, but this might be expected"' >> /app/start.sh && \
-    echo '  # Try to connect using nc' >> /app/start.sh && \
-    echo '  echo "Trying netcat to $DB_HOST:$DB_PORT..."' >> /app/start.sh && \
-    echo '  nc -z -v -w5 $DB_HOST $DB_PORT || echo "Netcat connection failed"' >> /app/start.sh && \
-    echo '  # DNS lookup' >> /app/start.sh && \
-    echo '  echo "DNS lookup for $DB_HOST..."' >> /app/start.sh && \
-    echo '  nslookup $DB_HOST || echo "DNS lookup failed"' >> /app/start.sh && \
-    echo '  # Environment variables that might affect PostgreSQL connections' >> /app/start.sh && \
-    echo '  echo "PostgreSQL environment variables:"' >> /app/start.sh && \
-    echo '  env | grep -i "pg\|postgres\|sql" | grep -v PASSWORD' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo 'echo "Checking for existence of app directory:"' >> /app/start.sh && \
-    echo 'if [ -d /app/backend/app ]; then' >> /app/start.sh && \
-    echo '  echo "App directory exists"' >> /app/start.sh && \
-    echo '  echo "Contents of app directory:"' >> /app/start.sh && \
-    echo '  ls -la /app/backend/app' >> /app/start.sh && \
-    echo 'else' >> /app/start.sh && \
-    echo '  echo "App directory does not exist"' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo 'echo "Checking for main.py:"' >> /app/start.sh && \
-    echo 'if [ -f /app/backend/app/main.py ]; then' >> /app/start.sh && \
-    echo '  echo "main.py exists"' >> /app/start.sh && \
-    echo 'else' >> /app/start.sh && \
-    echo '  echo "main.py does not exist"' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo 'echo "PORT=$PORT"' >> /app/start.sh && \
-    echo 'export PORT=${PORT:-8000}' >> /app/start.sh && \
-    echo 'echo "Environment variables:"' >> /app/start.sh && \
-    echo 'echo "SECRET_KEY set: ${SECRET_KEY:+true}"' >> /app/start.sh && \
-    echo 'echo "DATABASE_URL set: ${DATABASE_URL:+true}"' >> /app/start.sh && \
-    echo '# Initialize the database' >> /app/start.sh && \
-    echo 'if [[ -n "$DATABASE_URL" && "$SKIP_DB_INIT" != "true" ]]; then' >> /app/start.sh && \
-    echo '  echo "Initializing database..."' >> /app/start.sh && \
-    echo '  set +e  # Temporarily disable exit on error' >> /app/start.sh && \
-    echo '  cd /app/backend && python init_db.py' >> /app/start.sh && \
-    echo '  DB_INIT_RESULT=$?' >> /app/start.sh && \
-    echo '  set -e  # Re-enable exit on error' >> /app/start.sh && \
-    echo '  if [ $DB_INIT_RESULT -ne 0 ]; then' >> /app/start.sh && \
-    echo '    echo "Warning: Database initialization failed with exit code $DB_INIT_RESULT"' >> /app/start.sh && \
-    echo '    echo "Will continue to start the application anyway"' >> /app/start.sh && \
-    echo '  else' >> /app/start.sh && \
-    echo '    echo "Database initialization completed successfully"' >> /app/start.sh && \
-    echo '  fi' >> /app/start.sh && \
-    echo 'else' >> /app/start.sh && \
-    echo '  echo "Skipping database initialization"' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo 'echo "Starting application..."' >> /app/start.sh && \
-    echo 'if [ -f /app/backend/app/main.py ]; then' >> /app/start.sh && \
-    echo '  echo "Starting with app wrapper to handle database issues"' >> /app/start.sh && \
-    echo '  cd /app/backend && gunicorn app_wrapper:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug' >> /app/start.sh && \
-    echo 'else' >> /app/start.sh && \
-    echo '  echo "Main app not found, running simple test app instead..."' >> /app/start.sh && \
-    echo '  cd /app/simple_app && gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
+RUN echo "#!/bin/bash" > /app/start.sh && \
+    echo "set -e" >> /app/start.sh && \
+    echo "echo \"Current directory: \$(pwd)\"" >> /app/start.sh && \
+    echo "echo \"Listing files in current directory:\"" >> /app/start.sh && \
+    echo "ls -la" >> /app/start.sh && \
+    echo "# Early PostgreSQL hostname fix - replace postgres.railway.internal with appropriate hostname" >> /app/start.sh && \
+    echo "if [[ -n \"\$PGHOST\" ]]; then" >> /app/start.sh && \
+    echo "  echo \"EARLY FIX: Setting up DATABASE_URL with correct PostgreSQL host (\$PGHOST)\"" >> /app/start.sh && \
+    echo "  if [[ -n \"\$PGUSER\" && -n \"\$PGPASSWORD\" && -n \"\$PGDATABASE\" ]]; then" >> /app/start.sh && \
+    echo "    export DATABASE_URL=\"postgresql://\${PGUSER}:\${PGPASSWORD}@\${PGHOST}:\${PGPORT:-5432}/\${PGDATABASE}\"" >> /app/start.sh && \
+    echo "    echo \"Set DATABASE_URL using PGHOST and Railway PostgreSQL variables\"" >> /app/start.sh && \
+    echo "  fi" >> /app/start.sh && \
+    echo "fi" >> /app/start.sh && \
+    echo "# Create a fix for SQLALCHEMY_DATABASE_URI environment variable if present" >> /app/start.sh && \
+    echo "if [[ -n \"\$DATABASE_URL\" ]]; then" >> /app/start.sh && \
+    echo "  export SQLALCHEMY_DATABASE_URI=\"\$DATABASE_URL\"" >> /app/start.sh && \
+    echo "  echo \"Set SQLALCHEMY_DATABASE_URI=\$SQLALCHEMY_DATABASE_URI (password hidden)\"" >> /app/start.sh && \
+    echo "fi" >> /app/start.sh && \
+    echo "echo \"Creating default .env file if needed\"" >> /app/start.sh && \
+    echo "/app/create_default_env.sh" >> /app/start.sh && \
+    echo "# Dump ALL environment variables for debugging (with passwords hidden)" >> /app/start.sh && \
+    echo "env | grep -v PASSWORD | grep -v SECRET | sort" >> /app/start.sh && \
+    echo "# Do not skip database operations anymore" >> /app/start.sh && \
+    echo "export SKIP_DB_INIT=false" >> /app/start.sh && \
+    echo "export DISABLE_DB=false" >> /app/start.sh && \
+    echo "# List all database-related environment variables" >> /app/start.sh && \
+    echo "echo \"=== DATABASE ENVIRONMENT VARIABLES ===\"" >> /app/start.sh && \
+    echo "env | grep -i \"db\|database\|pg\|sql\|postgres\" | grep -v PASSWORD | grep -v SECRET | sort" >> /app/start.sh && \
+    echo "# Handle Railway PostgreSQL connection" >> /app/start.sh && \
+    echo "if [[ -n \"\$DATABASE_URL\" ]]; then" >> /app/start.sh && \
+    echo "  echo \"Using provided DATABASE_URL\"" >> /app/start.sh && \
+    echo "elif [[ -n \"\$RAILWAY_ENVIRONMENT\" ]]; then" >> /app/start.sh && \
+    echo "  echo \"Running in Railway environment\"" >> /app/start.sh && \
+    echo "  # Railway provides PGHOST, PGDATABASE, PGUSER, PGPASSWORD, PGPORT variables" >> /app/start.sh && \
+    echo "  if [[ -n \"\$PGUSER\" && -n \"\$PGPASSWORD\" && -n \"\$PGDATABASE\" && -n \"\$PGHOST\" ]]; then" >> /app/start.sh && \
+    echo "    echo \"Using Railway-provided PG* variables\"" >> /app/start.sh && \
+    echo "    export DATABASE_URL=\"postgresql://\${PGUSER}:\${PGPASSWORD}@\${PGHOST}:\${PGPORT:-5432}/\${PGDATABASE}\"" >> /app/start.sh && \
+    echo "  fi" >> /app/start.sh && \
+    echo "elif [[ -n \"\$POSTGRES_USER\" && -n \"\$POSTGRES_PASSWORD\" && -n \"\$POSTGRES_DB\" ]]; then" >> /app/start.sh && \
+    echo "  echo \"Constructing DATABASE_URL from POSTGRES_* variables\"" >> /app/start.sh && \
+    echo "  # Railway might use different hostnames" >> /app/start.sh && \
+    echo "  POSTGRES_HOST=\${PGHOST:-\"postgresql.railway.app\"}" >> /app/start.sh && \
+    echo "  POSTGRES_PORT=\${PGPORT:-5432}" >> /app/start.sh && \
+    echo "  export DATABASE_URL=\"postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@\${POSTGRES_HOST}:\${POSTGRES_PORT}/\${POSTGRES_DB}\"" >> /app/start.sh && \
+    echo "fi" >> /app/start.sh && \
+    echo "echo \"DATABASE_URL: \${DATABASE_URL:-not set} (password hidden)\"" >> /app/start.sh && \
+    echo "echo \"DISABLE_DB: \${DISABLE_DB}\"" >> /app/start.sh && \
+    echo "# Test connectivity to PostgreSQL" >> /app/start.sh && \
+    echo "if [[ -n \"\$DATABASE_URL\" ]]; then" >> /app/start.sh && \
+    echo "  echo \"Testing PostgreSQL connectivity...\"" >> /app/start.sh && \
+    echo "  # Extract host and port from DATABASE_URL" >> /app/start.sh && \
+    echo "  DB_HOST=\$(echo \$DATABASE_URL | sed -n \"s/.*@\([^:]*\).*/\\1/p\")" >> /app/start.sh && \
+    echo "  DB_PORT=\$(echo \$DATABASE_URL | sed -n \"s/.*:\([0-9]*\)\\/.*/\\1/p\")" >> /app/start.sh && \
+    echo "  echo \"Extracted DB_HOST=\$DB_HOST DB_PORT=\$DB_PORT\"" >> /app/start.sh && \
+    echo "  # Try to ping the host" >> /app/start.sh && \
+    echo "  echo \"Trying to ping \$DB_HOST...\"" >> /app/start.sh && \
+    echo "  ping -c 1 \$DB_HOST || echo \"Ping failed, but this might be expected\"" >> /app/start.sh && \
+    echo "  # Try to connect using nc" >> /app/start.sh && \
+    echo "  echo \"Trying netcat to \$DB_HOST:\$DB_PORT...\"" >> /app/start.sh && \
+    echo "  nc -z -v -w5 \$DB_HOST \$DB_PORT || echo \"Netcat connection failed\"" >> /app/start.sh && \
+    echo "  # DNS lookup" >> /app/start.sh && \
+    echo "  echo \"DNS lookup for \$DB_HOST...\"" >> /app/start.sh && \
+    echo "  nslookup \$DB_HOST || echo \"DNS lookup failed\"" >> /app/start.sh && \
+    echo "  # Environment variables that might affect PostgreSQL connections" >> /app/start.sh && \
+    echo "  echo \"PostgreSQL environment variables:\"" >> /app/start.sh && \
+    echo "  env | grep -i \"pg\|postgres\|sql\" | grep -v PASSWORD" >> /app/start.sh && \
+    echo "fi" >> /app/start.sh && \
+    echo "echo \"Checking for existence of app directory:\"" >> /app/start.sh && \
+    echo "if [ -d /app/backend/app ]; then" >> /app/start.sh && \
+    echo "  echo \"App directory exists\"" >> /app/start.sh && \
+    echo "  echo \"Contents of app directory:\"" >> /app/start.sh && \
+    echo "  ls -la /app/backend/app" >> /app/start.sh && \
+    echo "else" >> /app/start.sh && \
+    echo "  echo \"App directory does not exist\"" >> /app/start.sh && \
+    echo "fi" >> /app/start.sh && \
+    echo "echo \"Checking for main.py:\"" >> /app/start.sh && \
+    echo "if [ -f /app/backend/app/main.py ]; then" >> /app/start.sh && \
+    echo "  echo \"main.py exists\"" >> /app/start.sh && \
+    echo "else" >> /app/start.sh && \
+    echo "  echo \"main.py does not exist\"" >> /app/start.sh && \
+    echo "fi" >> /app/start.sh && \
+    echo "echo \"PORT=\$PORT\"" >> /app/start.sh && \
+    echo "export PORT=\${PORT:-8000}" >> /app/start.sh && \
+    echo "echo \"Environment variables:\"" >> /app/start.sh && \
+    echo "echo \"SECRET_KEY set: \${SECRET_KEY:+true}\"" >> /app/start.sh && \
+    echo "echo \"DATABASE_URL set: \${DATABASE_URL:+true}\"" >> /app/start.sh && \
+    echo "# Initialize the database" >> /app/start.sh && \
+    echo "if [[ -n \"\$DATABASE_URL\" && \"\$SKIP_DB_INIT\" != \"true\" ]]; then" >> /app/start.sh && \
+    echo "  echo \"Initializing database...\"" >> /app/start.sh && \
+    echo "  set +e  # Temporarily disable exit on error" >> /app/start.sh && \
+    echo "  cd /app/backend && python init_db.py" >> /app/start.sh && \
+    echo "  DB_INIT_RESULT=\$?" >> /app/start.sh && \
+    echo "  set -e  # Re-enable exit on error" >> /app/start.sh && \
+    echo "  if [ \$DB_INIT_RESULT -ne 0 ]; then" >> /app/start.sh && \
+    echo "    echo \"Warning: Database initialization failed with exit code \$DB_INIT_RESULT\"" >> /app/start.sh && \
+    echo "    echo \"Will continue to start the application anyway\"" >> /app/start.sh && \
+    echo "  else" >> /app/start.sh && \
+    echo "    echo \"Database initialization completed successfully\"" >> /app/start.sh && \
+    echo "  fi" >> /app/start.sh && \
+    echo "else" >> /app/start.sh && \
+    echo "  echo \"Skipping database initialization\"" >> /app/start.sh && \
+    echo "fi" >> /app/start.sh && \
+    echo "echo \"Starting application...\"" >> /app/start.sh && \
+    echo "if [ -f /app/backend/app/main.py ]; then" >> /app/start.sh && \
+    echo "  echo \"Starting with app wrapper to handle database issues\"" >> /app/start.sh && \
+    echo "  cd /app/backend && gunicorn app_wrapper:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:\$PORT --timeout 300 --log-level debug" >> /app/start.sh && \
+    echo "else" >> /app/start.sh && \
+    echo "  echo \"Main app not found, running simple test app instead...\"" >> /app/start.sh && \
+    echo "  cd /app/simple_app && gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:\$PORT --timeout 300 --log-level debug" >> /app/start.sh && \
+    echo "fi" >> /app/start.sh && \
     chmod +x /app/start.sh
 
 # Expose the port
