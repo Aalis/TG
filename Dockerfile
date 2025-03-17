@@ -79,7 +79,7 @@ try:\n\
     print("Successfully imported the original application")\n\
 except Exception as e:\n\
     # If there are any exceptions, use the fallback app\n\
-    print(f"Error importing original app: {e}")\n
+    print(f"Error importing original app: {e}")\n\
     app = fallback_app\n\
     print("Using fallback application due to import error")\n\
 ' > /app/backend/app_wrapper.py
