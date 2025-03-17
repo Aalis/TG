@@ -20,22 +20,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV PYTHONUNBUFFERED=1
 
 # Create a startup script
-RUN echo '#!/bin/bash\n\
-# Wait for database to be ready\n\
-echo "Waiting for database..."\n\
-sleep 10\n\
-\n\
-# Initialize the database\n\
-echo "Initializing database..."\n\
-python init_db.py || echo "Database initialization failed but continuing"\n\
-\n\
-# Start the application\n\
-echo "Starting application..."\n\
-gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT\n\
-' > /app/start.sh && chmod +x /app/start.sh
+RUN echo '#!/bin/bash' > /app/start.sh && \
+    echo 'echo "Waiting for database..."' >> /app/start.sh && \
+    echo 'sleep 10' >> /app/start.sh && \
+    echo 'echo "Initializing database..."' >> /app/start.sh && \
+    echo 'cd /app/backend && python init_db.py || echo "Database initialization failed but continuing"' >> /app/start.sh && \
+    echo 'echo "Starting application..."' >> /app/start.sh && \
+    echo 'cd /app/backend && gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT' >> /app/start.sh && \
+    chmod +x /app/start.sh
 
 # Expose the port
 EXPOSE 8000
 
 # Command to run the application
-CMD ["/app/start.sh"] 
+CMD ["/bin/bash", "/app/start.sh"] 
