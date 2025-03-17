@@ -24,6 +24,16 @@ ENV PYTHONUNBUFFERED=1
 ENV MAIL_TLS=true
 ENV MAIL_SSL=false
 
+# Fix the config.py file to handle mail_tls and mail_ssl correctly
+RUN if [ -f /app/backend/app/core/config.py ]; then \
+      echo "Patching config.py to handle mail variables correctly"; \
+      # First backup the original file
+      cp /app/backend/app/core/config.py /app/backend/app/core/config.py.bak; \
+      # Remove mail_tls and mail_ssl from environment variables being processed
+      sed -i 's/mail_tls/MAIL_TLS_DISABLED/g' /app/backend/app/core/config.py; \
+      sed -i 's/mail_ssl/MAIL_SSL_DISABLED/g' /app/backend/app/core/config.py; \
+    fi
+
 # Create a simple app for testing
 RUN mkdir -p /app/simple_app
 RUN echo 'from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get("/health")\ndef health_check():\n    return {"status": "ok"}\n\n@app.get("/")\ndef root():\n    return {"message": "Hello World"}\n' > /app/simple_app/main.py
@@ -58,8 +68,6 @@ MAIL_PASSWORD=password\n\
 MAIL_FROM=noreply@example.com\n\
 MAIL_PORT=587\n\
 MAIL_SERVER=smtp.example.com\n\
-MAIL_TLS=true\n\
-MAIL_SSL=false\n\
 EOL\n\
 fi' > /app/create_default_env.sh
 RUN chmod +x /app/create_default_env.sh
@@ -72,9 +80,8 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'ls -la' >> /app/start.sh && \
     echo 'echo "Creating default .env file if needed"' >> /app/start.sh && \
     echo '/app/create_default_env.sh' >> /app/start.sh && \
-    echo '# Ensure correct format for boolean environment variables' >> /app/start.sh && \
-    echo 'export MAIL_TLS=true' >> /app/start.sh && \
-    echo 'export MAIL_SSL=false' >> /app/start.sh && \
+    echo '# Dump environment variables for debugging' >> /app/start.sh && \
+    echo 'env | sort' >> /app/start.sh && \
     echo 'echo "Checking for existence of app directory:"' >> /app/start.sh && \
     echo 'if [ -d /app/backend/app ]; then' >> /app/start.sh && \
     echo '  echo "App directory exists"' >> /app/start.sh && \
@@ -94,8 +101,6 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'echo "Environment variables:"' >> /app/start.sh && \
     echo 'echo "SECRET_KEY set: ${SECRET_KEY:+true}"' >> /app/start.sh && \
     echo 'echo "DATABASE_URL set: ${DATABASE_URL:+true}"' >> /app/start.sh && \
-    echo 'echo "MAIL_TLS set: $MAIL_TLS"' >> /app/start.sh && \
-    echo 'echo "MAIL_SSL set: $MAIL_SSL"' >> /app/start.sh && \
     echo 'echo "Waiting for database..."' >> /app/start.sh && \
     echo 'sleep 5' >> /app/start.sh && \
     echo 'echo "Database initialization step skipped for initial deployment"' >> /app/start.sh && \
