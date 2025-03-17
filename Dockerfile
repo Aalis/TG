@@ -114,8 +114,14 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'echo "Environment variables:"' >> /app/start.sh && \
     echo 'echo "SECRET_KEY set: ${SECRET_KEY:+true}"' >> /app/start.sh && \
     echo 'echo "DATABASE_URL set: ${DATABASE_URL:+true}"' >> /app/start.sh && \
-    echo 'echo "Using simple app to ensure service starts"' >> /app/start.sh && \
-    echo 'cd /app/simple_app && gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug' >> /app/start.sh && \
+    echo 'echo "Starting application..."' >> /app/start.sh && \
+    echo 'if [ -f /app/backend/app/main.py ]; then' >> /app/start.sh && \
+    echo '  echo "Starting the actual FastAPI application"' >> /app/start.sh && \
+    echo '  cd /app/backend && gunicorn app.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug' >> /app/start.sh && \
+    echo 'else' >> /app/start.sh && \
+    echo '  echo "Main app not found, running simple test app instead..."' >> /app/start.sh && \
+    echo '  cd /app/simple_app && gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug' >> /app/start.sh && \
+    echo 'fi' >> /app/start.sh && \
     chmod +x /app/start.sh
 
 # Expose the port
