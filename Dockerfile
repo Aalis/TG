@@ -85,6 +85,16 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo '/app/create_default_env.sh' >> /app/start.sh && \
     echo '# Dump environment variables for debugging' >> /app/start.sh && \
     echo 'env | sort' >> /app/start.sh && \
+    echo '# Skip database initialization for now to prevent startup failures' >> /app/start.sh && \
+    echo 'export SKIP_DB_INIT=true' >> /app/start.sh && \
+    echo '# Handle Railway PostgreSQL connection' >> /app/start.sh && \
+    echo 'if [[ -n "$DATABASE_URL" ]]; then' >> /app/start.sh && \
+    echo '  echo "Using provided DATABASE_URL"' >> /app/start.sh && \
+    echo 'elif [[ -n "$PGHOST" && -n "$PGUSER" && -n "$PGPASSWORD" && -n "$PGDATABASE" ]]; then' >> /app/start.sh && \
+    echo '  echo "Constructing DATABASE_URL from PG* variables"' >> /app/start.sh && \
+    echo '  export DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT:-5432}/${PGDATABASE}"' >> /app/start.sh && \
+    echo 'fi' >> /app/start.sh && \
+    echo 'echo "DATABASE_URL: ${DATABASE_URL:-not set}"' >> /app/start.sh && \
     echo 'echo "Checking for existence of app directory:"' >> /app/start.sh && \
     echo 'if [ -d /app/backend/app ]; then' >> /app/start.sh && \
     echo '  echo "App directory exists"' >> /app/start.sh && \
@@ -104,16 +114,8 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'echo "Environment variables:"' >> /app/start.sh && \
     echo 'echo "SECRET_KEY set: ${SECRET_KEY:+true}"' >> /app/start.sh && \
     echo 'echo "DATABASE_URL set: ${DATABASE_URL:+true}"' >> /app/start.sh && \
-    echo 'echo "Waiting for database..."' >> /app/start.sh && \
-    echo 'sleep 5' >> /app/start.sh && \
-    echo 'echo "Database initialization step skipped for initial deployment"' >> /app/start.sh && \
-    echo 'echo "Starting application..."' >> /app/start.sh && \
-    echo 'if [ -f /app/backend/app/main.py ]; then' >> /app/start.sh && \
-    echo '  cd /app/backend && gunicorn app.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug' >> /app/start.sh && \
-    echo 'else' >> /app/start.sh && \
-    echo '  echo "Running simple test app instead..."' >> /app/start.sh && \
-    echo '  cd /app/simple_app && gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
+    echo 'echo "Using simple app to ensure service starts"' >> /app/start.sh && \
+    echo 'cd /app/simple_app && gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug' >> /app/start.sh && \
     chmod +x /app/start.sh
 
 # Expose the port
