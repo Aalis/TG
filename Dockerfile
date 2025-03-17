@@ -423,8 +423,16 @@ if [ -f /app/backend/app/main.py ]; then
 else
   echo "main.py does not exist"
 fi
-echo "PORT=$PORT"
-export PORT=${PORT:-8000}
+
+# Make sure PORT is set to a default value (8000) if it's empty or not set
+# This fixes the error: '' is not a valid port number
+echo "Current PORT value: '$PORT'"
+if [[ -z "$PORT" ]]; then
+  export PORT=8000
+  echo "PORT was empty, set to default: $PORT"
+fi
+echo "Final PORT=$PORT"
+
 echo "Environment variables:"
 echo "SECRET_KEY set: ${SECRET_KEY:+true}"
 echo "DATABASE_URL set: ${DATABASE_URL:+true}"
