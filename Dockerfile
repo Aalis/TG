@@ -30,296 +30,309 @@ ENV MAIL_TLS=true
 ENV MAIL_SSL=false
 
 # Create a database connection patch to handle connection issues
-RUN echo 'import os\n\
-import sys\n\
-import monkeypatch\n\
-import re\n\
-from fastapi import FastAPI\n\
-\n\
-# Create a simple application fallback\n\
-fallback_app = FastAPI()\n\
-\n\
-# Try to fix any hardcoded database URLs in already loaded modules\n\
-def fix_hardcoded_urls():\n\
-    """Attempt to patch already loaded modules that might have hardcoded database URLs."""\n\
-    print("\\nLooking for modules with hardcoded database URLs...")\n\
-    pg_host = None\n\
-    if "PGHOST" in os.environ:\n\
-        pg_host = os.environ["PGHOST"]\n\
-    elif "DATABASE_URL" in os.environ:\n\
-        match = re.search(r"@([^:]+)", os.environ["DATABASE_URL"])\n\
-        if match:\n\
-            pg_host = match.group(1)\n\
-    \n\
-    if not pg_host:\n\
-        print("Cannot determine proper PostgreSQL host, skipping URL fixes")\n\
-        return\n\
-    \n\
-    print(f"Using PostgreSQL host: {pg_host}")\n\
-    \n\
-    # Look through all loaded modules for SQLAlchemy engine or URL attributes\n\
-    for module_name, module in list(sys.modules.items()):\n\
-        if not module_name.startswith("_") and module is not None:\n\
-            try:\n\
-                # Check for database_url attribute\n\
-                for attr_name in dir(module):\n\
-                    if attr_name.lower().endswith("_url") or "database" in attr_name.lower() or "postgres" in attr_name.lower():\n\
-                        try:\n\
-                            attr = getattr(module, attr_name)\n\
-                            if isinstance(attr, str) and "postgres.railway.internal" in attr:\n\
-                                print(f"Found hardcoded URL in {module_name}.{attr_name}")\n\
-                                new_value = attr.replace("postgres.railway.internal", pg_host)\n\
-                                setattr(module, attr_name, new_value)\n\
-                                print(f"Updated {module_name}.{attr_name} to use {pg_host}")\n\
-                        except Exception:\n\
-                            pass\n\
-            except Exception:\n\
-                pass\n\
-    \n\
-    # Check if SQLAlchemy has an engine already created\n\
-    if "sqlalchemy" in sys.modules:\n\
-        try:\n\
-            sqlalchemy = sys.modules["sqlalchemy"]\n\
-            engine_module = sys.modules.get("sqlalchemy.engine", None)\n\
-            if engine_module:\n\
-                # Try to patch any existing engines\n\
-                print("Looking for existing SQLAlchemy engines to patch...")\n\
-        except Exception as e:\n\
-            print(f"Error checking SQLAlchemy engine: {e}")\n\
-\n\
-# Attempt to fix hardcoded URLs before trying to import the app\n\
-fix_hardcoded_urls()\n\
-\n\
-@fallback_app.get("/health")\n\
-def health_check():\n\
-    # Log database connection info to help debug\n\
-    db_url = os.environ.get("DATABASE_URL", "Not set")\n\
-    postgres_user = os.environ.get("POSTGRES_USER", "Not set")\n\
-    postgres_db = os.environ.get("POSTGRES_DB", "Not set")\n\
-    postgres_password = "****" if "POSTGRES_PASSWORD" in os.environ else "Not set"\n\
-    # Hide password from logs\n\
-    safe_db_url = db_url\n\
-    if db_url != "Not set" and "POSTGRES_PASSWORD" in os.environ:\n\
-        safe_db_url = db_url.replace(os.environ.get("POSTGRES_PASSWORD", ""), "****")\n\
-    \n\
-    print(f"DATABASE_URL: {safe_db_url}")\n\
-    print(f"POSTGRES_USER: {postgres_user}, POSTGRES_DB: {postgres_db}")\n\
-    \n\
-    # Get all environment variables for debugging\n\
-    all_env_vars = {k: v for k, v in os.environ.items() if "PASSWORD" not in k and "SECRET" not in k}\n\
-    return {\n\
-        "status": "ok", \n\
-        "mode": "fallback",\n\
-        "message": "Running in fallback mode due to database connection issues",\n\
-        "db_diagnostics": {\n\
-            "database_url": safe_db_url,\n\
-            "postgres_user": postgres_user,\n\
-            "postgres_db": postgres_db,\n\
-            "environment": all_env_vars\n\
-        }\n\
-    }\n\
-\n\
-@fallback_app.get("/")\n\
-def root():\n\
-    return {"message": "Hello from the fallback app! Database connection had issues."}\n\
-\n\
-try:\n\
-    # Try to import the original app\n\
-    from app.main import app as original_app\n\
-    # If successful, use the original app\n\
-    app = original_app\n\
-    print("Successfully imported the original application")\n\
-except Exception as e:\n\
-    # If there are any exceptions, use the fallback app\n\
-    print(f"Error importing original app: {e}")\n\
-    app = fallback_app\n\
-    print("Using fallback application due to import error")\n\
-' > /app/backend/app_wrapper.py
+RUN echo "import os\\
+import sys\\
+import monkeypatch\\
+import re\\
+from fastapi import FastAPI\\
+\\
+# Create a simple application fallback\\
+fallback_app = FastAPI()\\
+\\
+# Try to fix any hardcoded database URLs in already loaded modules\\
+def fix_hardcoded_urls():\\
+    \"\"\"Attempt to patch already loaded modules that might have hardcoded database URLs.\"\"\"\\
+    print(\"\\nLooking for modules with hardcoded database URLs...\")\\
+    pg_host = None\\
+    if \"PGHOST\" in os.environ:\\
+        pg_host = os.environ[\"PGHOST\"]\\
+    elif \"DATABASE_URL\" in os.environ:\\
+        match = re.search(r\"@([^:]+)\", os.environ[\"DATABASE_URL\"])\\
+        if match:\\
+            pg_host = match.group(1)\\
+    \\
+    if not pg_host:\\
+        print(\"Cannot determine proper PostgreSQL host, skipping URL fixes\")\\
+        return\\
+    \\
+    print(f\"Using PostgreSQL host: {pg_host}\")\\
+    \\
+    # Look through all loaded modules for SQLAlchemy engine or URL attributes\\
+    for module_name, module in list(sys.modules.items()):\\
+        if not module_name.startswith(\"_\") and module is not None:\\
+            try:\\
+                # Check for database_url attribute\\
+                for attr_name in dir(module):\\
+                    if attr_name.lower().endswith(\"_url\") or \"database\" in attr_name.lower() or \"postgres\" in attr_name.lower():\\
+                        try:\\
+                            attr = getattr(module, attr_name)\\
+                            if isinstance(attr, str) and \"postgres.railway.internal\" in attr:\\
+                                print(f\"Found hardcoded URL in {module_name}.{attr_name}\")\\
+                                new_value = attr.replace(\"postgres.railway.internal\", pg_host)\\
+                                setattr(module, attr_name, new_value)\\
+                                print(f\"Updated {module_name}.{attr_name} to use {pg_host}\")\\
+                        except Exception:\\
+                            pass\\
+            except Exception:\\
+                pass\\
+    \\
+    # Check if SQLAlchemy has an engine already created\\
+    if \"sqlalchemy\" in sys.modules:\\
+        try:\\
+            sqlalchemy = sys.modules[\"sqlalchemy\"]\\
+            engine_module = sys.modules.get(\"sqlalchemy.engine\", None)\\
+            if engine_module:\\
+                # Try to patch any existing engines\\
+                print(\"Looking for existing SQLAlchemy engines to patch...\")\\
+        except Exception as e:\\
+            print(f\"Error checking SQLAlchemy engine: {e}\")\\
+\\
+# Attempt to fix hardcoded URLs before trying to import the app\\
+fix_hardcoded_urls()\\
+\\
+@fallback_app.get(\"/health\")\\
+def health_check():\\
+    # Log database connection info to help debug\\
+    db_url = os.environ.get(\"DATABASE_URL\", \"Not set\")\\
+    postgres_user = os.environ.get(\"POSTGRES_USER\", \"Not set\")\\
+    postgres_db = os.environ.get(\"POSTGRES_DB\", \"Not set\")\\
+    postgres_password = \"****\" if \"POSTGRES_PASSWORD\" in os.environ else \"Not set\"\\
+    # Hide password from logs\\
+    safe_db_url = db_url\\
+    if db_url != \"Not set\" and \"POSTGRES_PASSWORD\" in os.environ:\\
+        safe_db_url = db_url.replace(os.environ.get(\"POSTGRES_PASSWORD\", \"\"), \"****\")\\
+    \\
+    print(f\"DATABASE_URL: {safe_db_url}\")\\
+    print(f\"POSTGRES_USER: {postgres_user}, POSTGRES_DB: {postgres_db}\")\\
+    \\
+    # Get all environment variables for debugging\\
+    all_env_vars = {k: v for k, v in os.environ.items() if \"PASSWORD\" not in k and \"SECRET\" not in k}\\
+    return {\\
+        \"status\": \"ok\", \\
+        \"mode\": \"fallback\",\\
+        \"message\": \"Running in fallback mode due to database connection issues\",\\
+        \"db_diagnostics\": {\\
+            \"database_url\": safe_db_url,\\
+            \"postgres_user\": postgres_user,\\
+            \"postgres_db\": postgres_db,\\
+            \"environment\": all_env_vars\\
+        }\\
+    }\\
+\\
+@fallback_app.get(\"/\")\\
+def root():\\
+    return {\"message\": \"Hello from the fallback app! Database connection had issues.\"}\\
+\\
+try:\\
+    # Try to import the original app\\
+    from app.main import app as original_app\\
+    # If successful, use the original app\\
+    app = original_app\\
+    print(\"Successfully imported the original application\")\\
+except Exception as e:\\
+    # If there are any exceptions, use the fallback app\\
+    print(f\"Error importing original app: {e}\")\\
+    app = fallback_app\\
+    print(\"Using fallback application due to import error\")\\
+" > /app/backend/app_wrapper.py
 
 # Create a monkeypatch module to intercept database operations
-RUN echo 'import sys\n\
-import builtins\n\
-import importlib.abc\n\
-import types\n\
-import os\n\
-import re\n\
-from importlib.machinery import ModuleSpec\n\
-\n\
-# Store original import\n\
-original_import = builtins.__import__\n\
-\n\
-# Check if we need to override the PostgreSQL host\n\
-def override_postgres_connection():\n\
-    """Set up environment to override PostgreSQL connections to use Railway-provided values."""\n\
-    print("\\n\\nSetting up PostgreSQL connection override...")\n\
-    \n\
-    # Print debug info\n\
-    print("Available environment variables for PostgreSQL connection:")\n\
-    postgres_vars = {}\n\
-    for var in os.environ:\n\
-        if var.startswith("PG") or "POSTGRES" in var or "DATABASE" in var:\n\
-            if "PASSWORD" not in var and "SECRET" not in var:\n\
-                postgres_vars[var] = os.environ[var]\n\
-    print(f"PostgreSQL variables: {postgres_vars}")\n\
-    \n\
-    # Determine the correct PostgreSQL host\n\
-    pg_host = None\n\
-    if "PGHOST" in os.environ:\n\
-        print(f"Using PGHOST: {os.environ[\'PGHOST\']}")\n\
-        pg_host = os.environ["PGHOST"]\n\
-    elif "DATABASE_URL" in os.environ:\n\
-        # Extract host from DATABASE_URL\n\
-        import re\n\
-        match = re.search(r"@([^:]+)", os.environ["DATABASE_URL"])\n\
-        if match:\n\
-            pg_host = match.group(1)\n\
-            print(f"Extracted host from DATABASE_URL: {pg_host}")\n\
-    \n\
-    if pg_host:\n\
-        # Create a custom create_engine function to override connections\n\
-        def patch_sqlalchemy():\n\
-            # Try to import sqlalchemy safely\n\
-            try:\n\
-                import sqlalchemy\n\
-                import sqlalchemy.engine\n\
-                \n\
-                # Store the original create_engine\n\
-                original_create_engine = sqlalchemy.create_engine\n\
-                \n\
-                def patched_create_engine(url, *args, **kwargs):\n\
-                    """Replace any postgres.railway.internal with the correct host."""\n\
-                    url_str = str(url)\n\
-                    if "postgres.railway.internal" in url_str:\n\
-                        print(f"\\n\\nIntercepting connection to postgres.railway.internal!")\n\
-                        print(f"Original URL: {url_str}")\n\
-                        # Replace the host\n\
-                        new_url = url_str.replace("postgres.railway.internal", pg_host)\n\
-                        print(f"New URL: {new_url}")\n\
-                        return original_create_engine(new_url, *args, **kwargs)\n\
-                    return original_create_engine(url, *args, **kwargs)\n\
-                \n\
-                # Replace the create_engine method\n\
-                sqlalchemy.create_engine = patched_create_engine\n\
-                print("Successfully patched SQLAlchemy create_engine!")\n\
-            except Exception as e:\n\
-                print(f"Error patching SQLAlchemy: {e}")\n\
-        \n\
-        # Patch sqlalchemy immediately if already imported\n\
-        if "sqlalchemy" in sys.modules:\n\
-            print("SQLAlchemy already imported, patching now...")\n\
-            patch_sqlalchemy()\n\
-        \n\
-        # Also modify the DATABASE_URL if it uses postgres.railway.internal\n\
-        if "DATABASE_URL" in os.environ and "postgres.railway.internal" in os.environ["DATABASE_URL"]:\n\
-            print("\\nFixing DATABASE_URL environment variable...")\n\
-            old_url = os.environ["DATABASE_URL"]\n\
-            os.environ["DATABASE_URL"] = old_url.replace("postgres.railway.internal", pg_host)\n\
-            print(f"Updated DATABASE_URL to use host: {pg_host}")\n\
-    else:\n\
-        print("\\nWARNING: Could not determine correct PostgreSQL host!")\n\
-\n\
-def patched_import(name, globals=None, locals=None, fromlist=(), level=0):\n\
-    # Intercept specific imports that might cause database operations\n\
-    if name in ["sqlalchemy", "databases", "psycopg2"]:\n\
-        print(f"Note: Import of {name} detected - connections may be intercepted if DISABLE_DB=true")\n\
-        # Print all the environment variables that might affect database connections\n\
-        print("Debug - Database Environment Variables:")\n\
-        for var in sorted(os.environ.keys()):\n\
-            if var.startswith("PG") or "DB" in var or "SQL" in var or "POSTGRES" in var:\n\
-                # Hide passwords\n\
-                if "PASSWORD" in var or "PWD" in var:\n\
-                    print(f"  {var}: ****")\n\
-                else:\n\
-                    print(f"  {var}: {os.environ.get(var)}")\n\
-        \n\
-        # If importing SQLAlchemy, set up to patch it\n\
-        if name == "sqlalchemy":\n\
-            module = original_import(name, globals, locals, fromlist, level)\n\
-            # Try to override any postgres.railway.internal connections\n\
-            override_postgres_connection()\n\
-            return module\n\
-        \n\
-        # Intercept and patch psycopg2 if it fails with "postgres.railway.internal"\n\
-        if name == "psycopg2" and fromlist and "OperationalError" in fromlist:\n\
-            # Try to override any postgres.railway.internal connections\n\
-            override_postgres_connection()\n\
-            \n\
-            # Get the original module\n\
-            psycopg2_module = original_import(name, globals, locals, fromlist, level)\n\
-            \n\
-            # Store the original OperationalError\n\
-            original_error = psycopg2_module.OperationalError\n\
-            \n\
-            # Create a patched version\n\
-            def patched_error(*args, **kwargs):\n\
-                error_msg = args[0] if args else ""\n\
-                if isinstance(error_msg, str) and "could not translate host name" in error_msg and "railway.internal" in error_msg:\n\
-                    print("\\n\\nDETECTED RAILWAY POSTGRES CONNECTION ISSUE!")\n\
-                    print("The application is trying to connect to Railway PostgreSQL using the internal hostname.")\n\
-                    print("This may be due to missing environment variables or incorrect configuration.")\n\
-                    print("\\nTrying to fix the issue by checking environment variables...")\n\
-                    \n\
-                    # Check for Railway PG environment variables\n\
-                    pg_vars = {k: v for k, v in os.environ.items() if k.startswith("PG") and "PASSWORD" not in k}\n\
-                    print(f"Railway PostgreSQL variables: {pg_vars}")\n\
-                    \n\
-                    # Suggest possible fixes\n\
-                    print("\\nPOSSIBLE SOLUTIONS:")\n\
-                    print("1. Make sure PGHOST is set to the correct hostname in Railway")\n\
-                    print("2. Set DATABASE_URL explicitly with the correct hostname")\n\
-                    print("3. Check the Railway dashboard for the correct PostgreSQL connection details")\n\
-                return original_error(*args, **kwargs)\n\
-            \n\
-            # Replace the OperationalError with our patched version\n\
-            psycopg2_module.OperationalError = patched_error\n\
-            return psycopg2_module\n\
-    \n\
-    # Let the original import proceed\n\
-    return original_import(name, globals, locals, fromlist, level)\n\
-\n\
-# Replace the built-in import function\n\
-builtins.__import__ = patched_import\n\
-\n\
-# Immediately try to fix any hardcoded database URLs\n\
-override_postgres_connection()\n\
-' > /app/backend/monkeypatch.py
+RUN echo "import sys\\
+import builtins\\
+import importlib.abc\\
+import types\\
+import os\\
+import re\\
+from importlib.machinery import ModuleSpec\\
+\\
+# Store original import\\
+original_import = builtins.__import__\\
+\\
+# Check if we need to override the PostgreSQL host\\
+def override_postgres_connection():\\
+    \"\"\"Set up environment to override PostgreSQL connections to use Railway-provided values.\"\"\"\\
+    print(\"\\n\\nSetting up PostgreSQL connection override...\")\\
+    \\
+    # Print debug info\\
+    print(\"Available environment variables for PostgreSQL connection:\")\\
+    postgres_vars = {}\\
+    for var in os.environ:\\
+        if var.startswith(\"PG\") or \"POSTGRES\" in var or \"DATABASE\" in var:\\
+            if \"PASSWORD\" not in var and \"SECRET\" not in var:\\
+                postgres_vars[var] = os.environ[var]\\
+    print(f\"PostgreSQL variables: {postgres_vars}\")\\
+    \\
+    # Determine the correct PostgreSQL host\\
+    pg_host = None\\
+    if \"PGHOST\" in os.environ:\\
+        print(f\"Using PGHOST: {os.environ['PGHOST']}\")\\
+        pg_host = os.environ[\"PGHOST\"]\\
+    elif \"DATABASE_URL\" in os.environ:\\
+        # Extract host from DATABASE_URL\\
+        import re\\
+        match = re.search(r\"@([^:]+)\", os.environ[\"DATABASE_URL\"])\\
+        if match:\\
+            pg_host = match.group(1)\\
+            print(f\"Extracted host from DATABASE_URL: {pg_host}\")\\
+    \\
+    if pg_host:\\
+        # Create a custom create_engine function to override connections\\
+        def patch_sqlalchemy():\\
+            # Try to import sqlalchemy safely\\
+            try:\\
+                import sqlalchemy\\
+                import sqlalchemy.engine\\
+                \\
+                # Store the original create_engine\\
+                original_create_engine = sqlalchemy.create_engine\\
+                \\
+                def patched_create_engine(url, *args, **kwargs):\\
+                    \"\"\"Replace any postgres.railway.internal with the correct host.\"\"\"\\
+                    url_str = str(url)\\
+                    if \"postgres.railway.internal\" in url_str:\\
+                        print(\"\\n\\nIntercepting connection to postgres.railway.internal!\")\\
+                        print(f\"Original URL: {url_str}\")\\
+                        # Replace the host\\
+                        new_url = url_str.replace(\"postgres.railway.internal\", pg_host)\\
+                        print(f\"New URL: {new_url}\")\\
+                        return original_create_engine(new_url, *args, **kwargs)\\
+                    return original_create_engine(url, *args, **kwargs)\\
+                \\
+                # Replace the create_engine method\\
+                sqlalchemy.create_engine = patched_create_engine\\
+                print(\"Successfully patched SQLAlchemy create_engine!\")\\
+            except Exception as e:\\
+                print(f\"Error patching SQLAlchemy: {e}\")\\
+        \\
+        # Patch sqlalchemy immediately if already imported\\
+        if \"sqlalchemy\" in sys.modules:\\
+            print(\"SQLAlchemy already imported, patching now...\")\\
+            patch_sqlalchemy()\\
+        \\
+        # Also modify the DATABASE_URL if it uses postgres.railway.internal\\
+        if \"DATABASE_URL\" in os.environ and \"postgres.railway.internal\" in os.environ[\"DATABASE_URL\"]:\\
+            print(\"\\nFixing DATABASE_URL environment variable...\")\\
+            old_url = os.environ[\"DATABASE_URL\"]\\
+            os.environ[\"DATABASE_URL\"] = old_url.replace(\"postgres.railway.internal\", pg_host)\\
+            print(f\"Updated DATABASE_URL to use host: {pg_host}\")\\
+    else:\\
+        print(\"\\nWARNING: Could not determine correct PostgreSQL host!\")\\
+\\
+def patched_import(name, globals=None, locals=None, fromlist=(), level=0):\\
+    # Intercept specific imports that might cause database operations\\
+    if name in [\"sqlalchemy\", \"databases\", \"psycopg2\"]:\\
+        print(f\"Note: Import of {name} detected - connections may be intercepted if DISABLE_DB=true\")\\
+        # Print all the environment variables that might affect database connections\\
+        print(\"Debug - Database Environment Variables:\")\\
+        for var in sorted(os.environ.keys()):\\
+            if var.startswith(\"PG\") or \"DB\" in var or \"SQL\" in var or \"POSTGRES\" in var:\\
+                # Hide passwords\\
+                if \"PASSWORD\" in var or \"PWD\" in var:\\
+                    print(f\"  {var}: ****\")\\
+                else:\\
+                    print(f\"  {var}: {os.environ.get(var)}\")\\
+        \\
+        # If importing SQLAlchemy, set up to patch it\\
+        if name == \"sqlalchemy\":\\
+            module = original_import(name, globals, locals, fromlist, level)\\
+            # Try to override any postgres.railway.internal connections\\
+            override_postgres_connection()\\
+            return module\\
+        \\
+        # Intercept and patch psycopg2 if it fails with \"postgres.railway.internal\"\\
+        if name == \"psycopg2\" and fromlist and \"OperationalError\" in fromlist:\\
+            # Try to override any postgres.railway.internal connections\\
+            override_postgres_connection()\\
+            \\
+            # Get the original module\\
+            psycopg2_module = original_import(name, globals, locals, fromlist, level)\\
+            \\
+            # Store the original OperationalError\\
+            original_error = psycopg2_module.OperationalError\\
+            \\
+            # Create a patched version\\
+            def patched_error(*args, **kwargs):\\
+                error_msg = args[0] if args else \"\"\\
+                if isinstance(error_msg, str) and \"could not translate host name\" in error_msg and \"railway.internal\" in error_msg:\\
+                    print(\"\\n\\nDETECTED RAILWAY POSTGRES CONNECTION ISSUE!\")\\
+                    print(\"The application is trying to connect to Railway PostgreSQL using the internal hostname.\")\\
+                    print(\"This may be due to missing environment variables or incorrect configuration.\")\\
+                    print(\"\\nTrying to fix the issue by checking environment variables...\")\\
+                    \\
+                    # Check for Railway PG environment variables\\
+                    pg_vars = {k: v for k, v in os.environ.items() if k.startswith(\"PG\") and \"PASSWORD\" not in k}\\
+                    print(f\"Railway PostgreSQL variables: {pg_vars}\")\\
+                    \\
+                    # Suggest possible fixes\\
+                    print(\"\\nPOSSIBLE SOLUTIONS:\")\\
+                    print(\"1. Make sure PGHOST is set to the correct hostname in Railway\")\\
+                    print(\"2. Set DATABASE_URL explicitly with the correct hostname\")\\
+                    print(\"3. Check the Railway dashboard for the correct PostgreSQL connection details\")\\
+                return original_error(*args, **kwargs)\\
+            \\
+            # Replace the OperationalError with our patched version\\
+            psycopg2_module.OperationalError = patched_error\\
+            return psycopg2_module\\
+    \\
+    # Let the original import proceed\\
+    return original_import(name, globals, locals, fromlist, level)\\
+\\
+# Replace the built-in import function\\
+builtins.__import__ = patched_import\\
+\\
+# Immediately try to fix any hardcoded database URLs\\
+override_postgres_connection()\\
+" > /app/backend/monkeypatch.py
 
 # Create a simple app for testing
 RUN mkdir -p /app/simple_app
-RUN echo 'from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get("/health")\ndef health_check():\n    return {"status": "ok"}\n\n@app.get("/")\ndef root():\n    return {"message": "Hello World"}\n' > /app/simple_app/main.py
+RUN echo "from fastapi import FastAPI\\
+\\
+app = FastAPI()\\
+\\
+@app.get(\"/health\")\\
+def health_check():\\
+    return {\"status\": \"ok\"}\\
+\\
+@app.get(\"/\")\\
+def root():\\
+    return {\"message\": \"Hello World\"}\\
+" > /app/simple_app/main.py
 
 # Create default .env file if it doesn't exist
-RUN echo '# Create default .env file with placeholder values\n\
-if [ ! -f /app/backend/.env ]; then\n\
-  echo "Creating default .env file with placeholder values..."\n\
-  cat > /app/backend/.env << EOL\n\
-# Database configuration\n\
-DATABASE_URL=postgresql://postgres:password@localhost:5432/telegram_parser\n\
-POSTGRES_USER=postgres\n\
-POSTGRES_PASSWORD=password\n\
-POSTGRES_DB=telegram_parser\n\
-\n\
-# JWT Authentication\n\
-SECRET_KEY=temporarysecretkey123456789\n\
-ALGORITHM=HS256\n\
-ACCESS_TOKEN_EXPIRE_MINUTES=10080\n\
-\n\
-# Application settings\n\
-BACKEND_CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000"]\n\
-\n\
-# Telegram API credentials\n\
-API_ID=0000000\n\
-API_HASH=temporaryapihash\n\
-TELEGRAM_BOT_TOKENS=["token1"]\n\
-\n\
-# Email settings\n\
-MAIL_USERNAME=user@example.com\n\
-MAIL_PASSWORD=password\n\
-MAIL_FROM=noreply@example.com\n\
-MAIL_PORT=587\n\
-MAIL_SERVER=smtp.example.com\n\
-EOL\n\
-fi' > /app/create_default_env.sh
+RUN echo "#!/bin/bash\\
+\\
+# Create default .env file with placeholder values\\
+if [ ! -f /app/backend/.env ]; then\\
+  echo \"Creating default .env file with placeholder values...\"\\
+  cat > /app/backend/.env << EOL\\
+# Database configuration\\
+DATABASE_URL=postgresql://postgres:password@localhost:5432/telegram_parser\\
+POSTGRES_USER=postgres\\
+POSTGRES_PASSWORD=password\\
+POSTGRES_DB=telegram_parser\\
+\\
+# JWT Authentication\\
+SECRET_KEY=temporarysecretkey123456789\\
+ALGORITHM=HS256\\
+ACCESS_TOKEN_EXPIRE_MINUTES=10080\\
+\\
+# Application settings\\
+BACKEND_CORS_ORIGINS=[\"http://localhost:3000\", \"http://localhost:8000\"]\\
+\\
+# Telegram API credentials\\
+API_ID=0000000\\
+API_HASH=temporaryapihash\\
+TELEGRAM_BOT_TOKENS=[\"token1\"]\\
+\\
+# Email settings\\
+MAIL_USERNAME=user@example.com\\
+MAIL_PASSWORD=password\\
+MAIL_FROM=noreply@example.com\\
+MAIL_PORT=587\\
+MAIL_SERVER=smtp.example.com\\
+EOL\\
+fi" > /app/create_default_env.sh
 RUN chmod +x /app/create_default_env.sh
 
 # Create a startup script with error handling and diagnostics
