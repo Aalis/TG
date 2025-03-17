@@ -28,6 +28,8 @@ ENV PYTHONUNBUFFERED=1
 # Explicitly set email-related environment variables
 ENV MAIL_TLS=true
 ENV MAIL_SSL=false
+# Set a default PORT value to handle cases where it might be empty
+ENV PORT=8000
 
 # Create a database connection patch to handle connection issues
 COPY <<EOF /app/backend/app_wrapper.py
@@ -427,10 +429,20 @@ fi
 # Make sure PORT is set to a default value (8000) if it's empty or not set
 # This fixes the error: '' is not a valid port number
 echo "Current PORT value: '$PORT'"
-if [[ -z "$PORT" ]]; then
+if [[ -z "$PORT" || "$PORT" == "" ]]; then
+  # Force set PORT to a hardcoded value when it's empty or contains only whitespace
+  PORT=8000
   export PORT=8000
-  echo "PORT was empty, set to default: $PORT"
+  echo "PORT was empty, forced to default: $PORT"
 fi
+
+# Double check the PORT value is valid
+if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+  echo "PORT value '$PORT' is not a valid number, setting to default 8000"
+  PORT=8000
+  export PORT=8000
+fi
+
 echo "Final PORT=$PORT"
 
 echo "Environment variables:"
@@ -452,7 +464,7 @@ if [[ -n "$DATABASE_URL" && "$SKIP_DB_INIT" != "true" ]]; then
 else
   echo "Skipping database initialization"
 fi
-echo "Starting application..."
+echo "Starting application with PORT=$PORT..."
 if [ -f /app/backend/app/main.py ]; then
   echo "Starting with app wrapper to handle database issues"
   cd /app/backend && gunicorn app_wrapper:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 300 --log-level debug
