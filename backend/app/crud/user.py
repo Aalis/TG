@@ -1,4 +1,5 @@
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -19,6 +20,18 @@ def get_by_username(db: Session, username: str) -> Optional[User]:
     return db.query(User).filter(User.username == username).first()
 
 
+def get_by_verification_token(db: Session, token: str) -> Optional[User]:
+    return db.query(User).filter(User.verification_token == token).first()
+
+
+def get_by_reset_token(db: Session, token: str) -> Optional[User]:
+    return db.query(User).filter(User.password_reset_token == token).first()
+
+
+def get_multi(db: Session, *, skip: int = 0, limit: int = 100) -> List[User]:
+    return db.query(User).offset(skip).limit(limit).all()
+
+
 def authenticate(db: Session, *, username: str, password: str) -> Optional[User]:
     user = get_by_username(db, username=username)
     if not user:
@@ -28,13 +41,18 @@ def authenticate(db: Session, *, username: str, password: str) -> Optional[User]
     return user
 
 
-def create(db: Session, *, obj_in: UserCreate) -> User:
-    db_obj = User(
-        email=obj_in.email,
-        username=obj_in.username,
-        hashed_password=get_password_hash(obj_in.password),
-        is_superuser=obj_in.is_superuser,
-    )
+def create(db: Session, *, obj_in: Union[UserCreate, Dict[str, Any]]) -> User:
+    if isinstance(obj_in, dict):
+        create_data = obj_in
+    else:
+        create_data = obj_in.dict(exclude_unset=True)
+        
+    if "password" in create_data:
+        hashed_password = get_password_hash(create_data["password"])
+        del create_data["password"]
+        create_data["hashed_password"] = hashed_password
+    
+    db_obj = User(**create_data)
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
@@ -42,22 +60,59 @@ def create(db: Session, *, obj_in: UserCreate) -> User:
 
 
 def update(
-    db: Session, *, db_obj: User, obj_in: Union[UserUpdate, Dict[str, Any]]
+    db: Session,
+    *,
+    db_obj: User,
+    obj_in: Union[UserUpdate, Dict[str, Any]]
 ) -> User:
+    """
+    Update a user in the database.
+    
+    Args:
+        db: Database session
+        db_obj: User object from database
+        obj_in: User update data
+        
+    Returns:
+        Updated user object
+    """
+    # Convert input to dictionary if it's not already
     if isinstance(obj_in, dict):
         update_data = obj_in
     else:
         update_data = obj_in.dict(exclude_unset=True)
-    if update_data.get("password"):
+    
+    # Handle password hashing if password is provided
+    if "password" in update_data and update_data["password"]:
         hashed_password = get_password_hash(update_data["password"])
         del update_data["password"]
         update_data["hashed_password"] = hashed_password
-    for field in update_data:
-        setattr(db_obj, field, update_data[field])
-    db.add(db_obj)
-    db.commit()
-    db.refresh(db_obj)
-    return db_obj
+    
+    # Update user fields
+    try:
+        for field in update_data:
+            if hasattr(db_obj, field):
+                setattr(db_obj, field, update_data[field])
+        
+        # Update the updated_at timestamp
+        db_obj.updated_at = datetime.utcnow()
+        
+        # Commit changes to database
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+    except Exception as e:
+        db.rollback()
+        print(f"Error in user update: {str(e)}")
+        raise e
+
+
+def remove(db: Session, *, id: int) -> None:
+    user = db.query(User).filter(User.id == id).first()
+    if user:
+        db.delete(user)
+        db.commit()
 
 
 def is_active(user: User) -> bool:

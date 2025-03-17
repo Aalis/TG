@@ -1,4 +1,5 @@
 from typing import List, Optional, Union, Dict, Any
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -73,6 +74,7 @@ def get_channels_by_user(db: Session, user_id: int) -> List[ParsedGroup]:
 
 
 def get_group_by_telegram_id(db: Session, telegram_group_id: str, user_id: int) -> Optional[ParsedGroup]:
+    """Get a group by its Telegram ID and user ID"""
     return db.query(ParsedGroup).filter(
         ParsedGroup.group_id == telegram_group_id,
         ParsedGroup.user_id == user_id
@@ -80,6 +82,7 @@ def get_group_by_telegram_id(db: Session, telegram_group_id: str, user_id: int) 
 
 
 def create_group(db: Session, *, obj_in: ParsedGroupCreate, user_id: int) -> ParsedGroup:
+    """Create new group"""
     db_obj = ParsedGroup(
         user_id=user_id,
         group_id=obj_in.group_id,
@@ -88,20 +91,35 @@ def create_group(db: Session, *, obj_in: ParsedGroupCreate, user_id: int) -> Par
         member_count=obj_in.member_count,
         is_public=obj_in.is_public,
         is_channel=obj_in.is_channel,
+        parsed_at=datetime.utcnow()
     )
     db.add(db_obj)
-    db.commit()
-    db.refresh(db_obj)
+    try:
+        db.commit()
+        db.refresh(db_obj)
+    except Exception as e:
+        db.rollback()
+        raise e
     return db_obj
 
 
 def delete_group(db: Session, *, group_id: int) -> None:
-    db_obj = db.query(ParsedGroup).filter(ParsedGroup.id == group_id).first()
-    if db_obj:
-        # Delete all members first
+    """Delete a group and its members"""
+    # First delete all members
+    delete_group_members(db, group_id=group_id)
+    # Then delete the group
+    db.query(ParsedGroup).filter(ParsedGroup.id == group_id).delete()
+    db.commit()
+
+
+def delete_group_members(db: Session, *, group_id: int) -> None:
+    """Delete all members of a group"""
+    try:
         db.query(GroupMember).filter(GroupMember.group_id == group_id).delete()
-        db.delete(db_obj)
         db.commit()
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 # Group Member CRUD
@@ -123,21 +141,27 @@ def create_member(db: Session, *, obj_in: GroupMemberCreate) -> GroupMember:
 
 
 def create_members_bulk(db: Session, *, members: List[GroupMemberCreate]) -> None:
-    db_objs = [
-        GroupMember(
-            group_id=member.group_id,
-            user_id=member.user_id,
-            username=member.username,
-            first_name=member.first_name,
-            last_name=member.last_name,
-            is_bot=member.is_bot,
-            is_admin=member.is_admin,
-            is_premium=member.is_premium,
-        )
-        for member in members
-    ]
-    db.add_all(db_objs)
-    db.commit()
+    """Create multiple group members at once"""
+    try:
+        db_objs = [
+            GroupMember(
+                group_id=member.group_id,
+                user_id=member.user_id,
+                username=member.username,
+                first_name=member.first_name,
+                last_name=member.last_name,
+                phone=member.phone if hasattr(member, 'phone') else None,
+                is_bot=member.is_bot,
+                is_admin=member.is_admin,
+                is_premium=member.is_premium
+            )
+            for member in members
+        ]
+        db.bulk_save_objects(db_objs)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def get_post_by_id(db: Session, post_id: int) -> Optional[ChannelPost]:

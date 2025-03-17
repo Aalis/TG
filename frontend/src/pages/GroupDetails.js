@@ -21,6 +21,8 @@ import {
   Tooltip,
   Divider,
   IconButton,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -31,10 +33,15 @@ import {
   Download as DownloadIcon,
   Send as SendIcon,
   Verified as VerifiedIcon,
+  Add as AddIcon,
+  Telegram as TelegramIcon,
 } from '@mui/icons-material';
 import { groupsAPI } from '../services/api';
+import { useTranslation } from 'react-i18next';
+import ParseButtonHeader from '../components/ParseButtonHeader';
 
 const GroupDetails = () => {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   
@@ -42,9 +49,12 @@ const GroupDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showOnlyPremium, setShowOnlyPremium] = useState(false);
+  const [showOnlyWithUsername, setShowOnlyWithUsername] = useState(false);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [showBots, setShowBots] = useState(true);
 
   // Fetch group details on component mount
   useEffect(() => {
@@ -66,13 +76,24 @@ const GroupDetails = () => {
     fetchGroupDetails();
   }, [id]);
 
-  // Filter members when search term changes
+  // Update filter members effect to include new filters
   useEffect(() => {
     if (!group) return;
     
-    if (searchTerm.trim() === '') {
-      setFilteredMembers(group.members);
-    } else {
+    let filtered = group.members;
+    
+    // Apply premium filter
+    if (showOnlyPremium) {
+      filtered = filtered.filter(member => member.is_premium);
+    }
+    
+    // Apply username filter
+    if (showOnlyWithUsername) {
+      filtered = filtered.filter(member => member.username);
+    }
+    
+    // Apply search term filter
+    if (searchTerm.trim() !== '') {
       const term = searchTerm.toLowerCase();
       const filtered = group.members.filter(
         (member) =>
@@ -81,11 +102,13 @@ const GroupDetails = () => {
           (member.last_name && member.last_name.toLowerCase().includes(term))
       );
       setFilteredMembers(filtered);
+    } else {
+      setFilteredMembers(filtered);
     }
     
     // Reset to first page when filtering
     setPage(0);
-  }, [searchTerm, group]);
+  }, [searchTerm, group, showOnlyPremium, showOnlyWithUsername]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -100,16 +123,17 @@ const GroupDetails = () => {
     if (!group) return;
     
     // Create CSV content
-    const headers = ['User ID', 'Username', 'First Name', 'Last Name', 'Is Bot', 'Is Admin'];
+    const headers = ['User ID', 'Username', 'First Name', 'Last Name', 'Is Bot', 'Is Admin', 'Is Premium'];
     const csvContent = [
       headers.join(','),
-      ...group.members.map(member => [
+      ...filteredMembers.map(member => [
         member.user_id,
         member.username || '',
         member.first_name || '',
         member.last_name || '',
         member.is_bot ? 'Yes' : 'No',
-        member.is_admin ? 'Yes' : 'No'
+        member.is_admin ? 'Yes' : 'No',
+        member.is_premium ? 'Yes' : 'No'
       ].join(','))
     ].join('\n');
     
@@ -118,7 +142,7 @@ const GroupDetails = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `${group.group_name}_members.csv`);
+    link.setAttribute('download', `${group.group_name}_filtered_members.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -171,13 +195,33 @@ const GroupDetails = () => {
 
   return (
     <Box>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate('/groups')}
-        sx={{ mb: 3 }}
-      >
-        Back to Groups
-      </Button>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 3,
+        backgroundColor: 'background.default',
+        py: 1
+      }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/groups')}
+          variant="outlined"
+          size="medium"
+        >
+          {t('common.back')}
+        </Button>
+        
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => navigate('/groups', { state: { openParseDialog: true } })}
+          size="medium"
+        >
+          {t('telegram.parseNewGroup')}
+        </Button>
+      </Box>
       
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -217,10 +261,39 @@ const GroupDetails = () => {
         
         <Divider sx={{ my: 3 }} />
         
-        <Typography variant="h6" gutterBottom>
-          Members
-        </Typography>
-        
+        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showOnlyPremium}
+                onChange={(e) => setShowOnlyPremium(e.target.checked)}
+                color="warning"
+              />
+            }
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <VerifiedIcon color="warning" sx={{ fontSize: '20px' }} />
+                Premium Users
+              </Box>
+            }
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showOnlyWithUsername}
+                onChange={(e) => setShowOnlyWithUsername(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography>@</Typography>
+                Users with Username
+              </Box>
+            }
+          />
+        </Box>
+
         <TextField
           fullWidth
           placeholder="Search members by username or name..."
@@ -236,6 +309,10 @@ const GroupDetails = () => {
           sx={{ mb: 2 }}
         />
         
+        <Typography variant="h6" gutterBottom>
+          Members
+        </Typography>
+        
         <TableContainer>
           <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead>
@@ -244,6 +321,7 @@ const GroupDetails = () => {
                 <TableCell width="120px" sx={{ minWidth: '120px', height: '56px', padding: '12px' }}>User ID</TableCell>
                 <TableCell width="150px" sx={{ minWidth: '150px', height: '56px', padding: '12px' }}>Username</TableCell>
                 <TableCell width="200px" sx={{ minWidth: '200px', height: '56px', padding: '12px' }}>Name</TableCell>
+                <TableCell width="120px" sx={{ minWidth: '120px', height: '56px', padding: '12px' }}>Status</TableCell>
                 <TableCell width="120px" sx={{ minWidth: '120px', height: '56px', padding: '12px' }} align="center">Premium</TableCell>
                 <TableCell width="100px" sx={{ minWidth: '100px', height: '56px', padding: '12px' }} align="center">Message</TableCell>
               </TableRow>
@@ -281,6 +359,24 @@ const GroupDetails = () => {
                     <TableCell sx={{ width: '200px', height: '56px', padding: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {[member.first_name, member.last_name].filter(Boolean).join(' ') || '-'}
                     </TableCell>
+                    <TableCell sx={{ width: '120px', height: '56px', padding: '12px' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {member.is_admin && (
+                          <Tooltip title="Admin">
+                            <AdminIcon color="primary" />
+                          </Tooltip>
+                        )}
+                        {member.is_bot ? (
+                          <Tooltip title="Bot">
+                            <BotIcon color="secondary" />
+                          </Tooltip>
+                        ) : !member.is_admin && (
+                          <Tooltip title="User">
+                            <PersonIcon color="action" />
+                          </Tooltip>
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell sx={{ width: '120px', height: '56px', padding: '12px' }} align="center">
                       {member.is_premium ? (
                         <Tooltip title="Premium User" placement="top">
@@ -310,7 +406,7 @@ const GroupDetails = () => {
                           rel="noopener noreferrer"
                           sx={{ width: '32px', height: '32px' }}
                         >
-                          <SendIcon sx={{ fontSize: '20px' }} />
+                          <TelegramIcon sx={{ fontSize: '20px' }} />
                         </IconButton>
                       </Tooltip>
                     </TableCell>

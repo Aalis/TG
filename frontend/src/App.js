@@ -1,74 +1,58 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { CssBaseline } from '@mui/material';
 import { useAuth } from './context/AuthContext';
-import { useTheme } from './context/ThemeContext';
-
-// Layouts
-import MainLayout from './layouts/MainLayout';
-import AuthLayout from './layouts/AuthLayout';
 
 // Pages
-import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import TelegramTokens from './pages/TelegramTokens';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import ParsedGroups from './pages/ParsedGroups';
 import ParsedChannels from './pages/ParsedChannels';
 import GroupDetails from './pages/GroupDetails';
-import Profile from './pages/Profile';
-import NotFound from './pages/NotFound';
 import ChannelDetails from './pages/ChannelDetails';
+import Profile from './pages/Profile';
+import AdminPanel from './pages/AdminPanel';
+import Sessions from './pages/Sessions';
+import LandingPage from './pages/LandingPage';
+import Subscribe from './pages/Subscribe';
 
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  return children;
-};
+// Layouts
+import MainLayout from './layouts/MainLayout';
+import PublicLayout from './layouts/PublicLayout';
 
 function App() {
-  const { theme } = useTheme();
-  const { isAuthenticated } = useAuth();
-  
+  const { user } = useAuth();
+
   return (
-    <div className={`app ${theme}`}>
-      <CssBaseline />
-      <Routes>
-        {/* Auth Routes */}
-        <Route path="/" element={<AuthLayout />}>
-          <Route path="login" element={<Login />} />
-          <Route path="register" element={<Register />} />
+    <Routes>
+      {user ? (
+        // Protected routes
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<Sessions />} />
+          <Route path="/groups" element={<ParsedGroups />} />
+          <Route path="/groups/:id" element={<GroupDetails />} />
+          <Route path="/channels" element={<ParsedChannels />} />
+          <Route path="/channels/:id" element={<ChannelDetails />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/subscribe" element={<Subscribe />} />
+          {user.is_superuser && (
+            <Route path="/admin" element={<AdminPanel />} />
+          )}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-        
-        {/* Protected Routes */}
-        <Route path="/" element={
-          <ProtectedRoute>
-            <MainLayout />
-          </ProtectedRoute>
-        }>
-          <Route index element={<Dashboard />} />
-          <Route path="tokens" element={<TelegramTokens />} />
-          <Route path="groups" element={<ParsedGroups />} />
-          <Route path="groups/:id" element={<GroupDetails />} />
-          <Route path="channels" element={<ParsedChannels />} />
-          <Route path="channels/:id" element={<ChannelDetails />} />
-          <Route path="profile" element={<Profile />} />
+      ) : (
+        // Public routes
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-        
-        {/* Redirect root to dashboard if authenticated, otherwise to login */}
-        <Route path="/" element={
-          isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
-        } />
-        
-        {/* 404 Route */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </div>
+      )}
+    </Routes>
   );
 }
 

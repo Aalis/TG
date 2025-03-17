@@ -1,132 +1,238 @@
-import React from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { Formik, Form, Field } from 'formik';
-import * as Yup from 'yup';
+import React, { useState } from 'react';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
+  Box,
   TextField,
   Button,
   Typography,
   Link,
-  Box,
+  Paper,
   Alert,
-  CircularProgress,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
-
-// Validation schema
-const RegisterSchema = Yup.object().shape({
-  email: Yup.string()
-    .email('Invalid email address')
-    .required('Email is required'),
-  username: Yup.string()
-    .min(3, 'Username must be at least 3 characters')
-    .max(20, 'Username must be at most 20 characters')
-    .required('Username is required'),
-  password: Yup.string()
-    .min(6, 'Password must be at least 6 characters')
-    .required('Password is required'),
-  confirmPassword: Yup.string()
-    .oneOf([Yup.ref('password'), null], 'Passwords must match')
-    .required('Confirm password is required'),
-});
+import { useSnackbar } from 'notistack';
+import { useTranslation } from 'react-i18next';
 
 const Register = () => {
-  const { register, error, setError, isLoading } = useAuth();
   const navigate = useNavigate();
-  
-  const handleSubmit = async (values, { setSubmitting }) => {
-    const success = await register(values.email, values.username, values.password);
-    
-    if (success) {
-      navigate('/login');
-    }
-    
-    setSubmitting(false);
+  const { register } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  const { t } = useTranslation();
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    username: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [errors, setErrors] = useState({
+    email: '',
+    username: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+    // Clear error for the field being changed
+    setErrors({
+      ...errors,
+      [e.target.name]: '',
+    });
   };
 
-  return (
-    <Box sx={{ width: '100%' }}>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Reset all errors
+    setErrors({
+      email: '',
+      username: '',
+      password: '',
+      confirmPassword: '',
+    });
+    
+    // Validate passwords match
+    if (formData.password !== formData.confirmPassword) {
+      setErrors({
+        ...errors,
+        confirmPassword: t('validation.passwordsMustMatch'),
+      });
+      return;
+    }
+
+    try {
+      const { confirmPassword, ...registrationData } = formData;
+      const success = await register(registrationData.email, registrationData.username, registrationData.password);
+      if (success) {
+        // Store username for login page
+        localStorage.setItem('lastRegisteredUsername', registrationData.username);
+        setIsRegistered(true);
+        enqueueSnackbar(t('auth.registerSuccess'), { 
+          variant: 'success',
+          autoHideDuration: 8000
+        });
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || t('auth.registerError');
       
-      <Formik
-        initialValues={{ email: '', username: '', password: '', confirmPassword: '' }}
-        validationSchema={RegisterSchema}
-        onSubmit={handleSubmit}
+      // Handle specific error messages
+      if (errorMessage.includes('email already exists')) {
+        setErrors({
+          ...errors,
+          email: t('validation.emailAlreadyExists'),
+        });
+      } else if (errorMessage.includes('username already exists')) {
+        setErrors({
+          ...errors,
+          username: t('validation.usernameAlreadyExists'),
+        });
+      } else {
+        // General error
+        enqueueSnackbar(errorMessage, { variant: 'error' });
+      }
+    }
+  };
+
+  if (isRegistered) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: 'calc(100vh - 120px)',
+        }}
       >
-        {({ errors, touched, isSubmitting }) => (
-          <Form>
-            <Field
-              as={TextField}
-              name="email"
-              label="Email"
-              fullWidth
-              margin="normal"
-              error={touched.email && Boolean(errors.email)}
-              helperText={touched.email && errors.email}
-              disabled={isLoading || isSubmitting}
-            />
-            
-            <Field
-              as={TextField}
-              name="username"
-              label="Username"
-              fullWidth
-              margin="normal"
-              error={touched.username && Boolean(errors.username)}
-              helperText={touched.username && errors.username}
-              disabled={isLoading || isSubmitting}
-            />
-            
-            <Field
-              as={TextField}
-              name="password"
-              label="Password"
-              type="password"
-              fullWidth
-              margin="normal"
-              error={touched.password && Boolean(errors.password)}
-              helperText={touched.password && errors.password}
-              disabled={isLoading || isSubmitting}
-            />
-            
-            <Field
-              as={TextField}
-              name="confirmPassword"
-              label="Confirm Password"
-              type="password"
-              fullWidth
-              margin="normal"
-              error={touched.confirmPassword && Boolean(errors.confirmPassword)}
-              helperText={touched.confirmPassword && errors.confirmPassword}
-              disabled={isLoading || isSubmitting}
-            />
-            
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              color="primary"
-              disabled={isLoading || isSubmitting}
-              sx={{ mt: 3, mb: 2 }}
-            >
-              {(isLoading || isSubmitting) ? <CircularProgress size={24} /> : 'Sign Up'}
-            </Button>
-            
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="body2">
-                Already have an account?{' '}
-                <Link component={RouterLink} to="/login" variant="body2">
-                  Sign In
-                </Link>
-              </Typography>
-            </Box>
-          </Form>
-        )}
-      </Formik>
+        <Paper
+          elevation={3}
+          sx={{
+            p: 3,
+            width: '100%',
+            maxWidth: '400px',
+            borderRadius: 2,
+          }}
+        >
+          <Alert severity="success" sx={{ mb: 2 }}>
+            {t('auth.registerSuccess')}
+          </Alert>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            {t('auth.verificationEmailSent', { email: formData.email })}
+          </Typography>
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={() => navigate('/login')}
+          >
+            {t('auth.goToLogin')}
+          </Button>
+        </Paper>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 'calc(100vh - 120px)',
+      }}
+    >
+      <Paper
+        elevation={3}
+        sx={{
+          p: 3,
+          width: '100%',
+          maxWidth: '400px',
+          borderRadius: 2,
+        }}
+      >
+        <Typography variant="h5" align="center" gutterBottom>
+          {t('auth.registerTitle')}
+        </Typography>
+        <Box
+          component="form"
+          onSubmit={handleSubmit}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label={t('common.email')}
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            autoComplete="email"
+            error={!!errors.email}
+            helperText={errors.email}
+          />
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label={t('common.username')}
+            name="username"
+            value={formData.username}
+            onChange={handleChange}
+            autoComplete="username"
+            error={!!errors.username}
+            helperText={errors.username}
+          />
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label={t('common.password')}
+            name="password"
+            type="password"
+            value={formData.password}
+            onChange={handleChange}
+            autoComplete="new-password"
+            error={!!errors.password}
+            helperText={errors.password}
+          />
+          <TextField
+            required
+            fullWidth
+            size="small"
+            label={t('common.confirmPassword')}
+            name="confirmPassword"
+            type="password"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            autoComplete="new-password"
+            error={!!errors.confirmPassword}
+            helperText={errors.confirmPassword}
+          />
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            sx={{ mt: 1 }}
+          >
+            {t('common.register')}
+          </Button>
+          <Box sx={{ textAlign: 'center', mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('auth.haveAccount')}{' '}
+              <Link component={RouterLink} to="/login">
+                {t('auth.signIn')}
+              </Link>
+            </Typography>
+          </Box>
+        </Box>
+      </Paper>
     </Box>
   );
 };

@@ -1,26 +1,36 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Dict
+from typing import List, Dict, Any
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
 import asyncio
+import os
 
 from app.database.database import get_db
 from app.database.models import TelegramSession, User
 from app.schemas.telegram_sessions import TelegramSessionCreate, TelegramSessionResponse, TelegramSessionUpdate
 from app.api.deps import get_current_active_user
 from app.core.config import settings
+from app.core.redis_client import (
+    store_client_session_data, 
+    get_client_session_data, 
+    delete_client_session,
+    store_phone_code_hash,
+    get_phone_code_hash
+)
 
 router = APIRouter()
 
-# Store client instances temporarily (in production, you might want to use Redis)
+# This dictionary is no longer used for storing clients
+# It's kept for backward compatibility with run.py
 temp_clients = {}
 
-def create_client(phone_number: str) -> TelegramClient:
+def create_client(phone_number: str, session_string: str = None) -> TelegramClient:
     """Create a new Telethon client with consistent parameters"""
+    session = StringSession(session_string) if session_string else StringSession()
     return TelegramClient(
-        StringSession(),
+        session,
         api_id=settings.API_ID,
         api_hash=settings.API_HASH,
         device_model="Desktop",
@@ -120,18 +130,31 @@ async def verify_phone(
         raise HTTPException(status_code=400, detail="Phone number is required")
 
     try:
-        # Create and store client
+        # Create client
         client = create_client(phone_number)
-        temp_clients[phone_number] = client
         
         # Connect and send code
         print(f"Connecting to Telegram for phone {phone_number}...")
         await client.connect()
         sent = await client.send_code_request(phone_number)
         
-        # Don't disconnect, keep the client for verification
+        # Store phone code hash in Redis
+        await store_phone_code_hash(phone_number, sent.phone_code_hash)
+        
+        # Store session string in Redis
+        session_string = client.session.save()
+        await store_client_session_data(phone_number, {
+            "session_string": session_string,
+            "phone_code_hash": sent.phone_code_hash
+        })
+        
+        # For backward compatibility with run.py
+        temp_clients[phone_number] = client
+        
         return {"phone_code_hash": sent.phone_code_hash}
     except Exception as e:
+        # Clean up on error
+        await delete_client_session(phone_number)
         if phone_number in temp_clients:
             await temp_clients[phone_number].disconnect()
             del temp_clients[phone_number]
@@ -167,15 +190,38 @@ async def verify_code(
         raise HTTPException(status_code=400, detail=error_msg)
 
     try:
-        # Get existing client or create new one
-        client = temp_clients.get(phone_number)
-        if not client:
+        # Try to get session data from Redis
+        session_data = await get_client_session_data(phone_number)
+        client = None
+        
+        # If we have session data, create a client with the session string
+        if session_data and "session_string" in session_data:
+            print("Creating client from stored session string...")
+            client = create_client(phone_number, session_data["session_string"])
+            await client.connect()
+            
+            # Use stored phone_code_hash if available
+            if "phone_code_hash" in session_data and session_data["phone_code_hash"] != phone_code_hash:
+                print(f"Using stored phone code hash instead of provided one")
+                phone_code_hash = session_data["phone_code_hash"]
+        # If not in Redis, try temp_clients (for backward compatibility)
+        elif phone_number in temp_clients:
+            print("Using existing client from memory...")
+            client = temp_clients[phone_number]
+            if not client.is_connected():
+                await client.connect()
+        # If still not found, create a new client
+        else:
             print("Creating new client as no existing client found...")
             client = create_client(phone_number)
             await client.connect()
-        elif not client.is_connected():
-            print("Reconnecting existing client...")
-            await client.connect()
+            
+            # Verify phone_code_hash from Redis
+            stored_hash = await get_phone_code_hash(phone_number)
+            if stored_hash and stored_hash != phone_code_hash:
+                print(f"Warning: Provided hash {phone_code_hash} doesn't match stored hash {stored_hash}")
+                # Use the stored hash instead
+                phone_code_hash = stored_hash
             
         try:
             print("Attempting to sign in...")
@@ -190,6 +236,15 @@ async def verify_code(
         except SessionPasswordNeededError:
             print("2FA password required")
             if not password:
+                # Store session string for the next request
+                session_string = client.session.save()
+                await store_client_session_data(phone_number, {
+                    "session_string": session_string,
+                    "phone_code_hash": phone_code_hash
+                })
+                # For backward compatibility
+                temp_clients[phone_number] = client
+                
                 raise HTTPException(
                     status_code=400,
                     detail="Two-factor authentication required"
@@ -202,7 +257,8 @@ async def verify_code(
         await client.disconnect()
         print("Client disconnected successfully")
         
-        # Clean up temp client
+        # Clean up
+        await delete_client_session(phone_number)
         if phone_number in temp_clients:
             del temp_clients[phone_number]
         
@@ -230,6 +286,7 @@ async def verify_code(
         return {"message": "Session created successfully"}
     except Exception as e:
         # Clean up on error
+        await delete_client_session(phone_number)
         if phone_number in temp_clients:
             await temp_clients[phone_number].disconnect()
             del temp_clients[phone_number]

@@ -81,6 +81,14 @@ class ParsedGroup(ParsedGroupBase):
 
 class GroupParseRequest(BaseModel):
     group_link: str
+    scan_comments: bool = False  # Whether to scan comments for additional users
+    comment_limit: Optional[int] = 100  # Default to 100 comments if not specified
+
+    @validator('comment_limit')
+    def validate_comment_limit(cls, v):
+        if v not in [100, 1000, 5000, 10000]:
+            raise ValueError('Comment limit must be either 100, 1000, 5000, or 10000')
+        return v
 
 
 class GroupParseResponse(BaseModel):
@@ -144,12 +152,31 @@ class ChannelParseRequest(BaseModel):
     def validate_post_limit(cls, v):
         if v <= 0:
             raise ValueError('post_limit must be greater than 0')
-        if v > 100:
-            raise ValueError('post_limit cannot exceed 100')
+        if v > 200:
+            raise ValueError('post_limit cannot exceed 200')
         return v
 
 
 class ChannelParseResponse(BaseModel):
     success: bool
     message: str
-    group: Optional[ParsedGroup] = None 
+    group: Optional[ParsedGroup] = None
+
+
+class ParsingProgressResponse(BaseModel):
+    """Schema for parsing progress response"""
+    is_parsing: bool
+    phase: str
+    progress: float
+    message: str
+    total_members: int
+    current_members: int
+
+
+class DialogResponse(BaseModel):
+    id: str
+    title: str
+    username: Optional[str] = None
+    type: str
+    members_count: int = 0
+    is_public: bool = True 

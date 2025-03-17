@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
 
@@ -8,6 +9,13 @@ class UserBase(BaseModel):
     username: Optional[str] = None
     is_active: Optional[bool] = True
     is_superuser: bool = False
+    can_parse: bool = False
+    parse_permission_expires: Optional[datetime] = None
+    email_verified: Optional[bool] = False
+    password_reset_token: Optional[str] = None
+    password_reset_expires: Optional[datetime] = None
+    verification_token: Optional[str] = None
+    verification_token_expires: Optional[datetime] = None
 
 
 # Properties to receive via API on creation
@@ -20,10 +28,19 @@ class UserCreate(UserBase):
 # Properties to receive via API on update
 class UserUpdate(UserBase):
     password: Optional[str] = None
+    can_parse: Optional[bool] = None
+    parse_permission_expires: Optional[datetime] = None
+    password_reset_token: Optional[str] = None
+    password_reset_expires: Optional[datetime] = None
+    verification_token: Optional[str] = None
+    verification_token_expires: Optional[datetime] = None
 
 
 class UserInDBBase(UserBase):
     id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_visit: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -36,4 +53,12 @@ class User(UserInDBBase):
 
 # Additional properties stored in DB
 class UserInDB(UserInDBBase):
-    hashed_password: str 
+    hashed_password: str
+
+
+class PaginatedUsers(BaseModel):
+    data: List[User]
+    total: int
+
+    class Config:
+        from_attributes = True 

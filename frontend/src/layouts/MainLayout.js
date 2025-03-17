@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
@@ -27,15 +27,21 @@ import {
   Menu as MenuIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
-  Dashboard as DashboardIcon,
-  VpnKey as TokensIcon,
+  ChevronLeft as ChevronLeftIcon,
   Group as GroupsIcon,
   Forum as ChannelsIcon,
   Person as ProfileIcon,
   Logout as LogoutIcon,
+  AdminPanelSettings as AdminIcon,
+  ShoppingCart as ShoppingCartIcon,
+  AccountCircle as AccountCircleIcon,
+  History as SessionsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import ParsePermissionCountdown from '../components/ParsePermissionCountdown';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 const drawerWidth = 240;
 
@@ -44,6 +50,7 @@ const MainLayout = () => {
   const { darkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorElUser, setAnchorElUser] = useState(null);
@@ -88,33 +95,13 @@ const MainLayout = () => {
       <List>
         <ListItem 
           button 
-          onClick={() => handleNavigate('/')}
-          selected={location.pathname === '/'}
-        >
-          <ListItemIcon>
-            <DashboardIcon />
-          </ListItemIcon>
-          <ListItemText primary="Dashboard" />
-        </ListItem>
-        <ListItem 
-          button 
-          onClick={() => handleNavigate('/tokens')}
-          selected={location.pathname === '/tokens'}
-        >
-          <ListItemIcon>
-            <TokensIcon />
-          </ListItemIcon>
-          <ListItemText primary="Telegram Tokens" />
-        </ListItem>
-        <ListItem 
-          button 
           onClick={() => handleNavigate('/groups')}
           selected={location.pathname === '/groups'}
         >
           <ListItemIcon>
             <GroupsIcon />
           </ListItemIcon>
-          <ListItemText primary="Parsed Groups" />
+          <ListItemText primary={t('navigation.parsedGroups')} />
         </ListItem>
         <ListItem 
           button 
@@ -124,11 +111,43 @@ const MainLayout = () => {
           <ListItemIcon>
             <ChannelsIcon />
           </ListItemIcon>
-          <ListItemText primary="Parsed Channels" />
+          <ListItemText primary={t('navigation.parsedChannels')} />
+        </ListItem>
+        <ListItem 
+          button 
+          onClick={() => handleNavigate('/')}
+          selected={location.pathname === '/'}
+        >
+          <ListItemIcon>
+            <SessionsIcon />
+          </ListItemIcon>
+          <ListItemText primary={t('navigation.sessions')} />
         </ListItem>
       </List>
       <Divider />
       <List>
+        <ListItem 
+          button 
+          onClick={() => handleNavigate('/subscribe')}
+          selected={location.pathname === '/subscribe'}
+        >
+          <ListItemIcon>
+            <ShoppingCartIcon />
+          </ListItemIcon>
+          <ListItemText primary={t('common.subscribe')} />
+        </ListItem>
+        {user?.is_superuser && (
+          <ListItem 
+            button 
+            onClick={() => handleNavigate('/admin')}
+            selected={location.pathname === '/admin'}
+          >
+            <ListItemIcon>
+              <AdminIcon />
+            </ListItemIcon>
+            <ListItemText primary={t('navigation.admin')} />
+          </ListItem>
+        )}
         <ListItem 
           button 
           onClick={() => handleNavigate('/profile')}
@@ -137,13 +156,13 @@ const MainLayout = () => {
           <ListItemIcon>
             <ProfileIcon />
           </ListItemIcon>
-          <ListItemText primary="Profile" />
+          <ListItemText primary={t('navigation.profile')} />
         </ListItem>
         <ListItem button onClick={handleLogoutClick}>
           <ListItemIcon>
             <LogoutIcon />
           </ListItemIcon>
-          <ListItemText primary="Logout" />
+          <ListItemText primary={t('common.logout')} />
         </ListItem>
       </List>
     </div>
@@ -158,55 +177,61 @@ const MainLayout = () => {
           ml: { sm: `${drawerWidth}px` },
         }}
       >
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Telegram Group Parser
-          </Typography>
-          
-          <IconButton color="inherit" onClick={toggleTheme}>
-            {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-          </IconButton>
-          
-          <Box sx={{ flexGrow: 0, ml: 2 }}>
-            <Tooltip title="Open settings">
-              <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
-                <Avatar alt={user?.username} src="/static/images/avatar/2.jpg" />
-              </IconButton>
-            </Tooltip>
-            <Menu
-              sx={{ mt: '45px' }}
-              id="menu-appbar"
-              anchorEl={anchorElUser}
-              anchorOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              keepMounted
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              open={Boolean(anchorElUser)}
-              onClose={handleCloseUserMenu}
+        <Container maxWidth="xl">
+          <Toolbar disableGutters>
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2, display: { sm: 'none' } }}
             >
-              <MenuItem onClick={() => { handleCloseUserMenu(); navigate('/profile'); }}>
-                <Typography textAlign="center">Profile</Typography>
-              </MenuItem>
-              <MenuItem onClick={handleLogoutClick}>
-                <Typography textAlign="center">Logout</Typography>
-              </MenuItem>
-            </Menu>
-          </Box>
-        </Toolbar>
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+              {t('common.welcome')}
+            </Typography>
+            
+            <Box sx={{ flexGrow: 0, display: 'flex', alignItems: 'center' }}>
+              <ParsePermissionCountdown 
+                expiresAt={user?.parse_permission_expires} 
+                canParse={user?.can_parse}
+              />
+              <IconButton sx={{ ml: 1 }} onClick={toggleTheme} color="inherit">
+                {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
+              </IconButton>
+              <Tooltip title={user?.email || ''}>
+                <IconButton onClick={handleOpenUserMenu} sx={{ p: 0, ml: 1 }}>
+                  <Avatar alt={user?.username} src="/static/images/avatar/2.jpg" />
+                </IconButton>
+              </Tooltip>
+              <LanguageSwitcher />
+              <Menu
+                sx={{ mt: '45px' }}
+                id="menu-appbar"
+                anchorEl={anchorElUser}
+                anchorOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+                keepMounted
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+                open={Boolean(anchorElUser)}
+                onClose={handleCloseUserMenu}
+              >
+                <MenuItem onClick={() => { handleCloseUserMenu(); navigate('/profile'); }}>
+                  <Typography textAlign="center">{t('navigation.profile')}</Typography>
+                </MenuItem>
+                <MenuItem onClick={handleLogoutClick}>
+                  <Typography textAlign="center">{t('common.logout')}</Typography>
+                </MenuItem>
+              </Menu>
+            </Box>
+          </Toolbar>
+        </Container>
       </AppBar>
       
       <Box
@@ -247,17 +272,17 @@ const MainLayout = () => {
         aria-labelledby="logout-dialog-title"
       >
         <DialogTitle id="logout-dialog-title">
-          Confirm Logout
+          {t('auth.confirmLogout', 'Confirm Logout')}
         </DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to log out? You will need to sign in again to access your account.
+            {t('auth.logoutConfirmMessage', 'Are you sure you want to log out? You will need to sign in again to access your account.')}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setLogoutDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setLogoutDialogOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleLogoutConfirm} color="error" variant="contained">
-            Logout
+            {t('common.logout')}
           </Button>
         </DialogActions>
       </Dialog>

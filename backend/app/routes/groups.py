@@ -56,7 +56,7 @@ async def parse_group(
     *,
     db: Session = Depends(deps.get_db),
     request: GroupParseRequest,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.get_current_user_with_parse_permission),
 ) -> Any:
     """Parse a new group"""
     try:

@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed. Please try again.');
       setIsLoading(false);
-      return false;
+      throw err; // Throw the error so it can be caught in the Register component
     }
   };
 
@@ -110,13 +110,23 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     
     try {
+      // Ensure we have the authorization header set
+      const token = localStorage.getItem('token');
+      if (token) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      }
+      
+      // Make the API call to update the profile
       const response = await axios.put('/api/v1/users/me', data);
       
+      // Update the user state with the new data
       setUser(response.data);
       setIsLoading(false);
       return true;
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to update profile. Please try again.');
+      console.error('Profile update error:', err);
+      const errorMessage = err.response?.data?.detail || 'Failed to update profile. Please try again.';
+      setError(errorMessage);
       setIsLoading(false);
       return false;
     }
