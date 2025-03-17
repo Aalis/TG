@@ -18,6 +18,9 @@ COPY . .
 WORKDIR /app/backend
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install additional missing dependencies
+RUN pip install --no-cache-dir pytz
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 # Explicitly set email-related environment variables
