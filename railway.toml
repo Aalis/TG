@@ -14,17 +14,19 @@ PORT = "8080"
 # Configure database connection - uncomment and adjust as needed
 # DATABASE_URL = "${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
 
+# This section defines your main application service
 [service]
 internal_port = 8080
 auto_deploy = true
 
-[[services]]
-name = "PostgreSQL"
-auto_create = true
-type = "postgres"
+# Create and configure a PostgreSQL service
+[[plugins]]
+type = "postgresql"
 
-[services.var]
-# These will be used by your application
-POSTGRES_USER = "postgres"
-POSTGRES_PASSWORD = "auto_generated"
-POSTGRES_DB = "telegram_parser" 
+# Reference the PostgreSQL variables in your main service
+[plugins.var]
+# These are used by the postgres plugin
+PGUSER = "postgres"
+PGDATABASE = "telegram_parser"
+POSTGRES_DB = "telegram_parser"
+POSTGRES_USER = "postgres" 
