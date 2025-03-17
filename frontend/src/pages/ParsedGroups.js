@@ -42,8 +42,11 @@ import {
 } from '@mui/icons-material';
 import { groupsAPI } from '../services/api';
 import { useSnackbar } from 'notistack';
+import { useTranslation } from 'react-i18next';
+import ParseButtonHeader from '../components/ParseButtonHeader';
 
 const ParsedGroups = () => {
+  const { t } = useTranslation();
   const [groups, setGroups] = useState([]);
   const [filteredGroups, setFilteredGroups] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -453,6 +456,23 @@ const ParsedGroups = () => {
     }
   }, [parseDialogOpen]);
 
+  // Check if we should open the parse dialog when navigating back from details page
+  useEffect(() => {
+    if (location.state?.openParseDialog) {
+      // Reset all parsing-related state
+      resetParsingState();
+      // Clear any previous error messages when opening the dialog
+      setParsingStatus({ loading: false, success: false, error: null });
+      // Reset form fields
+      setSelectedDialog(null);
+      setGroupLink('');
+      // Open the dialog
+      setParseDialogOpen(true);
+      // Clear the state to prevent reopening on further navigation
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location]);
+
   if (loading && groups.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -463,30 +483,21 @@ const ParsedGroups = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
-          Parsed Groups
-        </Typography>
-        
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            // Reset all parsing-related state
-            resetParsingState();
-            // Clear any previous error messages when opening the dialog
-            setParsingStatus({ loading: false, success: false, error: null });
-            // Reset form fields
-            setSelectedDialog(null);
-            setGroupLink('');
-            // Open the dialog
-            setParseDialogOpen(true);
-          }}
-        >
-          Parse New Group
-        </Button>
-      </Box>
+      <ParseButtonHeader
+        title={t('navigation.parsedGroups')}
+        entityType="group"
+        onButtonClick={() => {
+          // Reset all parsing-related state
+          resetParsingState();
+          // Clear any previous error messages when opening the dialog
+          setParsingStatus({ loading: false, success: false, error: null });
+          // Reset form fields
+          setSelectedDialog(null);
+          setGroupLink('');
+          // Open the dialog
+          setParseDialogOpen(true);
+        }}
+      />
       
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -497,7 +508,7 @@ const ParsedGroups = () => {
       <Paper sx={{ p: 2, mb: 3 }}>
         <TextField
           fullWidth
-          placeholder="Search groups by name or username..."
+          placeholder={t('common.searchPlaceholder')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           InputProps={{
@@ -515,10 +526,10 @@ const ParsedGroups = () => {
           {groups.length === 0 ? (
             <>
               <Typography variant="h6" gutterBottom>
-                No Parsed Groups Found
+                {t('telegram.noParsedGroupsFound')}
               </Typography>
               <Typography variant="body1" color="text.secondary" paragraph>
-                You haven't parsed any Telegram groups yet.
+                {t('telegram.checkActiveSession')} <RouterLink to="/sessions" style={{ color: '#1976d2', fontWeight: 500 }}>{t('telegram.session')}</RouterLink>.
               </Typography>
               <Button
                 variant="contained"
@@ -530,16 +541,16 @@ const ParsedGroups = () => {
                   setParseDialogOpen(true);
                 }}
               >
-                Parse Your First Group
+                {t('telegram.parseFirstGroup')}
               </Button>
             </>
           ) : (
             <>
               <Typography variant="h6" gutterBottom>
-                No Results Found
+                {t('common.noResults')}
               </Typography>
               <Typography variant="body1" color="text.secondary">
-                No groups match your search criteria.
+                {t('common.noGroupsMatchSearch')}
               </Typography>
             </>
           )}
@@ -570,26 +581,26 @@ const ParsedGroups = () => {
                     </Typography>
                     
                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {group.group_username ? `@${group.group_username}` : 'Private Group'}
+                      {group.group_username ? `@${group.group_username}` : t('telegram.privateGroup')}
                     </Typography>
                     
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                         <Chip 
-                          label={`${group.member_count.toLocaleString()} members`} 
+                          label={`${group.member_count.toLocaleString()} ${t('common.members')}`} 
                           size="small" 
                           color="primary" 
                           variant="outlined"
                         />
                         <Chip 
-                          label={`${(group.members?.length || 0).toLocaleString()} users found`} 
+                          label={`${(group.members?.length || 0).toLocaleString()} ${t('common.usersFound')}`} 
                           size="small" 
                           color="info" 
                           variant="outlined"
                         />
                       </Box>
                       <Chip 
-                        label={group.is_public ? 'Public' : 'Private'} 
+                        label={group.is_public ? t('common.public') : t('common.private')} 
                         size="small" 
                         color={group.is_public ? 'success' : 'default'} 
                         variant="outlined"
@@ -597,14 +608,35 @@ const ParsedGroups = () => {
                     </Box>
                     
                     <Typography variant="caption" color="text.secondary" display="block">
-                      Parsed: {new Date(group.parsed_at).toLocaleString()}
+                      {t('common.parsed')}: {(() => {
+                        // Parse the timestamp from the server and adjust for timezone
+                        const serverDate = new Date(group.parsed_at);
+                        
+                        // Get the timezone offset in minutes
+                        const timezoneOffset = new Date().getTimezoneOffset();
+                        
+                        // Create a new date adjusted for the local timezone
+                        const localDate = new Date(serverDate.getTime() - (timezoneOffset * 60000));
+                        
+                        // Format the date in local timezone
+                        return localDate.toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                        }) + ' ' + localDate.toLocaleTimeString(undefined, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: false
+                        });
+                      })()}
                     </Typography>
                   </CardContent>
                   
                   <CardActions>
                     <Box sx={{ flexGrow: 1 }} />
                     
-                    <Tooltip title="Delete">
+                    <Tooltip title={t('actions.delete')}>
                       <IconButton 
                         color="error" 
                         onClick={(e) => {
@@ -641,16 +673,16 @@ const ParsedGroups = () => {
       
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogTitle>{t('actions.confirm')}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete the group "{groupToDelete?.group_name}"? This action cannot be undone.
+            {t('telegram.deleteGroupConfirm', { groupName: groupToDelete?.group_name })}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Delete
+            {t('actions.delete')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -664,10 +696,10 @@ const ParsedGroups = () => {
           resetParsingState();
         }
       }} maxWidth="sm" fullWidth>
-        <DialogTitle>Parse New Group</DialogTitle>
+        <DialogTitle>{t('telegram.parseNewGroup')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Select a group from your Telegram groups or enter a group link manually.
+            {t('telegram.selectGroup')}
           </DialogContentText>
 
           {dialogError && (
@@ -679,7 +711,7 @@ const ParsedGroups = () => {
           {/* Available Groups List */}
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle1" gutterBottom>
-              Your Telegram Groups
+              {t('telegram.yourTelegramGroups')}
             </Typography>
             {loadingDialogs ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
@@ -713,14 +745,14 @@ const ParsedGroups = () => {
                         {dialog.title}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {dialog.username ? `@${dialog.username}` : 'Private Group'} • {dialog.members_count} members
+                        {dialog.username ? `@${dialog.username}` : t('telegram.privateGroup')} • {dialog.members_count} {t('common.members')}
                       </Typography>
                     </Box>
                   ))}
               </Box>
             ) : !dialogError && (
               <Typography variant="body2" color="text.secondary">
-                No groups found. Make sure you have an active Telegram session.
+                {t('telegram.noGroupsFound')}
               </Typography>
             )}
           </Box>
@@ -728,12 +760,12 @@ const ParsedGroups = () => {
           <Divider sx={{ my: 2 }} />
 
           <Typography variant="subtitle1" gutterBottom>
-            Or Enter Group Link Manually
+            {t('telegram.orEnterGroupLinkManually')}
           </Typography>
           
           <TextField
             margin="dense"
-            label="Group Link"
+            label={t('telegram.groupLink')}
             fullWidth
             variant="outlined"
             value={groupLink}
@@ -756,25 +788,26 @@ const ParsedGroups = () => {
                 disabled={parsingStatus.loading}
               />
             }
-            label="Scan comments for additional users"
+            label={t('telegram.scanCommentsForAdditionalUsers')}
             sx={{ mb: 2 }}
           />
 
           {scanComments && (
             <FormControl fullWidth variant="outlined">
-              <InputLabel>Comment Scan Limit</InputLabel>
+              <InputLabel>{t('telegram.commentScanLimit')}</InputLabel>
               <Select
                 value={commentLimit}
                 onChange={(e) => setCommentLimit(e.target.value)}
-                label="Comment Scan Limit"
+                label={t('telegram.commentScanLimit')}
                 disabled={parsingStatus.loading}
               >
-                <MenuItem value={100}>Last 100 Comments</MenuItem>
-                <MenuItem value={1000}>Last 1,000 Comments</MenuItem>
-                <MenuItem value={5000}>Last 5,000 Comments</MenuItem>
+                <MenuItem value={100}>{t('telegram.last100Comments')}</MenuItem>
+                <MenuItem value={1000}>{t('telegram.last1000Comments')}</MenuItem>
+                <MenuItem value={5000}>{t('telegram.last5000Comments')}</MenuItem>
+                <MenuItem value={10000}>{t('telegram.last10000Comments')}</MenuItem>
               </Select>
               <FormHelperText>
-                Select how many recent comments to scan for additional user information
+                {t('telegram.selectHowManyRecentComments')}
               </FormHelperText>
             </FormControl>
           )}
@@ -784,7 +817,7 @@ const ParsedGroups = () => {
             <Box sx={{ mt: 2, p: 1.5, bgcolor: 'error.light', borderRadius: 1, opacity: 0.9 }}>
               <Typography variant="subtitle2" color="error.dark" gutterBottom>
                 <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <span>⚠️</span> Your parsing subscription has expired
+                  <span>⚠️</span> {t('telegram.parsingSubscriptionExpired')}
                 </Box>
               </Typography>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
@@ -796,7 +829,7 @@ const ParsedGroups = () => {
                   size="small"
                   sx={{ fontSize: '0.75rem' }}
                 >
-                  Subscribe
+                  {t('common.subscribe')}
                 </Button>
                 <Button 
                   variant="outlined" 
@@ -809,7 +842,7 @@ const ParsedGroups = () => {
                     resetParsingState();
                   }}
                 >
-                  Close
+                  {t('common.close')}
                 </Button>
               </Box>
             </Box>
@@ -823,21 +856,29 @@ const ParsedGroups = () => {
             </Alert>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => {
-            setParseDialogOpen(false);
-            setSelectedDialog(null);
-            setGroupLink('');
-            resetParsingState();
-          }} disabled={parsingStatus.loading}>
-            Cancel
+        <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+          <Button 
+            onClick={() => {
+              setParseDialogOpen(false);
+              setSelectedDialog(null);
+              setGroupLink('');
+              resetParsingState();
+            }} 
+            disabled={parsingStatus.loading}
+            variant="outlined"
+            sx={{ textTransform: 'uppercase' }}
+          >
+            {t('telegram.cancel')}
           </Button>
           <LoadingButton
             onClick={handleParseGroup}
             loading={parsingStatus.loading}
+            loadingPosition="start"
+            startIcon={<SendIcon />}
             variant="contained"
+            disabled={parsingStatus.loading || (!groupLink.trim() && !selectedDialog)}
           >
-            Parse Group
+            {t('telegram.parseGroup')}
           </LoadingButton>
         </DialogActions>
       </Dialog>
@@ -854,11 +895,11 @@ const ParsedGroups = () => {
           }
         }}
       >
-        <DialogTitle>Parsing Group</DialogTitle>
+        <DialogTitle>{t('telegram.parsingGroup')}</DialogTitle>
         <DialogContent>
           <Box sx={{ width: '100%', mt: 2 }}>
             <Typography variant="body1" gutterBottom>
-              {parsingProgress?.message || 'Initializing...'}
+              {parsingProgress?.message || t('common.initializing')}
             </Typography>
             <LinearProgress 
               variant="determinate" 
@@ -866,11 +907,11 @@ const ParsedGroups = () => {
               sx={{ my: 2 }}
             />
             <Typography variant="body2" color="text.secondary">
-              Phase: {parsingProgress?.phase || 'initializing'}
+              {t('common.phase')}: {parsingProgress?.phase || 'initializing'}
             </Typography>
             {parsingProgress?.total_members > 0 && (
               <Typography variant="body2" color="text.secondary">
-                Members: {parsingProgress.current_members} / {parsingProgress.total_members}
+                {t('common.members')}: {parsingProgress.current_members} / {parsingProgress.total_members}
               </Typography>
             )}
           </Box>
@@ -882,7 +923,7 @@ const ParsedGroups = () => {
             color="error"
             variant="contained"
           >
-            Cancel Parsing
+            {t('common.cancelParsing')}
           </LoadingButton>
         </DialogActions>
       </Dialog>

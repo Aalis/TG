@@ -48,8 +48,11 @@ import {
 import { format } from 'date-fns';
 import { channelsAPI } from '../services/api';
 import { useSnackbar } from 'notistack';
+import { useTranslation } from 'react-i18next';
+import ParseButtonHeader from '../components/ParseButtonHeader';
 
 const ParsedChannels = () => {
+  const { t } = useTranslation();
   const [channels, setChannels] = useState([]);
   const [filteredChannels, setFilteredChannels] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -339,7 +342,8 @@ const ParsedChannels = () => {
 
   // Update the success handler in handleParseChannel
   const handleParseChannel = async () => {
-    if (!channelLink && !selectedDialog) {
+    // Check if either a channel link or a selected dialog is provided
+    if (!channelLink.trim() && !selectedDialog) {
       setParsingStatus({
         loading: false,
         success: false,
@@ -528,6 +532,23 @@ const ParsedChannels = () => {
     return true;
   };
 
+  // Check if we should open the parse dialog when navigating back from details page
+  useEffect(() => {
+    if (location.state?.openParseDialog) {
+      // Reset all parsing-related state
+      resetParsingState();
+      // Clear any previous error messages when opening the dialog
+      setParsingStatus({ loading: false, success: false, error: null });
+      // Reset form fields
+      setSelectedDialog(null);
+      setChannelLink('');
+      // Open the dialog
+      setParseDialogOpen(true);
+      // Clear the state to prevent reopening on further navigation
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location]);
+
   if (loading && channels.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -538,30 +559,21 @@ const ParsedChannels = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
-          Parsed Channels
-        </Typography>
-        
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            // Reset all parsing-related state
-            resetParsingState();
-            // Clear any previous error messages when opening the dialog
-            setParsingStatus({ loading: false, success: false, error: null });
-            // Reset form fields
-            setSelectedDialog(null);
-            setChannelLink('');
-            // Open the dialog
-            setParseDialogOpen(true);
-          }}
-        >
-          Parse New Channel
-        </Button>
-      </Box>
+      <ParseButtonHeader
+        title={t('navigation.parsedChannels')}
+        entityType="channel"
+        onButtonClick={() => {
+          // Reset all parsing-related state
+          resetParsingState();
+          // Clear any previous error messages when opening the dialog
+          setParsingStatus({ loading: false, success: false, error: null });
+          // Reset form fields
+          setSelectedDialog(null);
+          setChannelLink('');
+          // Open the dialog
+          setParseDialogOpen(true);
+        }}
+      />
       
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -572,7 +584,8 @@ const ParsedChannels = () => {
       <Paper sx={{ p: 2, mb: 3 }}>
         <TextField
           fullWidth
-          placeholder="Search channels by name or username..."
+          variant="outlined"
+          placeholder={t('common.searchPlaceholder')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           InputProps={{
@@ -590,27 +603,31 @@ const ParsedChannels = () => {
           {channels.length === 0 ? (
             <>
               <Typography variant="h6" gutterBottom>
-                No Parsed Channels Found
+                {t('telegram.noParsedChannelsFound')}
               </Typography>
               <Typography variant="body1" color="text.secondary" paragraph>
-                You haven't parsed any Telegram channels yet.
+                {t('telegram.checkActiveSession')} <Link to="/sessions" style={{ color: '#1976d2', fontWeight: 500 }}>{t('telegram.session')}</Link>.
               </Typography>
               <Button
                 variant="contained"
                 color="primary"
                 startIcon={<AddIcon />}
-                onClick={() => setParseDialogOpen(true)}
+                onClick={() => {
+                  // Clear any previous error messages when opening the dialog
+                  setParsingStatus({ loading: false, success: false, error: null });
+                  setParseDialogOpen(true);
+                }}
               >
-                Parse Your First Channel
+                {t('telegram.parseFirstChannel')}
               </Button>
             </>
           ) : (
             <>
               <Typography variant="h6" gutterBottom>
-                No Results Found
+                {t('common.noResults')}
               </Typography>
               <Typography variant="body1" color="text.secondary">
-                No channels match your search criteria.
+                {t('common.noChannelsMatchSearch')}
               </Typography>
             </>
           )}
@@ -641,26 +658,26 @@ const ParsedChannels = () => {
                     </Typography>
                     
                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {channel.group_username ? `@${channel.group_username}` : 'Private Channel'}
+                      {channel.group_username ? `@${channel.group_username}` : t('telegram.privateChannel')}
                     </Typography>
                     
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                         <Chip 
-                          label={`${channel.member_count.toLocaleString()} subscribers`} 
+                          label={`${channel.member_count.toLocaleString()} ${t('common.subscribers')}`} 
                           size="small" 
                           color="primary" 
                           variant="outlined"
                         />
                         <Chip 
-                          label={`${(channel.members?.length || 0).toLocaleString()} users found`} 
+                          label={`${(channel.members?.length || 0).toLocaleString()} ${t('common.usersFound')}`} 
                           size="small" 
                           color="info" 
                           variant="outlined"
                         />
                       </Box>
                       <Chip 
-                        label={channel.is_public ? 'Public' : 'Private'} 
+                        label={channel.is_public ? t('common.public') : t('common.private')} 
                         size="small" 
                         color={channel.is_public ? 'success' : 'default'} 
                         variant="outlined"
@@ -668,14 +685,35 @@ const ParsedChannels = () => {
                     </Box>
                     
                     <Typography variant="caption" color="text.secondary" display="block">
-                      Parsed: {new Date(channel.parsed_at).toLocaleString()}
+                      {t('common.parsed')}: {(() => {
+                        // Parse the timestamp from the server and adjust for timezone
+                        const serverDate = new Date(channel.parsed_at);
+                        
+                        // Get the timezone offset in minutes
+                        const timezoneOffset = new Date().getTimezoneOffset();
+                        
+                        // Create a new date adjusted for the local timezone
+                        const localDate = new Date(serverDate.getTime() - (timezoneOffset * 60000));
+                        
+                        // Format the date in local timezone
+                        return localDate.toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                        }) + ' ' + localDate.toLocaleTimeString(undefined, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: false
+                        });
+                      })()}
                     </Typography>
                   </CardContent>
                   
                   <CardActions>
                     <Box sx={{ flexGrow: 1 }} />
                     
-                    <Tooltip title="Delete">
+                    <Tooltip title={t('actions.delete')}>
                       <IconButton 
                         color="error" 
                         onClick={(e) => {
@@ -712,10 +750,12 @@ const ParsedChannels = () => {
 
       {/* Parse Channel Dialog */}
       <Dialog open={parseDialogOpen} onClose={handleCloseParseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Parse New Channel</DialogTitle>
+        <DialogTitle>
+          {t('telegram.parseNewChannel')}
+        </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Select a channel from your Telegram channels or enter a channel link manually.
+            {t('telegram.selectChannel')}
           </DialogContentText>
 
           {dialogError && (
@@ -727,7 +767,7 @@ const ParsedChannels = () => {
           {/* Available Channels List */}
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle1" gutterBottom>
-              Your Telegram Channels
+              {t('telegram.yourTelegramChannels')}
             </Typography>
             {loadingDialogs ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
@@ -761,14 +801,14 @@ const ParsedChannels = () => {
                         {dialog.title}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {dialog.username ? `@${dialog.username}` : 'Private Channel'} • {dialog.members_count} subscribers
+                        {dialog.username ? `@${dialog.username}` : t('telegram.privateChannel')} • {dialog.members_count} {t('common.subscribers')}
                       </Typography>
                     </Box>
                   ))}
               </Box>
             ) : !dialogError && (
               <Typography variant="body2" color="text.secondary">
-                No channels found. Make sure you have an active Telegram session.
+                {t('telegram.noChannelsFound')}
               </Typography>
             )}
           </Box>
@@ -776,12 +816,12 @@ const ParsedChannels = () => {
           <Divider sx={{ my: 2 }} />
 
           <Typography variant="subtitle1" gutterBottom>
-            Or Enter Channel Link Manually
+            {t('telegram.orEnterChannelLinkManually')}
           </Typography>
           
           <TextField
             margin="dense"
-            label="Channel Link"
+            label={t('telegram.channelLink')}
             fullWidth
             variant="outlined"
             value={channelLink}
@@ -797,34 +837,34 @@ const ParsedChannels = () => {
           />
 
           <FormControl fullWidth variant="outlined">
-            <InputLabel>Post Limit</InputLabel>
+            <InputLabel>{t('telegram.limitPosts')}</InputLabel>
             <Select
               value={isCustomPostLimit ? 'custom' : postLimit}
               onChange={handlePostLimitChange}
-              label="Post Limit"
+              label={t('telegram.limitPosts')}
               disabled={parsingStatus.loading}
             >
-              <MenuItem value={10}>Last 10 Posts</MenuItem>
-              <MenuItem value={100}>Last 100 Posts</MenuItem>
-              <MenuItem value={200}>Last 200 Posts</MenuItem>
-              <MenuItem value="custom">Custom (up to 200)</MenuItem>
+              <MenuItem value={10}>{t('common.last10Posts')}</MenuItem>
+              <MenuItem value={100}>{t('common.last100Posts')}</MenuItem>
+              <MenuItem value={200}>{t('telegram.last200Posts')}</MenuItem>
+              <MenuItem value="custom">{t('common.customUpTo200')}</MenuItem>
             </Select>
             <FormHelperText>
-              Select how many recent posts to scan for user information
+              {t('common.selectHowManyRecentPosts')}
             </FormHelperText>
           </FormControl>
 
           {isCustomPostLimit && (
             <TextField
               margin="dense"
-              label="Custom Post Limit"
+              label={t('common.customPostLimit')}
               type="number"
               fullWidth
               variant="outlined"
               value={customPostLimit}
               InputProps={{ inputProps: { min: 1, max: 200 } }}
               onChange={handleCustomPostLimitChange}
-              helperText="Enter a number between 1 and 200"
+              helperText={t('common.enterNumberBetween1And200')}
               sx={{ mt: 2 }}
               autoFocus
             />
@@ -835,7 +875,7 @@ const ParsedChannels = () => {
             <Box sx={{ mt: 2, p: 1.5, bgcolor: 'error.light', borderRadius: 1, opacity: 0.9 }}>
               <Typography variant="subtitle2" color="error.dark" gutterBottom>
                 <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <span>⚠️</span> Your parsing subscription has expired
+                  <span>⚠️</span> {t('telegram.parsingSubscriptionExpired')}
                 </Box>
               </Typography>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
@@ -847,7 +887,7 @@ const ParsedChannels = () => {
                   size="small"
                   sx={{ fontSize: '0.75rem' }}
                 >
-                  Subscribe
+                  {t('telegram.subscribe')}
                 </Button>
                 <Button 
                   variant="outlined" 
@@ -860,7 +900,7 @@ const ParsedChannels = () => {
                     resetParsingState();
                   }}
                 >
-                  Close
+                  {t('common.close')}
                 </Button>
               </Box>
             </Box>
@@ -874,32 +914,42 @@ const ParsedChannels = () => {
             </Alert>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseParseDialog} disabled={parsingStatus.loading}>
-            Cancel
+        <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+          <Button 
+            onClick={handleCloseParseDialog} 
+            disabled={parsingStatus.loading}
+            variant="outlined"
+            sx={{ textTransform: 'uppercase' }}
+          >
+            {t('telegram.cancel')}
           </Button>
           <LoadingButton
             onClick={handleParseChannel}
             loading={parsingStatus.loading}
+            loadingPosition="start"
+            startIcon={<SendIcon />}
             variant="contained"
+            disabled={parsingStatus.loading || (!channelLink.trim() && !selectedDialog)}
           >
-            Parse Channel
+            {t('telegram.parseChannel')}
           </LoadingButton>
         </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogTitle>{t('actions.confirm')}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete this channel? This action cannot be undone.
+            {t('telegram.deleteChannelConfirm', 'Are you sure you want to delete this channel? This action cannot be undone.')}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>
+            {t('common.cancel')}
+          </Button>
           <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Delete
+            {t('actions.delete')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -916,7 +966,7 @@ const ParsedChannels = () => {
           }
         }}
       >
-        <DialogTitle>Parsing Channel</DialogTitle>
+        <DialogTitle>{t('telegram.parsingChannel')}</DialogTitle>
         <DialogContent>
           <Box sx={{ width: '100%', mt: 2 }}>
             <Typography variant="body1" gutterBottom>
@@ -928,11 +978,11 @@ const ParsedChannels = () => {
               sx={{ my: 2 }}
             />
             <Typography variant="body2" color="text.secondary">
-              Phase: {parsingProgress?.phase || 'initializing'}
+              {t('common.phase')}: {parsingProgress?.phase || 'initializing'}
             </Typography>
             {parsingProgress?.total_posts > 0 && (
               <Typography variant="body2" color="text.secondary">
-                Posts: {parsingProgress.current_posts} / {parsingProgress.total_posts}
+                {t('common.posts')}: {parsingProgress.current_posts} / {parsingProgress.total_posts}
               </Typography>
             )}
           </Box>
@@ -944,7 +994,7 @@ const ParsedChannels = () => {
             color="error"
             variant="contained"
           >
-            Cancel Parsing
+            {t('common.cancelParsing')}
           </LoadingButton>
         </DialogActions>
       </Dialog>
