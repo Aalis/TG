@@ -6,7 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     WORKERS=2 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    STATIC_FILES_DIR=/app/static
 
 WORKDIR /app
 
@@ -46,11 +47,9 @@ RUN apt-get update && \
 # Create a non-root user to run the application
 RUN useradd -m appuser
 
-# Create and set up directories with proper permissions
+# Create static directory and set permissions (as root)
 RUN mkdir -p /app/static && \
-    chown -R appuser:appuser /app && \
-    chmod -R 755 /app && \
-    chmod -R 777 /app/static  # Ensure full permissions for static directory
+    chmod 777 /app/static
 
 # Copy the application code
 COPY backend /app/
@@ -58,11 +57,11 @@ COPY backend /app/
 # Copy static files from frontend build
 COPY static/ /app/static/
 
-# Set final permissions again after copying files
+# Set final permissions
 RUN chown -R appuser:appuser /app && \
     chmod -R 755 /app && \
-    chmod -R 777 /app/static && \
-    chmod +x /app/startup.py
+    chmod +x /app/startup.py && \
+    chmod -R 777 /app/static
 
 # Expose the port
 EXPOSE 8000
