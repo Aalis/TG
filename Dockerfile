@@ -22,7 +22,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file
-COPY backend/requirements.txt .
+COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -46,14 +46,7 @@ RUN apt-get update && \
 # Create a non-root user to run the application
 RUN useradd -m appuser
 
-# First copy only the files needed for initialization
-COPY backend/init_db.py /app/init_db.py
-COPY backend/create_superuser.py /app/create_superuser.py
-COPY backend/alembic.ini /app/alembic.ini
-COPY backend/alembic /app/alembic/
-COPY backend/startup.py /app/startup.py
-
-# Then copy the rest of the application code
+# Copy the application code
 COPY backend /app/
 
 # Set permissions

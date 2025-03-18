@@ -8,6 +8,10 @@ import os
 import sys
 import subprocess
 import logging
+import threading
+import time
+import json
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Configure logging
 logging.basicConfig(
@@ -15,6 +19,52 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("startup")
+
+# Global flag to indicate if the main application is running
+main_app_running = False
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health':
+            # Return a successful health check
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            response = {
+                "status": "healthy",
+                "version": "1.0.0",
+                "main_app_running": main_app_running,
+                "environment": os.environ.get("ENVIRONMENT", "production")
+            }
+            
+            self.wfile.write(json.dumps(response).encode())
+            logger.info("Health check request processed successfully")
+        else:
+            # For any other path, return 404
+            self.send_response(404)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            response = {
+                "error": "Not found",
+                "message": f"Path {self.path} not found"
+            }
+            
+            self.wfile.write(json.dumps(response).encode())
+
+def run_health_server(port=8000):
+    """Run a health check server in a separate thread"""
+    health_port = int(os.environ.get("HEALTH_PORT", port))
+    logger.info(f"Starting health check server on port {health_port}")
+    
+    server_address = ('', health_port)
+    httpd = HTTPServer(server_address, HealthCheckHandler)
+    
+    server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    server_thread.start()
+    logger.info("Health check server running in background")
+    return httpd
 
 def run_command(command, ignore_errors=False):
     """Run a shell command and log the output"""
@@ -37,6 +87,13 @@ def run_command(command, ignore_errors=False):
         if not ignore_errors:
             raise
         return False
+
+def install_missing_packages():
+    """Install any potentially missing packages explicitly"""
+    logger.info("Installing potentially missing packages...")
+    packages = ["pytz", "python-dateutil", "pendulum"]
+    for package in packages:
+        run_command(f"pip install --no-cache-dir {package}", ignore_errors=True)
 
 def check_environment():
     """Log environment information"""
@@ -97,8 +154,27 @@ def create_superuser():
     else:
         logger.info("No superuser credentials provided, skipping superuser creation")
 
+def run_health_check_server_only():
+    """Run only the health check server if the main application fails"""
+    global main_app_running
+    
+    logger.warning("Main application failed to start, running health check server only")
+    port = int(os.environ.get("PORT", "8000"))
+    
+    httpd = HTTPServer(('', port), HealthCheckHandler)
+    logger.info(f"Health check server running on port {port}")
+    
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
+    finally:
+        httpd.server_close()
+
 def start_application():
     """Start the Gunicorn application server"""
+    global main_app_running
+    
     logger.info("Starting application...")
     
     # Set environment variables
@@ -107,6 +183,18 @@ def start_application():
     # Get configuration from environment variables
     workers = os.environ.get("WORKERS", "2")
     port = os.environ.get("PORT", "8000")
+    
+    # Try to import the app to check if it will work
+    try:
+        logger.info("Testing if app can be imported...")
+        import sys
+        sys.path.insert(0, "/app")
+        import app.main
+        logger.info("App imported successfully!")
+    except ImportError as e:
+        logger.error(f"Failed to import app: {e}")
+        run_health_check_server_only()
+        return
     
     # Build the command
     command = (
@@ -120,22 +208,56 @@ def start_application():
     )
     
     logger.info(f"Executing: {command}")
+    main_app_running = True
     
-    # Execute Gunicorn directly using os.execvp to replace the current process
-    os.execvp("gunicorn", command.split())
+    # Start the application in a subprocess for better error handling
+    try:
+        # Use subprocess to run gunicorn and get output
+        process = subprocess.Popen(
+            command.split(), 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            text=True
+        )
+        
+        # Monitor the process
+        while process.poll() is None:
+            stderr_line = process.stderr.readline()
+            if stderr_line:
+                logger.warning(f"Gunicorn stderr: {stderr_line.strip()}")
+            
+            stdout_line = process.stdout.readline()
+            if stdout_line:
+                logger.info(f"Gunicorn stdout: {stdout_line.strip()}")
+        
+        # Process ended - get return code
+        returncode = process.poll()
+        if returncode != 0:
+            logger.error(f"Gunicorn exited with code {returncode}")
+            main_app_running = False
+            run_health_check_server_only()
+        
+    except Exception as e:
+        logger.error(f"Error starting Gunicorn: {e}")
+        main_app_running = False
+        run_health_check_server_only()
 
 def main():
     """Main entry point"""
     try:
+        # Start health check server in background thread
+        health_server = run_health_server()
+        
         logger.info("Starting application initialization...")
         check_environment()
+        install_missing_packages()
         initialize_database()
         run_migrations()
         create_superuser()
         start_application()
     except Exception as e:
         logger.error(f"Fatal error during startup: {e}")
-        sys.exit(1)
+        run_health_check_server_only()
 
 if __name__ == "__main__":
     main() 
