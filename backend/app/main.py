@@ -37,28 +37,7 @@ static_dir = Path(__file__).parent.parent.parent / "static"
 static_dir.mkdir(exist_ok=True)
 
 # Mount static files directory
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
-@app.get("/assets/{file_path:path}")
-async def serve_assets(file_path: str):
-    # Serve assets from the static/assets directory
-    assets_path = static_dir / "assets" / file_path
-    if assets_path.exists():
-        return FileResponse(str(assets_path))
-    return JSONResponse(status_code=404, content={"message": "Asset not found"})
-
-@app.get("/")
-async def serve_frontend():
-    # Serve the index.html file
-    index_path = static_dir / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
-    return JSONResponse(
-        content={
-            "message": "Welcome to Telegram Group Parser API",
-            "docs": "/docs",
-        }
-    )
+app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 @app.get("/health")
 def health_check():
