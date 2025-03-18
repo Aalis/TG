@@ -45,15 +45,21 @@ def health_check():
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Create a static directory if it doesn't exist
-static_dir = Path(__file__).parent.parent.parent / "static"
-static_dir.mkdir(exist_ok=True)
+# Get static directory from environment variable or use default
+static_dir = Path(os.getenv("STATIC_FILES_DIR", "/home/appuser/static"))
+
+# Create the static directory if it doesn't exist
+try:
+    static_dir.mkdir(parents=True, exist_ok=True)
+except Exception as e:
+    print(f"Warning: Could not create static directory: {e}")
 
 # Ensure index.html exists in static directory
 index_path = static_dir / "index.html"
 if not index_path.exists():
-    # Create a temporary index.html if it doesn't exist
-    index_path.write_text("""<!DOCTYPE html>
+    try:
+        # Create a temporary index.html if it doesn't exist
+        index_path.write_text("""<!DOCTYPE html>
 <html>
     <head>
         <title>Telegram Parser</title>
@@ -90,6 +96,11 @@ if not index_path.exists():
     </body>
 </html>
 """)
+    except Exception as e:
+        print(f"Warning: Could not create index.html: {e}")
 
 # Mount static files directory for all non-API routes
-app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static") 
+try:
+    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+except Exception as e:
+    print(f"Warning: Could not mount static directory: {e}") 
