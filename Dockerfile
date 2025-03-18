@@ -33,20 +33,31 @@ FROM base
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Install runtime dependencies - MAKE SURE BASH IS INCLUDED
+# Install runtime dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libpq5 \
     bash \
+    procps \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application code
+# First copy only the files needed for initialization
+COPY backend/init_db.py /app/init_db.py
+COPY backend/create_superuser.py /app/create_superuser.py
+COPY backend/alembic.ini /app/alembic.ini
+COPY backend/alembic /app/alembic/
+
+# Then copy the rest of the application code
 COPY backend /app/
 
 # Copy the entrypoint script
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
+# Make sure files are accessible
+RUN chmod -R 755 /app
 
 # Expose the port
 EXPOSE 8000
