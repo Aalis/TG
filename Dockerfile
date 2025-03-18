@@ -5,7 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     WORKERS=2 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
@@ -43,6 +44,9 @@ RUN apt-get update && \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Create a non-root user to run the application
+RUN useradd -m appuser
+
 # First copy only the files needed for initialization
 COPY backend/init_db.py /app/init_db.py
 COPY backend/create_superuser.py /app/create_superuser.py
@@ -54,17 +58,20 @@ COPY backend /app/
 
 # Copy the entrypoint script
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
 
-# Make sure files are accessible
-RUN chmod -R 755 /app
+# Set permissions
+RUN chmod +x /app/entrypoint.sh && \
+    chmod -R 755 /app && \
+    chown -R appuser:appuser /app
 
 # Expose the port
 EXPOSE 8000
 
-# Create a non-root user to run the application
-RUN useradd -m appuser && chown -R appuser:appuser /app
+# Switch to non-root user
 USER appuser
 
 # Set the entrypoint with explicit shell
 ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
+
+# Fallback command in case ENTRYPOINT fails
+CMD ["gunicorn", "--chdir", "/app", "app.main:app", "--workers", "2", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]

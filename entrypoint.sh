@@ -34,7 +34,9 @@ fi
 # Run migrations if alembic is available
 if [ -d "/app/alembic" ] && [ -f "/app/alembic.ini" ]; then
     echo "Running database migrations..."
-    cd /app && alembic upgrade head || echo "Warning: alembic migrations failed but continuing"
+    # Use absolute path with PYTHONPATH instead of cd
+    export PYTHONPATH=/app
+    alembic -c /app/alembic.ini upgrade head || echo "Warning: alembic migrations failed but continuing"
 else
     echo "Alembic files not found, skipping migrations"
     echo "Contents of /app directory:"
@@ -53,10 +55,6 @@ else
     echo "No superuser credentials provided, skipping superuser creation"
 fi
 
-# Start the application
-echo "Starting application with Gunicorn and ${WORKERS:-2} workers..."
-cd /app || { echo "Error: Failed to change directory to /app"; exit 1; }
-
 # Check if the Python module structure is correct
 if [ -d "/app/app" ]; then
     echo "Found /app/app directory, proceeding..."
@@ -67,9 +65,11 @@ else
     ls -la /app/
 fi
 
-# Start Gunicorn with error handling
+# Start Gunicorn without using cd
+echo "Starting application with Gunicorn and ${WORKERS:-2} workers..."
+export PYTHONPATH=/app
 echo "Executing: gunicorn app.main:app --workers ${WORKERS:-2} --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000}"
-exec gunicorn app.main:app \
+exec gunicorn --chdir /app app.main:app \
     --workers ${WORKERS:-2} \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:${PORT:-8000} \
