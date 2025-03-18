@@ -12,6 +12,7 @@ import threading
 import time
 import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import socket
 
 # Configure logging
 logging.basicConfig(
@@ -138,7 +139,15 @@ def run_migrations():
         logger.info("Found alembic files, running migrations...")
         # Set PYTHONPATH environment variable
         os.environ["PYTHONPATH"] = "/app"
-        run_command("alembic -c /app/alembic.ini upgrade head", ignore_errors=True)
+        
+        # Run migrations with ignore_errors=True to continue even if there are errors
+        success = run_command("alembic -c /app/alembic.ini upgrade head", ignore_errors=True)
+        
+        if not success:
+            logger.warning("Migration had errors but we're continuing anyway")
+            # Log additional information that might help diagnose the issue
+            logger.info("Checking database schema...")
+            run_command("python -c \"import os, sqlalchemy as sa; engine = sa.create_engine(os.environ.get('DATABASE_URL', '')); conn = engine.connect(); print([table for table in sa.inspect(engine).get_table_names()])\"", ignore_errors=True)
     else:
         logger.warning("Alembic files not found, skipping migrations")
 
@@ -161,15 +170,29 @@ def run_health_check_server_only():
     logger.warning("Main application failed to start, running health check server only")
     port = int(os.environ.get("PORT", "8000"))
     
-    httpd = HTTPServer(('', port), HealthCheckHandler)
-    logger.info(f"Health check server running on port {port}")
-    
     try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        logger.info("Server stopped by user")
-    finally:
-        httpd.server_close()
+        httpd = HTTPServer(('', port), HealthCheckHandler)
+        logger.info(f"Health check server running on port {port}")
+        
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            logger.info("Server stopped by user")
+        finally:
+            httpd.server_close()
+    except OSError as e:
+        if "Address already in use" in str(e):
+            # Try a different port if the main one is in use
+            fallback_port = port + 1
+            logger.warning(f"Port {port} already in use, trying fallback port {fallback_port}")
+            try:
+                httpd = HTTPServer(('', fallback_port), HealthCheckHandler)
+                logger.info(f"Health check server running on fallback port {fallback_port}")
+                httpd.serve_forever()
+            except Exception as e2:
+                logger.error(f"Failed to start health check server on fallback port: {e2}")
+        else:
+            logger.error(f"Error starting health check server: {e}")
 
 def start_application():
     """Start the Gunicorn application server"""
@@ -195,6 +218,14 @@ def start_application():
         logger.error(f"Failed to import app: {e}")
         run_health_check_server_only()
         return
+    
+    # Check if the port is already in use
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex(('127.0.0.1', int(port)))
+    if result == 0:
+        logger.warning(f"Port {port} is already in use. Health check server may already be running.")
+        logger.warning("Will attempt to start main application anyway, but it may fail.")
+    sock.close()
     
     # Build the command
     command = (
@@ -245,8 +276,25 @@ def start_application():
 def main():
     """Main entry point"""
     try:
-        # Start health check server in background thread
-        health_server = run_health_server()
+        # First check if we need to run just a health check server on a specific port
+        health_check_only = os.environ.get("HEALTH_CHECK_ONLY", "").lower() in ["true", "1", "yes"]
+        if health_check_only:
+            logger.info("Running in health check only mode")
+            run_health_check_server_only()
+            return
+            
+        # Full app mode - start health check server in background if not disabled
+        disable_health_check = os.environ.get("DISABLE_HEALTH_CHECK", "").lower() in ["true", "1", "yes"]
+        health_server = None
+        
+        if not disable_health_check:
+            # Use a different port for the health check server to avoid conflicts
+            health_port = int(os.environ.get("HEALTH_PORT", int(os.environ.get("PORT", "8000")) + 1))
+            os.environ["HEALTH_PORT"] = str(health_port)
+            logger.info(f"Starting background health check server on port {health_port}")
+            health_server = run_health_server(health_port)
+        else:
+            logger.info("Health check server disabled")
         
         logger.info("Starting application initialization...")
         check_environment()
