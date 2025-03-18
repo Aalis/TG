@@ -18,20 +18,18 @@ PYTHONUNBUFFERED = "1"
 name = "Telegram Parser API"
 description = "FastAPI application for parsing Telegram groups"
 
-[var]
-DISABLE_DB = "false"
-# Explicitly set the connection details
-DATABASE_URL = "postgresql://postgres:${POSTGRES_PASSWORD}@postgresql.railway.app:5432/railway"
-
 # This section defines your main application service
 [service]
-internal_port = 8080
+internal_port = 8000
 auto_deploy = true
 
-# Reference the PostgreSQL information for the main app
+# Reference the PostgreSQL plugin
 [[plugins]]
-name = "PostgreSQL"
-type = "postgresql"
+name = "postgresql"
+
+# Reference the Redis plugin
+[[plugins]]
+name = "redis"
 
 # Reference the PostgreSQL variables in your main service
 [plugins.var]

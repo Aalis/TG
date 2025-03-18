@@ -1,4 +1,4 @@
-FROM python:3.9-slim as base
+FROM python:3.11-slim as base
 
 # Set up environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 FROM base
 
 # Copy installed packages from builder stage
-COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Install runtime dependencies only
@@ -44,7 +44,7 @@ RUN apt-get update && \
 COPY backend /app/
 
 # Copy the entrypoint script
-COPY backend/entrypoint.sh /app/entrypoint.sh
+COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Expose the port
@@ -55,4 +55,4 @@ RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Set the entrypoint
-ENTRYPOINT ["/app/entrypoint.sh"] # Added Railway deployment configuration
+ENTRYPOINT ["/app/entrypoint.sh"]

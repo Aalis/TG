@@ -1,156 +1,132 @@
-# Railway Deployment Guide for FastAPI Project
+# Railway Deployment Guide
 
-This guide walks you through the process of deploying the FastAPI Telegram Parser application to Railway.
+This guide provides step-by-step instructions for deploying the Telegram Parser API to Railway.
 
-## Preparation
+## Prerequisites
 
-1. Make sure your code is committed to a Git repository
-2. Sign up for a Railway account at https://railway.app
-3. Install the Railway CLI if you want to deploy from your local machine:
-   ```
-   npm install -g @railway/cli
-   ```
+1. A Railway account (https://railway.app/)
+2. The Railway CLI installed locally (`npm i -g @railway/cli`)
+3. Git repository with your code
 
-## Required Files
+## Setup Steps
 
-The following files are required for deployment:
+### 1. Login to Railway
 
-- `Dockerfile` - Defines the container image
-- `railway.toml` - Railway-specific configuration
-- `backend/requirements.txt` - Python dependencies
-- `backend/entrypoint.sh` - Container startup script
-- `backend/.env` - Environment variables (not committed to Git)
-- `Procfile` - Alternative way to start your application
-
-## Environment Variables
-
-Ensure the following environment variables are set in Railway:
-
-```
-# Database configuration
-DATABASE_URL=postgresql://postgres:password@postgres-service:5432/railway
-
-# JWT Authentication
-SECRET_KEY=your_secret_key_here
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=10080
-
-# Telegram API credentials
-API_ID=your_api_id
-API_HASH=your_api_hash
-TELEGRAM_BOT_TOKENS=bot_token1,bot_token2,bot_token3
-
-# Email settings
-MAIL_USERNAME=your_gmail_username
-MAIL_PASSWORD=your_gmail_app_password
-MAIL_FROM=your_gmail_address
-SERVER_HOST=your_railway_url
-FRONTEND_URL=your_frontend_url
-
-# Redis settings
-REDIS_HOST=redis-service
-REDIS_PORT=6379
-REDIS_DB=0
-REDIS_PASSWORD=
-REDIS_CLIENT_EXPIRY=300
-
-# Application settings
-WORKERS=2
-PYTHONUNBUFFERED=1
-PORT=8000
+```bash
+railway login
 ```
 
-## Deployment Methods
+### 2. Initialize Railway Project
 
-### Method 1: Using the Railway Dashboard
+```bash
+railway init
+```
 
-1. Log in to your Railway dashboard
-2. Create a new project
-3. Select "Deploy from GitHub repo"
-4. Select your GitHub repository
-5. Railway will automatically detect the Dockerfile and deploy your application
-6. Add the required environment variables in the project settings
-7. Add PostgreSQL and Redis services from the "New Service" option
-8. Connect the services to your application
+This will create a new project in Railway. Select the appropriate options when prompted.
 
-### Method 2: Using the Railway CLI
+### 3. Configure Environment Variables
 
-1. Log in to the Railway CLI:
-   ```
-   railway login
-   ```
+You need to set up the following environment variables in the Railway dashboard:
 
-2. Initialize a new project:
-   ```
-   railway init
-   ```
+#### Database Configuration
+- `DATABASE_URL`: Railway will provide this automatically when you add a PostgreSQL service
+- `POSTGRES_PASSWORD`: Railway will set this automatically
+- `POSTGRES_USER`: Usually 'postgres'
+- `POSTGRES_DB`: Usually 'railway'
 
-3. Link your project to Railway:
-   ```
-   railway link
-   ```
+#### JWT Authentication
+- `SECRET_KEY`: Your secret key for JWT token generation
+- `ALGORITHM`: HS256
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: 10080 (7 days)
 
-4. Set environment variables:
-   ```
-   railway variables set SECRET_KEY=your_secret_key_here
-   # Set other environment variables similarly
-   ```
+#### Telegram API credentials
+- `API_ID`: Your Telegram API ID
+- `API_HASH`: Your Telegram API Hash
+- `TELEGRAM_BOT_TOKENS`: Your comma-separated list of Telegram bot tokens
 
-5. Deploy the application:
-   ```
-   railway up
-   ```
+#### Email Configuration
+- `MAIL_USERNAME`: Your email username
+- `MAIL_PASSWORD`: Your email password
+- `MAIL_FROM`: Your sender email
+- `SERVER_HOST`: Your Railway app URL (e.g., https://your-app-name.up.railway.app)
+- `FRONTEND_URL`: URL to your frontend application
 
-### Method 3: Using the Setup Script
+#### Redis Configuration
+- `REDIS_HOST`: Railway will provide this automatically when you add a Redis service
+- `REDIS_PORT`: Usually 6379
+- `REDIS_DB`: 0
+- `REDIS_PASSWORD`: Railway will set this automatically
+- `REDIS_CLIENT_EXPIRY`: 300
 
-We've provided a setup script to streamline the deployment process:
+#### Application Settings
+- `BACKEND_CORS_ORIGINS`: A list of allowed origins for CORS, e.g., `["https://your-frontend-app.up.railway.app"]`
+- `PORT`: 8000
+- `WORKERS`: 2
 
-1. Make sure the script is executable:
-   ```
-   chmod +x setup_railway.sh
-   ```
+### 4. Add PostgreSQL and Redis to Your Project
 
-2. Run the script:
-   ```
-   ./setup_railway.sh
-   ```
+In the Railway dashboard:
+1. Go to your project
+2. Click "New"
+3. Select "Database" → "PostgreSQL"
+4. Click "New" again
+5. Select "Database" → "Redis"
 
-3. Follow the prompts to set up your environment variables and deploy
+Railway will automatically inject the database connection details into your application.
 
-## Verifying Deployment
+### 5. Deploy Your Application
 
-1. Check the deployment logs in the Railway dashboard
-2. Access your application at the provided Railway URL
-3. Verify health check endpoint works: `<your-railway-url>/health`
-4. Run the health check script locally to test connections:
-   ```
-   python backend/health_check.py
-   ```
+Push your code to GitHub and connect your repository to Railway, or deploy directly using the CLI:
+
+```bash
+railway up
+```
+
+### 6. Monitor Your Deployment
+
+You can monitor your deployment in the Railway dashboard. Check the logs to ensure everything is working correctly.
+
+### 7. Verify Health Check Endpoint
+
+Once deployed, verify the health check endpoint is working:
+
+```
+https://your-app-name.up.railway.app/health
+```
+
+It should return a JSON response indicating the application is healthy.
 
 ## Troubleshooting
 
-1. If your application fails to start, check the logs in the Railway dashboard
-2. Verify that all environment variables are correctly set
-3. Ensure PostgreSQL and Redis services are properly connected
-4. Check if the database migrations are running correctly
-5. Verify the entrypoint script has execute permissions
+### Database Connection Issues
 
-## Database Migrations
+If you encounter database connection issues:
+1. Verify the `DATABASE_URL` is correctly set
+2. Check if the database has been properly created
+3. Ensure your application is using the correct connection details
 
-If you need to run migrations manually:
+### Application Crashes
 
-1. Connect to your container shell through the Railway dashboard
-2. Navigate to the application directory: `cd /app`
-3. Run Alembic migrations: `alembic upgrade head`
+If your application crashes:
+1. Check the logs in the Railway dashboard
+2. Verify all required environment variables are set
+3. Ensure your application's health check endpoint is properly implemented
 
-## Scaling
+### Cold Starts
 
-To scale your application:
+Railway may put your application to sleep if it's not receiving traffic. The first request after a period of inactivity may take longer to respond. This is normal behavior.
 
-1. Adjust the `WORKERS` environment variable to control the number of Gunicorn workers
-2. Use Railway's auto-scaling features in the Pro plan
+## Railway Scaling
 
-## Monitoring
+Railway automatically scales your application based on usage. You don't need to manually configure scaling settings.
 
-1. Set up monitoring using Railway's built-in metrics dashboard
-2. Configure alerts for CPU, memory, and disk usage 
+## Cost Optimization
+
+To optimize costs on Railway:
+1. Use the smallest possible instance type for your needs
+2. Use smaller database instances when possible
+3. Monitor usage and adjust resources accordingly
+
+## Continuous Deployment
+
+Railway supports continuous deployment from GitHub. When you push changes to your repository, Railway will automatically deploy them to your application. 
