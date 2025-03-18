@@ -49,7 +49,24 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 static_dir = Path(__file__).parent.parent.parent / "static"
 static_dir.mkdir(exist_ok=True)
 
-# Mount static files directory for non-API routes
+# Ensure index.html exists in static directory
+index_path = static_dir / "index.html"
+if not index_path.exists():
+    # Create a temporary index.html if it doesn't exist
+    index_path.write_text("""
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <title>Telegram Parser</title>
+        </head>
+        <body>
+            <h1>Application is running</h1>
+            <p>The backend API is operational. Please ensure the frontend is built and copied to the static directory.</p>
+        </body>
+    </html>
+    """)
+
+# Mount static files directory for all non-API routes
 app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 # Serve frontend routes by redirecting to index.html for client-side routing
