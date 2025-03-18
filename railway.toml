@@ -37,4 +37,4 @@ type = "postgresql"
 [plugins.var]
 # These are used by the postgres plugin
 POSTGRES_USER = "postgres"
-POSTGRES_DB = "railway" 
+POSTGRES_DB = "railway" # Railway Configuration

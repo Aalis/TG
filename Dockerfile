@@ -55,4 +55,4 @@ RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Set the entrypoint
-ENTRYPOINT ["/app/entrypoint.sh"] 
+ENTRYPOINT ["/app/entrypoint.sh"] # Added Railway deployment configuration

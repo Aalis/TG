@@ -56,4 +56,4 @@ services:
 
 volumes:
   postgres_data:
-  redis_data: 
+  redis_data: # Added Railway deployment configuration
