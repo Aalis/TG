@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -26,7 +27,16 @@ def upgrade() -> None:
     op.create_foreign_key(None, 'group_members', 'parsed_groups', ['group_id'], ['id'], ondelete='CASCADE')
     op.drop_constraint('parsed_groups_user_id_fkey', 'parsed_groups', type_='foreignkey')
     op.create_foreign_key(None, 'parsed_groups', 'users', ['user_id'], ['id'], ondelete='CASCADE')
-    op.drop_column('parsed_groups', 'parsing_progress')
+    
+    # Check if parsing_progress column exists before dropping it
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    columns = [col['name'] for col in inspector.get_columns('parsed_groups')]
+    if 'parsing_progress' in columns:
+        op.drop_column('parsed_groups', 'parsing_progress')
+    else:
+        print("Column 'parsing_progress' does not exist, skipping drop operation")
+        
     op.drop_constraint('post_comments_replied_to_id_fkey', 'post_comments', type_='foreignkey')
     op.drop_constraint('post_comments_post_id_fkey', 'post_comments', type_='foreignkey')
     op.create_foreign_key(None, 'post_comments', 'channel_posts', ['post_id'], ['id'], ondelete='CASCADE')
