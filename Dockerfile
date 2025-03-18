@@ -38,7 +38,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libpq5 \
-    bash \
     procps \
     curl \
     && apt-get clean \
@@ -52,15 +51,13 @@ COPY backend/init_db.py /app/init_db.py
 COPY backend/create_superuser.py /app/create_superuser.py
 COPY backend/alembic.ini /app/alembic.ini
 COPY backend/alembic /app/alembic/
+COPY backend/startup.py /app/startup.py
 
 # Then copy the rest of the application code
 COPY backend /app/
 
-# Copy the entrypoint script
-COPY entrypoint.sh /app/entrypoint.sh
-
 # Set permissions
-RUN chmod +x /app/entrypoint.sh && \
+RUN chmod +x /app/startup.py && \
     chmod -R 755 /app && \
     chown -R appuser:appuser /app
 
@@ -70,8 +67,5 @@ EXPOSE 8000
 # Switch to non-root user
 USER appuser
 
-# Set the entrypoint with explicit shell
-ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
-
-# Fallback command in case ENTRYPOINT fails
-CMD ["gunicorn", "--chdir", "/app", "app.main:app", "--workers", "2", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
+# Use the Python startup script
+CMD ["python", "/app/startup.py"]
