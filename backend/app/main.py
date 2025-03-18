@@ -29,16 +29,7 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
-# Include API router
-app.include_router(api_router, prefix=settings.API_V1_STR)
-
-# Create a static directory if it doesn't exist
-static_dir = Path(__file__).parent.parent.parent / "static"
-static_dir.mkdir(exist_ok=True)
-
-# Mount static files directory
-app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
-
+# Health check endpoint must be defined before static file mounting
 @app.get("/health")
 def health_check():
     """
@@ -50,6 +41,16 @@ def health_check():
             "version": "1.0.0",
         }
     )
+
+# Include API router
+app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Create a static directory if it doesn't exist
+static_dir = Path(__file__).parent.parent.parent / "static"
+static_dir.mkdir(exist_ok=True)
+
+# Mount static files directory for non-API routes
+app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 # Serve frontend routes by redirecting to index.html for client-side routing
 @app.get("/{full_path:path}")
