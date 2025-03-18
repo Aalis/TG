@@ -12,7 +12,7 @@ python /app/init_db.py
 # Run migrations if alembic is available
 if [ -d "/app/alembic" ] && [ -f "/app/alembic.ini" ]; then
     echo "Running database migrations..."
-    alembic upgrade head
+    cd /app && alembic upgrade head
 fi
 
 # Create superuser if environment variables are set
@@ -23,7 +23,7 @@ fi
 
 # Start the application
 echo "Starting application with Gunicorn and ${WORKERS:-2} workers..."
-exec gunicorn app.main:app \
+cd /app && exec gunicorn app.main:app \
     --workers ${WORKERS:-2} \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:${PORT:-8000} \

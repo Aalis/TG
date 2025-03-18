@@ -33,10 +33,11 @@ FROM base
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Install runtime dependencies only
+# Install runtime dependencies - MAKE SURE BASH IS INCLUDED
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libpq5 \
+    bash \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -54,5 +55,5 @@ EXPOSE 8000
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Set the entrypoint
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Set the entrypoint with explicit shell
+ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
