@@ -43,13 +43,39 @@ def upgrade() -> None:
     op.create_foreign_key(None, 'telegram_sessions', 'users', ['user_id'], ['id'], ondelete='CASCADE')
     op.drop_constraint('telegram_tokens_user_id_fkey', 'telegram_tokens', type_='foreignkey')
     op.create_foreign_key(None, 'telegram_tokens', 'users', ['user_id'], ['id'], ondelete='CASCADE')
-    op.add_column('users', sa.Column('email_verified', sa.Boolean(), nullable=True))
-    op.add_column('users', sa.Column('verification_token', sa.String(), nullable=True))
-    op.add_column('users', sa.Column('verification_token_expires', sa.DateTime(timezone=True), nullable=True))
-    op.alter_column('users', 'can_parse',
+    
+    # Add columns with error handling for duplicate columns
+    try:
+        op.add_column('users', sa.Column('email_verified', sa.Boolean(), nullable=True))
+    except Exception as e:
+        if 'DuplicateColumn' in str(e) or 'already exists' in str(e):
+            print("Column 'email_verified' already exists, skipping")
+        else:
+            raise
+    
+    try:
+        op.add_column('users', sa.Column('verification_token', sa.String(), nullable=True))
+    except Exception as e:
+        if 'DuplicateColumn' in str(e) or 'already exists' in str(e):
+            print("Column 'verification_token' already exists, skipping")
+        else:
+            raise
+    
+    try:
+        op.add_column('users', sa.Column('verification_token_expires', sa.DateTime(timezone=True), nullable=True))
+    except Exception as e:
+        if 'DuplicateColumn' in str(e) or 'already exists' in str(e):
+            print("Column 'verification_token_expires' already exists, skipping")
+        else:
+            raise
+    
+    try:
+        op.alter_column('users', 'can_parse',
                existing_type=sa.BOOLEAN(),
                nullable=True,
                existing_server_default=sa.text('false'))
+    except Exception as e:
+        print(f"Error altering column: {e}")
     # ### end Alembic commands ###
 
 
