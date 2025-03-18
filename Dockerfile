@@ -28,6 +28,18 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Frontend build stage
+FROM node:18 as frontend-builder
+
+WORKDIR /frontend
+
+# Copy frontend source
+COPY frontend/ .
+
+# Install dependencies and build
+RUN npm install --legacy-peer-deps && \
+    npm run build
+
 # Final stage
 FROM base
 
@@ -54,8 +66,8 @@ RUN mkdir -p /app/static && \
 # Copy the application code
 COPY backend /app/
 
-# Copy static files from frontend build
-COPY static/ /app/static/
+# Copy frontend build from frontend-builder stage
+COPY --from=frontend-builder /frontend/build/ /app/static/
 
 # Set final permissions
 RUN chown -R appuser:appuser /app && \

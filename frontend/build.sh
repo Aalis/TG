@@ -1,15 +1,16 @@
 #!/bin/bash
+set -e
 
-# Install dependencies
+echo "Installing frontend dependencies..."
 npm install --legacy-peer-deps
 
-# Build the application
+echo "Building frontend application..."
 npm run build
 
-# Create static directory in backend if it doesn't exist
-mkdir -p ../static
+echo "Creating static directory..."
+mkdir -p ../backend/static
 
-# Copy build files to static directory
-cp -r build/* ../static/
+echo "Copying build files to static directory..."
+cp -r build/* ../backend/static/
 
-echo "Frontend build completed and files copied to ../static/" 
+echo "Frontend build and copy completed successfully!" 
