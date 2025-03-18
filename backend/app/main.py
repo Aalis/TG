@@ -53,31 +53,43 @@ static_dir.mkdir(exist_ok=True)
 index_path = static_dir / "index.html"
 if not index_path.exists():
     # Create a temporary index.html if it doesn't exist
-    index_path.write_text("""
-    <!DOCTYPE html>
-    <html>
-        <head>
-            <title>Telegram Parser</title>
-        </head>
-        <body>
+    index_path.write_text("""<!DOCTYPE html>
+<html>
+    <head>
+        <title>Telegram Parser</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 2rem;
+                line-height: 1.6;
+                color: #333;
+            }
+            h1 {
+                color: #2563eb;
+                margin-bottom: 1rem;
+            }
+            p {
+                margin-bottom: 1rem;
+            }
+            .container {
+                background-color: #f8fafc;
+                border-radius: 8px;
+                padding: 2rem;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
             <h1>Application is running</h1>
             <p>The backend API is operational. Please ensure the frontend is built and copied to the static directory.</p>
-        </body>
-    </html>
-    """)
+            <p>API endpoints are available at <code>/api/v1/*</code></p>
+        </div>
+    </body>
+</html>
+""")
 
 # Mount static files directory for all non-API routes
-app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
-
-# Serve frontend routes by redirecting to index.html for client-side routing
-@app.get("/{full_path:path}")
-async def serve_frontend_routes(full_path: str):
-    # API routes should be handled by the API router
-    if full_path.startswith("api/") or full_path == "docs" or full_path == "redoc" or full_path == "openapi.json":
-        return {"detail": "Not Found"}
-        
-    # Serve the index.html file for all other routes to support client-side routing
-    index_path = static_dir / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
-    return JSONResponse(status_code=404, content={"message": "Not found"}) 
+app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static") 
