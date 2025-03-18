@@ -11,8 +11,10 @@ import logging
 import threading
 import time
 import json
+import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import socket
+import psycopg2
 
 # Configure logging
 logging.basicConfig(
@@ -146,93 +148,106 @@ def run_migrations():
         if not db_url:
             logger.warning("DATABASE_URL not set, skipping migrations")
             return
-            
-        # Try to fix known issues before running migrations
+        
+        # Try to directly modify the database schema before running migrations
         try:
-            import sqlalchemy as sa
-            from sqlalchemy import inspect, text
-            
-            # Initialize SQLAlchemy engine
-            engine = sa.create_engine(db_url)
-            
-            # Check if tables and columns exist
-            with engine.connect() as conn:
-                # Get table and column information
-                inspector = inspect(engine)
+            # Extract database connection parameters from DATABASE_URL
+            # Expected format: postgresql://username:password@host:port/dbname
+            match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', db_url)
+            if match:
+                username, password, host, port, dbname = match.groups()
+                logger.info(f"Extracted database connection parameters: host={host}, port={port}, dbname={dbname}, user={username}")
                 
-                # Check if users table exists
-                if 'users' in inspector.get_table_names():
-                    # Get existing columns
-                    user_columns = [col['name'] for col in inspector.get_columns('users')]
+                # Create dictionary of tables and their columns using psycopg2 directly
+                schema_info = {}
+                try:
+                    # Connect directly with psycopg2
+                    conn = psycopg2.connect(
+                        host=host,
+                        port=port,
+                        dbname=dbname,
+                        user=username,
+                        password=password
+                    )
+                    conn.autocommit = True  # Important: Each query runs in its own transaction
+                    cursor = conn.cursor()
                     
-                    # Execute individual DDL operations in separate transactions
-                    # Add verification columns if they don't exist
-                    if 'email_verified' not in user_columns:
-                        try:
-                            conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN"))
-                            conn.commit()
-                            logger.info("Added email_verified column")
-                        except Exception as e:
-                            logger.warning(f"Error adding email_verified column: {e}")
-                            conn.rollback()
+                    # Get list of tables
+                    cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public';")
+                    tables = [row[0] for row in cursor.fetchall()]
+                    logger.info(f"Tables found: {tables}")
                     
-                    if 'verification_token' not in user_columns:
-                        try:
-                            conn.execute(text("ALTER TABLE users ADD COLUMN verification_token VARCHAR"))
-                            conn.commit()
-                            logger.info("Added verification_token column")
-                        except Exception as e:
-                            logger.warning(f"Error adding verification_token column: {e}")
-                            conn.rollback()
+                    # Get columns for each table
+                    for table in tables:
+                        cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}';")
+                        columns = [row[0] for row in cursor.fetchall()]
+                        schema_info[table] = columns
                     
-                    if 'verification_token_expires' not in user_columns:
-                        try:
-                            conn.execute(text("ALTER TABLE users ADD COLUMN verification_token_expires TIMESTAMP WITH TIME ZONE"))
-                            conn.commit()
-                            logger.info("Added verification_token_expires column")
-                        except Exception as e:
-                            logger.warning(f"Error adding verification_token_expires column: {e}")
-                            conn.rollback()
+                    logger.info(f"Schema info: {schema_info}")
                     
-                    if 'password_reset_token' not in user_columns:
-                        try:
-                            conn.execute(text("ALTER TABLE users ADD COLUMN password_reset_token VARCHAR"))
-                            conn.commit()
-                            logger.info("Added password_reset_token column")
-                        except Exception as e:
-                            logger.warning(f"Error adding password_reset_token column: {e}")
-                            conn.rollback()
+                    # Now we can execute our DDL operations with separate connections
                     
-                    if 'password_reset_expires' not in user_columns:
-                        try:
-                            conn.execute(text("ALTER TABLE users ADD COLUMN password_reset_expires TIMESTAMP WITH TIME ZONE"))
-                            conn.commit()
-                            logger.info("Added password_reset_expires column")
-                        except Exception as e:
-                            logger.warning(f"Error adding password_reset_expires column: {e}")
-                            conn.rollback()
-                
-                # Check if parsed_groups table exists and has parsing_progress column
-                if 'parsed_groups' in inspector.get_table_names():
-                    parsed_group_columns = [col['name'] for col in inspector.get_columns('parsed_groups')]
+                    # Add missing columns to users table
+                    if 'users' in tables:
+                        user_columns = schema_info['users']
+                        logger.info(f"User columns found: {user_columns}")
+                        
+                        # Add each column in a separate connection
+                        for col_name, col_type in [
+                            ('email_verified', 'BOOLEAN'),
+                            ('verification_token', 'VARCHAR'),
+                            ('verification_token_expires', 'TIMESTAMP WITH TIME ZONE'),
+                            ('password_reset_token', 'VARCHAR'),
+                            ('password_reset_expires', 'TIMESTAMP WITH TIME ZONE')
+                        ]:
+                            if col_name not in user_columns:
+                                try:
+                                    # Create a new connection for each operation
+                                    with psycopg2.connect(
+                                        host=host, port=port, dbname=dbname, 
+                                        user=username, password=password
+                                    ) as new_conn:
+                                        new_conn.autocommit = True
+                                        with new_conn.cursor() as new_cursor:
+                                            new_cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type};")
+                                            logger.info(f"Added {col_name} column to users table")
+                                except Exception as e:
+                                    logger.warning(f"Error adding {col_name} column: {e}")
                     
                     # Drop parsing_progress column if it exists
-                    if 'parsing_progress' in parsed_group_columns:
-                        try:
-                            conn.execute(text("ALTER TABLE parsed_groups DROP COLUMN parsing_progress"))
-                            conn.commit()
-                            logger.info("Dropped parsing_progress column")
-                        except Exception as e:
-                            logger.warning(f"Error dropping parsing_progress column: {e}")
-                            conn.rollback()
-            
-            # Close the engine
-            engine.dispose()
-            
+                    if 'parsed_groups' in tables:
+                        parsed_groups_columns = schema_info['parsed_groups']
+                        logger.info(f"Parsed groups columns found: {parsed_groups_columns}")
+                        
+                        if 'parsing_progress' in parsed_groups_columns:
+                            try:
+                                # Create a new connection for this operation
+                                with psycopg2.connect(
+                                    host=host, port=port, dbname=dbname, 
+                                    user=username, password=password
+                                ) as new_conn:
+                                    new_conn.autocommit = True
+                                    with new_conn.cursor() as new_cursor:
+                                        new_cursor.execute("ALTER TABLE parsed_groups DROP COLUMN parsing_progress;")
+                                        logger.info("Dropped parsing_progress column")
+                            except Exception as e:
+                                logger.warning(f"Error dropping parsing_progress column: {e}")
+                    
+                    # Close the cursor and connection
+                    cursor.close()
+                    conn.close()
+                    
+                except Exception as e:
+                    logger.error(f"Error during direct database schema modification: {e}")
+            else:
+                logger.error(f"Could not parse DATABASE_URL: {db_url}")
+                
         except Exception as e:
             logger.error(f"Error during pre-migration schema check: {e}")
         
-        # Run migrations with ignore_errors=True to continue even if there are errors
+        # Run Alembic migrations with ignore_errors=True to continue even if there are errors
+        # Note: This is now a backup in case direct schema modifications fail
+        logger.info("Running Alembic migrations (will skip operations already done)...")
         success = run_command("alembic -c /app/alembic.ini upgrade head", ignore_errors=True)
         
         if not success:
