@@ -140,6 +140,98 @@ def run_migrations():
         # Set PYTHONPATH environment variable
         os.environ["PYTHONPATH"] = "/app"
         
+        # Check database schema before running migrations
+        logger.info("Pre-checking database schema...")
+        db_url = os.environ.get("DATABASE_URL", "")
+        if not db_url:
+            logger.warning("DATABASE_URL not set, skipping migrations")
+            return
+            
+        # Try to fix known issues before running migrations
+        try:
+            import sqlalchemy as sa
+            from sqlalchemy import inspect, text
+            
+            # Initialize SQLAlchemy engine
+            engine = sa.create_engine(db_url)
+            
+            # Check if tables and columns exist
+            with engine.connect() as conn:
+                # Get table and column information
+                inspector = inspect(engine)
+                
+                # Check if users table exists
+                if 'users' in inspector.get_table_names():
+                    # Get existing columns
+                    user_columns = [col['name'] for col in inspector.get_columns('users')]
+                    
+                    # Execute individual DDL operations in separate transactions
+                    # Add verification columns if they don't exist
+                    if 'email_verified' not in user_columns:
+                        try:
+                            conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN"))
+                            conn.commit()
+                            logger.info("Added email_verified column")
+                        except Exception as e:
+                            logger.warning(f"Error adding email_verified column: {e}")
+                            conn.rollback()
+                    
+                    if 'verification_token' not in user_columns:
+                        try:
+                            conn.execute(text("ALTER TABLE users ADD COLUMN verification_token VARCHAR"))
+                            conn.commit()
+                            logger.info("Added verification_token column")
+                        except Exception as e:
+                            logger.warning(f"Error adding verification_token column: {e}")
+                            conn.rollback()
+                    
+                    if 'verification_token_expires' not in user_columns:
+                        try:
+                            conn.execute(text("ALTER TABLE users ADD COLUMN verification_token_expires TIMESTAMP WITH TIME ZONE"))
+                            conn.commit()
+                            logger.info("Added verification_token_expires column")
+                        except Exception as e:
+                            logger.warning(f"Error adding verification_token_expires column: {e}")
+                            conn.rollback()
+                    
+                    if 'password_reset_token' not in user_columns:
+                        try:
+                            conn.execute(text("ALTER TABLE users ADD COLUMN password_reset_token VARCHAR"))
+                            conn.commit()
+                            logger.info("Added password_reset_token column")
+                        except Exception as e:
+                            logger.warning(f"Error adding password_reset_token column: {e}")
+                            conn.rollback()
+                    
+                    if 'password_reset_expires' not in user_columns:
+                        try:
+                            conn.execute(text("ALTER TABLE users ADD COLUMN password_reset_expires TIMESTAMP WITH TIME ZONE"))
+                            conn.commit()
+                            logger.info("Added password_reset_expires column")
+                        except Exception as e:
+                            logger.warning(f"Error adding password_reset_expires column: {e}")
+                            conn.rollback()
+                
+                # Check if parsed_groups table exists and has parsing_progress column
+                if 'parsed_groups' in inspector.get_table_names():
+                    parsed_group_columns = [col['name'] for col in inspector.get_columns('parsed_groups')]
+                    
+                    # Drop parsing_progress column if it exists
+                    if 'parsing_progress' in parsed_group_columns:
+                        try:
+                            conn.execute(text("ALTER TABLE parsed_groups DROP COLUMN parsing_progress"))
+                            conn.commit()
+                            logger.info("Dropped parsing_progress column")
+                        except Exception as e:
+                            logger.warning(f"Error dropping parsing_progress column: {e}")
+                            conn.rollback()
+            
+            # Close the engine
+            engine.dispose()
+            
+        except Exception as e:
+            logger.error(f"Error during pre-migration schema check: {e}")
+        
         # Run migrations with ignore_errors=True to continue even if there are errors
         success = run_command("alembic -c /app/alembic.ini upgrade head", ignore_errors=True)
         
