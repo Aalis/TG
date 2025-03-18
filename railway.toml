@@ -12,6 +12,7 @@ restartPolicyMaxRetries = 5
 PORT = "8000"
 WORKERS = "2"
 PYTHONUNBUFFERED = "1"
+STATIC_DIR = "/static"
 
 # Additional Metadata for Railway Dashboard
 [metadata]
@@ -49,3 +50,8 @@ POSTGRES_DB = "railway" # Railway Configuration
 # Environment variable for the frontend to know where the backend is
 [services.frontend.env]
 REACT_APP_API_URL = "${RAILWAY_SERVICE_BACKEND_URL}"
+
+# Mount points for static files
+[services.backend.mounts]
+source = "/static"
+destination = "/static"
