@@ -1,15 +1,25 @@
 [build]
-builder = "DOCKERFILE"
+builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-numReplicas = 1
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
+
+[deploy.env]
+PORT = "8000"
+WORKERS = "2"
+PYTHONUNBUFFERED = "1"
+
+# Additional Metadata for Railway Dashboard
+[metadata]
+name = "Telegram Parser API"
+description = "FastAPI application for parsing Telegram groups"
 
 [var]
 DISABLE_DB = "false"
-PORT = "8080"
 # Explicitly set the connection details
 DATABASE_URL = "postgresql://postgres:${POSTGRES_PASSWORD}@postgresql.railway.app:5432/railway"
 

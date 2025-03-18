@@ -1,64 +1,51 @@
 import os
-import sys
-import importlib.util
-
-# Add the parent directory to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from app.core.config import settings
-from app.schemas.user import UserCreate
-from app.crud.user import create as create_user
+import logging
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from app.database.models import Base
+from app.core.config import settings
+from app.database.database import engine
+from sqlalchemy_utils import database_exists, create_database
+import time
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def init_db():
-    from app.database.database import SessionLocal, engine
+    """Initialize the database with retry logic for Railway deployment"""
+    max_retries = 5
+    retry_interval = 5  # seconds
     
-    print("Creating tables...")
-    Base.metadata.create_all(bind=engine)
-    
-    # Check if alembic is installed
-    alembic_installed = importlib.util.find_spec("alembic") is not None
-    
-    if alembic_installed:
+    for attempt in range(max_retries):
         try:
-            from alembic import command
-            from alembic.config import Config
+            logger.info("Checking database connection...")
             
-            # Create Alembic configuration
-            alembic_cfg = Config(os.path.join(os.path.dirname(__file__), 'alembic.ini'))
+            # Try to connect to the database
+            url = os.environ.get("DATABASE_URL", settings.DATABASE_URL)
+            logger.info(f"Using database URL: {url.replace('://', '://[user]:[pass]@')}")
             
-            print("Applying migrations...")
-            command.upgrade(alembic_cfg, "head")
-        except ImportError as e:
-            print(f"Warning: Could not import Alembic modules: {e}")
-            print("Skipping migrations, but tables will still be created.")
-    else:
-        print("Alembic not installed. Skipping migrations, but tables will still be created.")
-    
-    db = SessionLocal()
-    
-    try:
-        print("Creating superuser...")
-        # Check if superuser already exists
-        from app.crud.user import get_by_username
-        superuser = get_by_username(db, username="admin")
-        
-        if not superuser:
-            user_in = UserCreate(
-                email="admin@example.com",
-                username="admin",
-                password="admin123",
-                is_superuser=True,
-            )
-            create_user(db, obj_in=user_in)
-            print("Superuser created successfully!")
-        else:
-            print("Superuser already exists.")
-    finally:
-        db.close()
-    
-    print("Database initialization completed!")
-
+            # Check if database exists, if not, create it
+            if not database_exists(url):
+                logger.info("Database does not exist, creating...")
+                create_database(url)
+                logger.info("Database created.")
+            
+            # Create the tables
+            logger.info("Creating database tables...")
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database tables created successfully.")
+            
+            return True
+        except Exception as e:
+            logger.error(f"Database initialization error: {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in {retry_interval} seconds... (Attempt {attempt + 1}/{max_retries})")
+                time.sleep(retry_interval)
+            else:
+                logger.error("Max retries reached. Database initialization failed.")
+                raise
 
 if __name__ == "__main__":
-    init_db() 
+    logger.info("Initializing database...")
+    init_db()
+    logger.info("Database initialized successfully.") 

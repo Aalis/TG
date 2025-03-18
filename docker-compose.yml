@@ -2,18 +2,15 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:13
+    image: postgres:14-alpine
     volumes:
       - postgres_data:/var/lib/postgresql/data/
-      - ./postgres-config:/etc/postgresql/conf.d
     env_file:
       - ./backend/.env
     environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-telegram_parser}
-      - POSTGRES_MAX_CONNECTIONS=200
-    command: postgres -c max_connections=200
     ports:
       - "5432:5432"
     healthcheck:
@@ -35,17 +32,19 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: Dockerfile
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
     env_file:
       - ./backend/.env
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
-      - REDIS_PASSWORD=
-      - REDIS_CLIENT_EXPIRY=300
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-telegram_parser}
+      - FRONTEND_URL=http://localhost:3000
     ports:
       - "8000:8000"
     depends_on:
@@ -53,17 +52,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: >
-      bash -c "python init_db.py && gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"
-
-  frontend:
-    build: 
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
+    command: gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --reload
 
 volumes:
   postgres_data:

@@ -35,4 +35,16 @@ def root():
             "message": "Welcome to Telegram Group Parser API",
             "docs": "/docs",
         }
+    )
+
+@app.get("/health")
+def health_check():
+    """
+    Health check endpoint for Railway to monitor the application.
+    """
+    return JSONResponse(
+        content={
+            "status": "healthy",
+            "version": "1.0.0",
+        }
     ) 
