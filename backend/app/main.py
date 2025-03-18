@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+from pathlib import Path
 from .api.api import api_router
 from .database import models
 from .database.database import engine
@@ -28,8 +32,27 @@ if settings.BACKEND_CORS_ORIGINS:
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+# Create a static directory if it doesn't exist
+static_dir = Path(__file__).parent.parent.parent / "static"
+static_dir.mkdir(exist_ok=True)
+
+# Mount static files directory
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+@app.get("/assets/{file_path:path}")
+async def serve_assets(file_path: str):
+    # Serve assets from the static/assets directory
+    assets_path = static_dir / "assets" / file_path
+    if assets_path.exists():
+        return FileResponse(str(assets_path))
+    return JSONResponse(status_code=404, content={"message": "Asset not found"})
+
 @app.get("/")
-def root():
+async def serve_frontend():
+    # Serve the index.html file
+    index_path = static_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
     return JSONResponse(
         content={
             "message": "Welcome to Telegram Group Parser API",
@@ -47,4 +70,17 @@ def health_check():
             "status": "healthy",
             "version": "1.0.0",
         }
-    ) 
+    )
+
+# Serve frontend routes by redirecting to index.html for client-side routing
+@app.get("/{full_path:path}")
+async def serve_frontend_routes(full_path: str):
+    # API routes should be handled by the API router
+    if full_path.startswith("api/") or full_path == "docs" or full_path == "redoc" or full_path == "openapi.json":
+        return {"detail": "Not Found"}
+        
+    # Serve the index.html file for all other routes to support client-side routing
+    index_path = static_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    return JSONResponse(status_code=404, content={"message": "Not found"}) 

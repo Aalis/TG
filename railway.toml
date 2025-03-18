@@ -18,10 +18,19 @@ PYTHONUNBUFFERED = "1"
 name = "Telegram Parser API"
 description = "FastAPI application for parsing Telegram groups"
 
-# This section defines your main application service
-[service]
+# This section defines your main backend application service
+[[services]]
+name = "backend"
 internal_port = 8000
 auto_deploy = true
+src = "."
+
+# Define the frontend service
+[[services]]
+name = "frontend"
+internal_port = 80
+auto_deploy = true
+src = "frontend"
 
 # Reference the PostgreSQL plugin
 [[plugins]]
@@ -36,3 +45,7 @@ name = "redis"
 # These are used by the postgres plugin
 POSTGRES_USER = "postgres"
 POSTGRES_DB = "railway" # Railway Configuration
+
+# Environment variable for the frontend to know where the backend is
+[services.frontend.env]
+REACT_APP_API_URL = "${RAILWAY_SERVICE_BACKEND_URL}"

@@ -18,3 +18,15 @@ backend/package.json
 backend/.env
 backend/*.session
 frontend/build/
+
+# Temporary files and databases
+*.bak
+*.db
+backend/app.db
+backend/temp_env*
+backend/gunicorn.pid
+dump.rdb
+fix.txt
+
+# Logs
+*.log
