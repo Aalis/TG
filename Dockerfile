@@ -46,10 +46,11 @@ RUN apt-get update && \
 # Create a non-root user to run the application
 RUN useradd -m appuser
 
-# Create and set up directories
+# Create and set up directories with proper permissions
 RUN mkdir -p /app/static && \
     chown -R appuser:appuser /app && \
-    chmod -R 755 /app
+    chmod -R 755 /app && \
+    chmod -R 777 /app/static  # Ensure full permissions for static directory
 
 # Copy the application code
 COPY backend /app/
@@ -57,8 +58,10 @@ COPY backend /app/
 # Copy static files from frontend build
 COPY static/ /app/static/
 
-# Set final permissions
+# Set final permissions again after copying files
 RUN chown -R appuser:appuser /app && \
+    chmod -R 755 /app && \
+    chmod -R 777 /app/static && \
     chmod +x /app/startup.py
 
 # Expose the port
