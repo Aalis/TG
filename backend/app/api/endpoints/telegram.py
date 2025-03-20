@@ -6,6 +6,7 @@ from telethon.errors import FloodWaitError, UserDeactivatedBanError
 import logging
 import asyncio
 import os
+import time
 
 from app import crud
 from app.api import deps
@@ -661,8 +662,12 @@ async def get_parsing_progress(
             "current_members": 0
         }
     
+    # Keep progress visible even after completion
+    is_parsing = progress.current_phase not in ["completed", "cancelled", "error"] or \
+                 (hasattr(progress, '_last_update') and time.time() - progress._last_update < 10)
+    
     return {
-        "is_parsing": True,
+        "is_parsing": is_parsing,
         "phase": progress.current_phase,
         "progress": progress.phase_progress,
         "message": progress.status_message,
@@ -737,6 +742,28 @@ async def cancel_channel_parsing(
 
 
 @classmethod
+def _update_progress(cls, phase: str, current: int = 0, total: int = 0, message: str = "") -> None:
+    """Update parsing progress"""
+    progress = cls.get_progress() or ParsingProgress()
+    
+    progress.current_phase = phase
+    if total > 0:
+        progress.total_members = total
+    if current >= 0:
+        progress.current_members = current
+    if message:
+        progress.status_message = message
+    
+    if total > 0:
+        progress.phase_progress = (current / total) * 100
+    
+    # Add timestamp for tracking last update
+    progress._last_update = time.time()
+    
+    cls._save_progress(progress)
+
+
+@classmethod
 def _reset_progress(cls) -> None:
     """Reset parsing progress"""
     progress = cls.get_progress()
@@ -745,20 +772,19 @@ def _reset_progress(cls) -> None:
             # For these states, keep the message visible longer
             asyncio.create_task(cls._delayed_reset())
         else:
-            # For other states, reset immediately
-            if os.path.exists(cls._progress_file):
-                try:
-                    os.remove(cls._progress_file)
-                except Exception as e:
-                    logging.error(f"Error removing progress file: {e}")
+            # For other states, don't reset immediately
+            progress._last_update = time.time()
+            cls._save_progress(progress)
 
 
 @classmethod
 async def _delayed_reset(cls) -> None:
     """Reset progress after a delay to ensure message visibility"""
-    await asyncio.sleep(5)  # Keep message visible for 5 seconds
-    if os.path.exists(cls._progress_file):
-        try:
-            os.remove(cls._progress_file)
-        except Exception as e:
-            logging.error(f"Error removing progress file: {e}") 
+    await asyncio.sleep(10)  # Keep message visible for 10 seconds
+    progress = cls.get_progress()
+    if progress and progress.current_phase in ["completed", "cancelled", "error"]:
+        if os.path.exists(cls._progress_file):
+            try:
+                os.remove(cls._progress_file)
+            except Exception as e:
+                logging.error(f"Error removing progress file: {e}") 
