@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   Typography,
@@ -44,13 +44,10 @@ import { groupsAPI } from '../services/api';
 import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
 import ParseButtonHeader from '../components/ParseButtonHeader';
+import { useGroups } from '../hooks/useGroups';
 
 const ParsedGroups = () => {
   const { t } = useTranslation();
-  const [groups, setGroups] = useState([]);
-  const [filteredGroups, setFilteredGroups] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [groupToDelete, setGroupToDelete] = useState(null);
@@ -71,7 +68,7 @@ const ParsedGroups = () => {
     error: null,
   });
   
-  // Pagination states
+  // Pagination constants
   const ITEMS_PER_PAGE = 21;
   const MAX_TOTAL_ITEMS = 42;
   
@@ -80,18 +77,27 @@ const ParsedGroups = () => {
   const { enqueueSnackbar } = useSnackbar();
 
   // Get page from URL query parameter or default to 1
-  const getPageFromUrl = () => {
+  const getPageFromUrl = useCallback(() => {
     const searchParams = new URLSearchParams(location.search);
     const pageParam = searchParams.get('page');
     return pageParam ? parseInt(pageParam, 10) : 1;
-  };
+  }, [location.search]);
 
   // Initialize page from URL on component mount
   const [page, setPage] = useState(getPageFromUrl());
   const [paginatedGroups, setPaginatedGroups] = useState([]);
   
+  // Use the groups hook for caching
+  const { 
+    groups, 
+    totalCount, 
+    isLoading, 
+    error: queryError, 
+    refetch 
+  } = useGroups(page);
+
   // Sync URL with page state when page changes
-  const updateUrlWithPage = (newPage) => {
+  const updateUrlWithPage = useCallback((newPage) => {
     const searchParams = new URLSearchParams(location.search);
     
     if (newPage === 1) {
@@ -103,16 +109,15 @@ const ParsedGroups = () => {
     const newSearch = searchParams.toString();
     const newPath = location.pathname + (newSearch ? `?${newSearch}` : '');
     
-    // Use push instead of replace to maintain browser history for back button
     navigate(newPath, { replace: false });
-  };
+  }, [location.pathname, location.search, navigate]);
 
   // Handle page change from pagination component
-  const handlePageChange = (event, newPage) => {
+  const handlePageChange = useCallback((event, newPage) => {
     setPage(newPage);
     updateUrlWithPage(newPage);
     window.scrollTo(0, 0);
-  };
+  }, [updateUrlWithPage]);
 
   // Sync page state with URL when URL changes (e.g., back button)
   useEffect(() => {
@@ -120,14 +125,10 @@ const ParsedGroups = () => {
     if (page !== urlPage) {
       setPage(urlPage);
     }
-  }, [location.search]);
-
-  // Fetch groups on component mount
-  useEffect(() => {
-    fetchGroups();
-  }, []);
+  }, [location.search, getPageFromUrl, page]);
 
   // Filter groups when search term changes
+  const [filteredGroups, setFilteredGroups] = useState([]);
   useEffect(() => {
     if (searchTerm.trim() === '') {
       setFilteredGroups(groups);
@@ -145,7 +146,7 @@ const ParsedGroups = () => {
       setPage(1);
       updateUrlWithPage(1);
     }
-  }, [searchTerm, groups]);
+  }, [searchTerm, groups, page, updateUrlWithPage]);
 
   // Update paginated groups when filtered groups or page changes
   useEffect(() => {
@@ -163,24 +164,15 @@ const ParsedGroups = () => {
     };
   }, [progressPolling]);
 
-  const fetchGroups = async () => {
-    try {
-      setLoading(true);
-      const response = await groupsAPI.getAll();
-      // Sort groups by parsed_at in descending order
-      const sortedGroups = response.data.sort((a, b) => 
-        new Date(b.parsed_at) - new Date(a.parsed_at)
-      );
-      setGroups(sortedGroups);
-      setFilteredGroups(sortedGroups);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load groups. Please try again.');
-      console.error(err);
-    } finally {
-      setLoading(false);
+  // Show error notification if groups fetch fails
+  useEffect(() => {
+    if (queryError) {
+      enqueueSnackbar('Failed to load groups. Please try again.', { 
+        variant: 'error',
+        autoHideDuration: 3000
+      });
     }
-  };
+  }, [queryError, enqueueSnackbar]);
 
   const handleDeleteClick = (group) => {
     setGroupToDelete(group);
@@ -191,15 +183,17 @@ const ParsedGroups = () => {
     try {
       await groupsAPI.delete(groupToDelete.id);
       
-      // Refresh groups list
-      await fetchGroups();
+      // Refresh groups list using the cached query
+      await refetch();
       
       // Close dialog
       setDeleteConfirmOpen(false);
       setGroupToDelete(null);
       
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to delete group. Please try again.');
+      enqueueSnackbar(err.response?.data?.detail || 'Failed to delete group', { 
+        variant: 'error' 
+      });
     }
   };
 
@@ -325,7 +319,7 @@ const ParsedGroups = () => {
         setScanComments(false);
         setCommentLimit(100);
         setSelectedDialog(null);
-        fetchGroups();
+        refetch();
         enqueueSnackbar('Group parsed successfully!', { variant: 'success' });
       } else {
         setParsingStatus({
@@ -350,8 +344,6 @@ const ParsedGroups = () => {
         success: false,
         error: errorMessage,
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -360,10 +352,26 @@ const ParsedGroups = () => {
       setLoadingDialogs(true);
       setDialogError(null);
       const response = await groupsAPI.getDialogs();
-      setAvailableDialogs(response.data);
+      
+      if (!response.data || !Array.isArray(response.data)) {
+        throw new Error('Invalid response format');
+      }
+      
+      // Filter and sort dialogs
+      const filteredDialogs = response.data
+        .filter(dialog => dialog.type === 'group')
+        .sort((a, b) => (b.members_count || 0) - (a.members_count || 0));
+      
+      setAvailableDialogs(filteredDialogs);
     } catch (err) {
-      setDialogError('Failed to load available groups. Please check your Telegram session.');
-      console.error(err);
+      console.error('Error fetching dialogs:', err);
+      if (err.response?.status === 401) {
+        setDialogError(t('telegram.noActiveSession'));
+      } else if (err.response?.status === 403) {
+        setDialogError(t('telegram.sessionNotVerified'));
+      } else {
+        setDialogError(t('telegram.failedToLoadGroups'));
+      }
     } finally {
       setLoadingDialogs(false);
     }
@@ -438,21 +446,10 @@ const ParsedGroups = () => {
       // Reset form fields
       setSelectedDialog(null);
       setGroupLink('');
+      setScanComments(false);
+      setCommentLimit(100);
       // Fetch available dialogs
       fetchAvailableDialogs();
-      
-      // Add an extra check to hide any cancellation errors
-      const errorElements = document.querySelectorAll('.MuiAlert-standardError');
-      errorElements.forEach(el => {
-        if (el.textContent.includes('cancelled')) {
-          el.style.display = 'none';
-        }
-      });
-    } else {
-      // When dialog closes, ensure parsing progress is reset
-      if (parsingProgress && !parsingProgress.is_parsing) {
-        setParsingProgress(null);
-      }
     }
   }, [parseDialogOpen]);
 
@@ -471,9 +468,9 @@ const ParsedGroups = () => {
       // Clear the state to prevent reopening on further navigation
       navigate(location.pathname, { replace: true });
     }
-  }, [location]);
+  }, [location, navigate, resetParsingState]);
 
-  if (loading && groups.length === 0) {
+  if (isLoading && groups.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
         <CircularProgress />
@@ -499,9 +496,9 @@ const ParsedGroups = () => {
         }}
       />
       
-      {error && (
+      {queryError && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
+          {queryError}
         </Alert>
       )}
       
@@ -717,6 +714,21 @@ const ParsedGroups = () => {
               <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
                 <CircularProgress size={24} />
               </Box>
+            ) : dialogError ? (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {dialogError}
+                {dialogError === t('telegram.noActiveSession') && (
+                  <Button
+                    component={RouterLink}
+                    to="/sessions"
+                    color="primary"
+                    size="small"
+                    sx={{ mt: 1 }}
+                  >
+                    {t('telegram.goToSessions')}
+                  </Button>
+                )}
+              </Alert>
             ) : availableDialogs.length > 0 ? (
               <Box sx={{ maxHeight: '200px', overflowY: 'auto' }}>
                 {availableDialogs
@@ -750,7 +762,7 @@ const ParsedGroups = () => {
                     </Box>
                   ))}
               </Box>
-            ) : !dialogError && (
+            ) : (
               <Typography variant="body2" color="text.secondary">
                 {t('telegram.noGroupsFound')}
               </Typography>

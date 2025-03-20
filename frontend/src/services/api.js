@@ -1,9 +1,12 @@
 import axios from 'axios';
 import { API_URL } from '../config';
 
-// Create axios instance with base URL
+// Create axios instance with base URL and default config
 const api = axios.create({
   baseURL: '/api/v1',
+  headers: {
+    'Content-Type': 'application/json',
+  }
 });
 
 // Add request interceptor to add auth token
@@ -46,43 +49,10 @@ export const authAPI = {
 
 // Telegram Tokens API
 export const tokensAPI = {
-  getAll: () => axios.get(`${API_URL}/telegram/tokens/`),
-  create: (tokenData) => axios.post(`${API_URL}/telegram/tokens/`, tokenData),
-  update: (id, tokenData) => axios.put(`${API_URL}/telegram/tokens/${id}`, tokenData),
-  delete: (id) => axios.delete(`${API_URL}/telegram/tokens/${id}`),
-};
-
-// Telegram Groups API
-export const groupsAPI = {
-  getAll: () => axios.get(`${API_URL}/telegram/parsed-groups/`),
-  getById: (id) => axios.get(`${API_URL}/telegram/parsed-groups/${id}`),
-  delete: (id) => axios.delete(`${API_URL}/telegram/parsed-groups/${id}`),
-  parseGroup: (groupLink, scanComments = false, commentLimit = 100) => 
-    axios.post(`${API_URL}/telegram/parse-group/`, {
-      group_link: groupLink,
-      scan_comments: scanComments,
-      comment_limit: commentLimit
-    }),
-  getParsingProgress: () => axios.get(`${API_URL}/telegram/parse-group/progress`),
-  getDialogs: () => axios.get(`${API_URL}/telegram/dialogs/`),
-  cancelParsing: () => axios.post(`${API_URL}/telegram/parse-group/cancel`),
-};
-
-// Telegram Channels API
-export const channelsAPI = {
-  getAll: () => axios.get(`${API_URL}/telegram/parsed-channels/`),
-  getById: (id) => axios.get(`${API_URL}/telegram/parsed-channels/${id}`),
-  deleteChannel: (id) => axios.delete(`${API_URL}/telegram/parsed-channels/${id}`),
-  parseChannel: (channelLink, postLimit = 100) => 
-    axios.post(`${API_URL}/telegram/parse-channel/`, {
-      channel_link: channelLink,
-      post_limit: postLimit
-    }),
-  getPosts: (channelId) => axios.get(`${API_URL}/telegram/groups/${channelId}/posts/`),
-  getComments: (postId) => axios.get(`${API_URL}/telegram/posts/${postId}/comments/`),
-  getParsingProgress: () => axios.get(`${API_URL}/telegram/parse-channel/progress`),
-  getDialogs: () => axios.get(`${API_URL}/telegram/dialogs/`),
-  cancelParsing: () => axios.post(`${API_URL}/telegram/parse-channel/cancel`),
+  getAll: () => api.get('/telegram/tokens/'),
+  create: (tokenData) => api.post('/telegram/tokens/', tokenData),
+  update: (id, tokenData) => api.put(`/telegram/tokens/${id}`, tokenData),
+  delete: (id) => api.delete(`/telegram/tokens/${id}`),
 };
 
 // Telegram Sessions API
@@ -98,6 +68,39 @@ export const sessionsAPI = {
     phone_code_hash: phoneCodeHash,
     password,
   }),
+};
+
+// Telegram Groups API
+export const groupsAPI = {
+  getAll: () => api.get('/telegram/parsed-groups/'),
+  getById: (id) => api.get(`/telegram/parsed-groups/${id}`),
+  delete: (id) => api.delete(`/telegram/parsed-groups/${id}`),
+  parseGroup: (groupLink, scanComments = false, commentLimit = 100) => 
+    api.post('/telegram/parse-group/', {
+      group_link: groupLink,
+      scan_comments: scanComments,
+      comment_limit: commentLimit
+    }),
+  getParsingProgress: () => api.get('/telegram/parse-group/progress'),
+  getDialogs: () => api.get('/telegram/dialogs/'),
+  cancelParsing: () => api.post('/telegram/parse-group/cancel'),
+};
+
+// Telegram Channels API
+export const channelsAPI = {
+  getAll: () => api.get('/telegram/parsed-channels/'),
+  getById: (id) => api.get(`/telegram/parsed-channels/${id}`),
+  delete: (id) => api.delete(`/telegram/parsed-channels/${id}`),
+  parseChannel: (channelLink, postLimit = 100) => 
+    api.post('/telegram/parse-channel/', {
+      channel_link: channelLink,
+      post_limit: postLimit
+    }),
+  getPosts: (channelId) => api.get(`/telegram/groups/${channelId}/posts/`),
+  getComments: (postId) => api.get(`/telegram/posts/${postId}/comments/`),
+  getParsingProgress: () => api.get('/telegram/parse-channel/progress'),
+  getDialogs: () => api.get('/telegram/dialogs/'),
+  cancelParsing: () => api.post('/telegram/parse-channel/cancel'),
 };
 
 export default api; 
