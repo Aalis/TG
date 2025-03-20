@@ -334,6 +334,27 @@ def start_application():
         main_app_running = False
         run_health_check_server_only()
 
+def check_redis_connection():
+    """Check Redis connection"""
+    logger.info("Checking Redis connection...")
+    try:
+        import redis
+        from app.core.config import settings
+        
+        r = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=settings.REDIS_DB,
+            password=settings.REDIS_PASSWORD or None,
+            socket_timeout=5
+        )
+        r.ping()
+        logger.info("Redis connection successful")
+        return True
+    except Exception as e:
+        logger.error(f"Redis connection failed: {e}")
+        return False
+
 def main():
     """Main entry point"""
     try:
@@ -361,6 +382,11 @@ def main():
         check_environment()
         install_missing_packages()
         initialize_database()
+        
+        # Check Redis connection
+        redis_ok = check_redis_connection()
+        if not redis_ok:
+            logger.warning("Redis connection failed, caching will be disabled")
         
         # Run migrations and check result
         migrations_success = run_migrations()
