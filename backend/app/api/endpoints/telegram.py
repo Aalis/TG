@@ -125,84 +125,105 @@ async def read_groups(
         # Calculate offset
         offset = (page - 1) * items_per_page
         
-        # Optimize query to reduce database round trips
-        query = (
-            db.query(
-                DBParsedGroup,
-                func.count(GroupMember.id).label('users_found')
+        try:
+            # Get total count first
+            total_count = (
+                db.query(DBParsedGroup)
+                .filter(
+                    DBParsedGroup.user_id == current_user.id,
+                    DBParsedGroup.is_channel == False
+                )
+                .count()
             )
-            .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
-            .filter(
-                DBParsedGroup.user_id == current_user.id,
-                DBParsedGroup.is_channel == False
-            )
-            .group_by(DBParsedGroup.id)
-            .order_by(DBParsedGroup.parsed_at.desc())
-        )
-        
-        # Get total count efficiently
-        total_count = query.with_entities(func.count(func.distinct(DBParsedGroup.id))).scalar()
-        
-        if total_count > max_items:
-            total_count = max_items
             
-        if total_count == 0:
-            return []
-        
-        # Get paginated results with member counts
-        groups_with_counts = query.offset(offset).limit(items_per_page).all()
-        
-        if not groups_with_counts:
-            return []
-        
-        # Get member data efficiently using IN clause
-        group_ids = [g[0].id for g in groups_with_counts]
-        members_map = {}
-        
-        if group_ids:
-            members = (
-                db.query(GroupMember)
-                .filter(GroupMember.group_id.in_(group_ids))
+            if total_count > max_items:
+                total_count = max_items
+                
+            if total_count == 0:
+                return []
+            
+            # Get groups with member counts
+            groups = (
+                db.query(DBParsedGroup)
+                .filter(
+                    DBParsedGroup.user_id == current_user.id,
+                    DBParsedGroup.is_channel == False
+                )
+                .order_by(DBParsedGroup.parsed_at.desc())
+                .offset(offset)
+                .limit(items_per_page)
                 .all()
             )
             
-            for member in members:
-                if member.group_id not in members_map:
-                    members_map[member.group_id] = []
-                members_map[member.group_id].append({
-                    "id": member.id,
-                    "user_id": member.user_id,
-                    "group_id": member.group_id,
-                    "username": member.username,
-                    "is_admin": member.is_admin,
-                    "is_premium": member.is_premium
+            if not groups:
+                return []
+            
+            # Get member counts efficiently
+            group_ids = [g.id for g in groups]
+            member_counts = dict(
+                db.query(
+                    GroupMember.group_id,
+                    func.count(GroupMember.id).label('count')
+                )
+                .filter(GroupMember.group_id.in_(group_ids))
+                .group_by(GroupMember.group_id)
+                .all()
+            )
+            
+            # Get member data
+            members_map = {}
+            if group_ids:
+                members = (
+                    db.query(GroupMember)
+                    .filter(GroupMember.group_id.in_(group_ids))
+                    .all()
+                )
+                
+                for member in members:
+                    if member.group_id not in members_map:
+                        members_map[member.group_id] = []
+                    members_map[member.group_id].append({
+                        "id": member.id,
+                        "user_id": member.user_id,
+                        "group_id": member.group_id,
+                        "username": member.username,
+                        "is_admin": member.is_admin,
+                        "is_premium": member.is_premium
+                    })
+            
+            # Build response data
+            groups_data = []
+            for group in groups:
+                users_found = member_counts.get(group.id, 0)
+                groups_data.append({
+                    "id": group.id,
+                    "group_id": group.group_id,
+                    "group_name": group.group_name,
+                    "group_username": group.group_username,
+                    "member_count": group.member_count or users_found,
+                    "users_found": users_found,
+                    "is_public": group.is_public,
+                    "is_channel": group.is_channel,
+                    "parsed_at": group.parsed_at,
+                    "user_id": group.user_id,
+                    "members": members_map.get(group.id, []),
+                    "total_count": total_count
                 })
-        
-        # Build response data efficiently
-        groups_data = []
-        for group, users_found in groups_with_counts:
-            groups_data.append({
-                "id": group.id,
-                "group_id": group.group_id,
-                "group_name": group.group_name,
-                "group_username": group.group_username,
-                "member_count": group.member_count or users_found,
-                "users_found": users_found,
-                "is_public": group.is_public,
-                "is_channel": group.is_channel,
-                "parsed_at": group.parsed_at,
-                "user_id": group.user_id,
-                "members": members_map.get(group.id, []),
-                "total_count": total_count
-            })
 
-        # Cache results
-        try:
-            await cache_parsed_groups(current_user.id, groups_data, cache_key, expiry=180)
+            # Cache results
+            try:
+                await cache_parsed_groups(current_user.id, groups_data, cache_key, expiry=180)
+            except Exception as e:
+                logging.error(f"Failed to cache groups: {str(e)}")
+            
+            return groups_data
+            
         except Exception as e:
-            logging.error(f"Failed to cache groups: {str(e)}")
-        
-        return groups_data
+            logging.error(f"Database query error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database query failed: {str(e)}"
+            )
             
     except Exception as e:
         logging.error(f"Error in read_groups: {str(e)}")
@@ -428,84 +449,105 @@ async def read_channels(
         # Calculate offset
         offset = (page - 1) * items_per_page
         
-        # Optimize query to reduce database round trips
-        query = (
-            db.query(
-                DBParsedGroup,
-                func.count(GroupMember.id).label('users_found')
+        try:
+            # Get total count first
+            total_count = (
+                db.query(DBParsedGroup)
+                .filter(
+                    DBParsedGroup.user_id == current_user.id,
+                    DBParsedGroup.is_channel == True
+                )
+                .count()
             )
-            .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
-            .filter(
-                DBParsedGroup.user_id == current_user.id,
-                DBParsedGroup.is_channel == True
-            )
-            .group_by(DBParsedGroup.id)
-            .order_by(DBParsedGroup.parsed_at.desc())
-        )
-        
-        # Get total count efficiently
-        total_count = query.with_entities(func.count(func.distinct(DBParsedGroup.id))).scalar()
-        
-        if total_count > max_items:
-            total_count = max_items
             
-        if total_count == 0:
-            return []
-        
-        # Get paginated results with member counts
-        channels_with_counts = query.offset(offset).limit(items_per_page).all()
-        
-        if not channels_with_counts:
-            return []
-        
-        # Get member data efficiently using IN clause
-        channel_ids = [c[0].id for c in channels_with_counts]
-        members_map = {}
-        
-        if channel_ids:
-            members = (
-                db.query(GroupMember)
-                .filter(GroupMember.group_id.in_(channel_ids))
+            if total_count > max_items:
+                total_count = max_items
+                
+            if total_count == 0:
+                return []
+            
+            # Get channels with member counts
+            channels = (
+                db.query(DBParsedGroup)
+                .filter(
+                    DBParsedGroup.user_id == current_user.id,
+                    DBParsedGroup.is_channel == True
+                )
+                .order_by(DBParsedGroup.parsed_at.desc())
+                .offset(offset)
+                .limit(items_per_page)
                 .all()
             )
             
-            for member in members:
-                if member.group_id not in members_map:
-                    members_map[member.group_id] = []
-                members_map[member.group_id].append({
-                    "id": member.id,
-                    "user_id": member.user_id,
-                    "group_id": member.group_id,
-                    "username": member.username,
-                    "is_admin": member.is_admin,
-                    "is_premium": member.is_premium
+            if not channels:
+                return []
+            
+            # Get member counts efficiently
+            channel_ids = [c.id for c in channels]
+            member_counts = dict(
+                db.query(
+                    GroupMember.group_id,
+                    func.count(GroupMember.id).label('count')
+                )
+                .filter(GroupMember.group_id.in_(channel_ids))
+                .group_by(GroupMember.group_id)
+                .all()
+            )
+            
+            # Get member data
+            members_map = {}
+            if channel_ids:
+                members = (
+                    db.query(GroupMember)
+                    .filter(GroupMember.group_id.in_(channel_ids))
+                    .all()
+                )
+                
+                for member in members:
+                    if member.group_id not in members_map:
+                        members_map[member.group_id] = []
+                    members_map[member.group_id].append({
+                        "id": member.id,
+                        "user_id": member.user_id,
+                        "group_id": member.group_id,
+                        "username": member.username,
+                        "is_admin": member.is_admin,
+                        "is_premium": member.is_premium
+                    })
+            
+            # Build response data
+            channels_data = []
+            for channel in channels:
+                users_found = member_counts.get(channel.id, 0)
+                channels_data.append({
+                    "id": channel.id,
+                    "group_id": channel.group_id,
+                    "group_name": channel.group_name,
+                    "group_username": channel.group_username,
+                    "member_count": channel.member_count or users_found,
+                    "users_found": users_found,
+                    "is_public": channel.is_public,
+                    "is_channel": channel.is_channel,
+                    "parsed_at": channel.parsed_at,
+                    "user_id": channel.user_id,
+                    "members": members_map.get(channel.id, []),
+                    "total_count": total_count
                 })
-        
-        # Build response data efficiently
-        channels_data = []
-        for channel, users_found in channels_with_counts:
-            channels_data.append({
-                "id": channel.id,
-                "group_id": channel.group_id,
-                "group_name": channel.group_name,
-                "group_username": channel.group_username,
-                "member_count": channel.member_count or users_found,
-                "users_found": users_found,
-                "is_public": channel.is_public,
-                "is_channel": channel.is_channel,
-                "parsed_at": channel.parsed_at,
-                "user_id": channel.user_id,
-                "members": members_map.get(channel.id, []),
-                "total_count": total_count
-            })
 
-        # Cache results
-        try:
-            await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
+            # Cache results
+            try:
+                await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
+            except Exception as e:
+                logging.error(f"Failed to cache channels: {str(e)}")
+            
+            return channels_data
+            
         except Exception as e:
-            logging.error(f"Failed to cache channels: {str(e)}")
-        
-        return channels_data
+            logging.error(f"Database query error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database query failed: {str(e)}"
+            )
             
     except Exception as e:
         logging.error(f"Error in read_channels: {str(e)}")
