@@ -446,6 +446,8 @@ async def read_channels(
 ) -> Any:
     """Get all parsed channels for current user with pagination"""
     try:
+        logging.info(f"Starting read_channels for user {current_user.id}, page {page}")
+        
         # Try to get channels from cache first
         from app.core.redis_client import get_cached_parsed_channels, cache_parsed_channels
         cache_key = f"parsed_channels:{current_user.id}:p{page}"
@@ -457,9 +459,11 @@ async def read_channels(
                 return cached_data
         except Exception as e:
             logging.error(f"Cache retrieval failed: {str(e)}")
+            # Continue with database query
         
         # Calculate offset
         offset = (page - 1) * items_per_page
+        logging.info(f"Querying database for channels, offset: {offset}, limit: {items_per_page}")
         
         # Ensure we have a valid database connection
         try:
@@ -467,117 +471,149 @@ async def read_channels(
         except Exception as e:
             logging.error(f"Database connection check failed: {str(e)}")
             raise HTTPException(
-                status_code=500,
+                status_code=503,
                 detail="Database connection error"
             )
         
-        # Get total count first
-        total_count = db.query(DBParsedGroup).filter(
-            DBParsedGroup.user_id == current_user.id,
-            DBParsedGroup.is_channel == True
-        ).count()
-        
-        if total_count > max_items:
-            total_count = max_items
-            
-        if total_count == 0:
-            return []
-        
-        # Main query with optimized loading
-        query = (
-            db.query(
-                DBParsedGroup.id,
-                DBParsedGroup.group_id,
-                DBParsedGroup.group_name,
-                DBParsedGroup.group_username,
-                DBParsedGroup.is_public,
-                DBParsedGroup.is_channel,
-                DBParsedGroup.parsed_at,
-                DBParsedGroup.user_id
-            )
-            .filter(
+        try:
+            # Get total count first
+            total_count = db.query(DBParsedGroup).filter(
                 DBParsedGroup.user_id == current_user.id,
                 DBParsedGroup.is_channel == True
+            ).count()
+            
+            logging.info(f"Found {total_count} total channels for user {current_user.id}")
+            
+            if total_count > max_items:
+                total_count = max_items
+                
+            if total_count == 0:
+                logging.info("No channels found, returning empty list")
+                return []
+            
+            # Main query with optimized loading
+            query = (
+                db.query(
+                    DBParsedGroup.id,
+                    DBParsedGroup.group_id,
+                    DBParsedGroup.group_name,
+                    DBParsedGroup.group_username,
+                    DBParsedGroup.is_public,
+                    DBParsedGroup.is_channel,
+                    DBParsedGroup.parsed_at,
+                    DBParsedGroup.user_id
+                )
+                .filter(
+                    DBParsedGroup.user_id == current_user.id,
+                    DBParsedGroup.is_channel == True
+                )
+                .order_by(DBParsedGroup.parsed_at.desc())
             )
-            .order_by(DBParsedGroup.parsed_at.desc())
-        )
-        
-        # Get paginated results
-        results = (
-            query
-            .offset(offset)
-            .limit(items_per_page)
-            .all()
-        )
-        
-        if not results:
-            return []
-        
-        # Get member counts in a single query
-        channel_ids = [r[0] for r in results]
-        member_counts = dict(
-            db.query(
-                GroupMember.group_id,
-                func.count(GroupMember.id).label('count')
+            
+            # Get paginated results
+            results = (
+                query
+                .offset(offset)
+                .limit(items_per_page)
+                .all()
             )
-            .filter(GroupMember.group_id.in_(channel_ids))
-            .group_by(GroupMember.group_id)
-            .all()
-        )
-        
-        # Get member data efficiently
-        members_query = (
-            db.query(GroupMember)
-            .filter(GroupMember.group_id.in_(channel_ids))
-            .all()
-        )
-        
-        # Create a mapping of channel_id to members
-        members_map = {}
-        for member in members_query:
-            if member.group_id not in members_map:
-                members_map[member.group_id] = []
-            members_map[member.group_id].append({
-                "id": member.id,
-                "user_id": member.user_id,
-                "group_id": member.group_id,
-                "username": member.username,
-                "is_admin": member.is_admin,
-                "is_premium": member.is_premium
-            })
-        
-        # Build response data
-        channels_data = []
-        for (
-            id, group_id, group_name, group_username, 
-            is_public, is_channel, parsed_at, user_id
-        ) in results:
-            channel_dict = {
-                "id": id,
-                "group_id": group_id,
-                "group_name": group_name,
-                "group_username": group_username,
-                "member_count": member_counts.get(id, 0),
-                "is_public": is_public,
-                "is_channel": is_channel,
-                "parsed_at": parsed_at,
-                "user_id": user_id,
-                "members": members_map.get(id, []),
-                "total_count": total_count
-            }
-            channels_data.append(channel_dict)
+            
+            if not results:
+                logging.info("No channels found in page range, returning empty list")
+                return []
+            
+            logging.info(f"Retrieved {len(results)} channels from database")
+            
+            try:
+                # Get member counts in a single query
+                channel_ids = [r[0] for r in results]
+                member_counts = dict(
+                    db.query(
+                        GroupMember.group_id,
+                        func.count(GroupMember.id).label('count')
+                    )
+                    .filter(GroupMember.group_id.in_(channel_ids))
+                    .group_by(GroupMember.group_id)
+                    .all()
+                )
+                
+                logging.info(f"Retrieved member counts for {len(member_counts)} channels")
+                
+                # Get member data efficiently
+                members_query = (
+                    db.query(GroupMember)
+                    .filter(GroupMember.group_id.in_(channel_ids))
+                    .all()
+                )
+                
+                logging.info(f"Retrieved {len(members_query)} total members")
+                
+                # Create a mapping of channel_id to members
+                members_map = {}
+                for member in members_query:
+                    if member.group_id not in members_map:
+                        members_map[member.group_id] = []
+                    members_map[member.group_id].append({
+                        "id": member.id,
+                        "user_id": member.user_id,
+                        "group_id": member.group_id,
+                        "username": member.username,
+                        "is_admin": member.is_admin,
+                        "is_premium": member.is_premium
+                    })
+                
+                # Build response data
+                channels_data = []
+                for (
+                    id, group_id, group_name, group_username, 
+                    is_public, is_channel, parsed_at, user_id
+                ) in results:
+                    channel_dict = {
+                        "id": id,
+                        "group_id": group_id,
+                        "group_name": group_name,
+                        "group_username": group_username,
+                        "member_count": member_counts.get(id, 0),
+                        "is_public": is_public,
+                        "is_channel": is_channel,
+                        "parsed_at": parsed_at,
+                        "user_id": user_id,
+                        "members": members_map.get(id, []),
+                        "total_count": total_count
+                    }
+                    channels_data.append(channel_dict)
 
-        # Cache the results
-        try:
-            await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
-            logging.info(f"Successfully cached {len(channels_data)} channels")
+                logging.info(f"Built response data for {len(channels_data)} channels")
+
+                # Cache the results
+                try:
+                    await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
+                    logging.info(f"Successfully cached {len(channels_data)} channels")
+                except Exception as e:
+                    logging.error(f"Failed to cache channels: {str(e)}")
+                    # Continue without caching
+                
+                return channels_data
+                
+            except Exception as e:
+                logging.error(f"Error processing member data: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Error processing channel member data"
+                )
+                
         except Exception as e:
-            logging.error(f"Failed to cache channels: {str(e)}")
+            logging.error(f"Database query error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="Database query failed"
+            )
         
-        return channels_data
-        
+    except HTTPException as e:
+        # Re-raise HTTP exceptions with their original status code and detail
+        raise e
     except Exception as e:
-        logging.error(f"Error in read_channels: {str(e)}")
+        logging.error(f"Unexpected error in read_channels: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Failed to load channels. Please try again."
