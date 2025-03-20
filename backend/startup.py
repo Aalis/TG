@@ -152,48 +152,81 @@ def run_migrations():
             
         # Always run Alembic migrations first
         logger.info("Running Alembic migrations...")
-        success = run_command("alembic -c /app/alembic.ini upgrade head")
-        
-        if not success:
-            logger.error("Alembic migrations failed")
-            return
-            
-        logger.info("Alembic migrations completed successfully")
-        
-        # Now run any additional schema modifications if needed
         try:
-            # Extract database connection parameters from DATABASE_URL
-            match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', db_url)
-            if match:
-                username, password, host, port, dbname = match.groups()
-                logger.info(f"Checking for any additional schema modifications needed...")
+            # First check current revision
+            logger.info("Checking current database revision...")
+            result = subprocess.run(
+                "alembic -c /app/alembic.ini current",
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            logger.info(f"Current revision: {result.stdout}")
+            if result.stderr:
+                logger.warning(f"Revision check stderr: {result.stderr}")
+
+            # Then run upgrade
+            logger.info("Running database upgrade...")
+            result = subprocess.run(
+                "alembic -c /app/alembic.ini upgrade head",
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"Alembic upgrade failed with code {result.returncode}")
+                logger.error(f"Stdout: {result.stdout}")
+                logger.error(f"Stderr: {result.stderr}")
                 
-                # Connect to database
-                conn = psycopg2.connect(
-                    host=host,
-                    port=port,
-                    dbname=dbname,
-                    user=username,
-                    password=password
-                )
-                conn.autocommit = True
-                cursor = conn.cursor()
+                # Try to get more information about the database state
+                logger.info("Checking database tables...")
+                try:
+                    # Extract database connection parameters from DATABASE_URL
+                    match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', db_url)
+                    if match:
+                        username, password, host, port, dbname = match.groups()
+                        conn = psycopg2.connect(
+                            host=host,
+                            port=port,
+                            dbname=dbname,
+                            user=username,
+                            password=password
+                        )
+                        conn.autocommit = True
+                        cursor = conn.cursor()
+                        
+                        # Get list of tables
+                        cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public';")
+                        tables = [row[0] for row in cursor.fetchall()]
+                        logger.info(f"Existing tables: {tables}")
+                        
+                        # Check alembic_version table specifically
+                        if 'alembic_version' in tables:
+                            cursor.execute("SELECT version_num FROM alembic_version;")
+                            version = cursor.fetchone()
+                            logger.info(f"Current alembic_version: {version[0] if version else 'No version'}")
+                        
+                        cursor.close()
+                        conn.close()
+                except Exception as e:
+                    logger.error(f"Error checking database state: {e}")
                 
-                # Get list of tables
-                cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public';")
-                tables = [row[0] for row in cursor.fetchall()]
-                logger.info(f"Tables found after migrations: {tables}")
-                
-                # Close connections
-                cursor.close()
-                conn.close()
-                
-                logger.info("Additional schema checks completed")
-                
+                return False
+            
+            logger.info("Alembic migrations completed successfully")
+            logger.info(f"Migration output: {result.stdout}")
+            if result.stderr:
+                logger.warning(f"Migration stderr: {result.stderr}")
+            
+            return True
+            
         except Exception as e:
-            logger.error(f"Error during additional schema checks: {e}")
+            logger.error(f"Error during migrations: {e}")
+            return False
     else:
         logger.warning("Alembic files not found, skipping migrations")
+        return False
 
 def create_superuser():
     """Create superuser if credentials are provided"""
@@ -328,7 +361,15 @@ def main():
         check_environment()
         install_missing_packages()
         initialize_database()
-        run_migrations()
+        
+        # Run migrations and check result
+        migrations_success = run_migrations()
+        if not migrations_success:
+            logger.error("Database migrations failed, cannot proceed with application startup")
+            # Try to start the app anyway in case the migrations actually succeeded
+            # but reported failure due to a different issue
+            logger.warning("Attempting to start application despite migration failure...")
+        
         create_superuser()
         start_application()
     except Exception as e:
