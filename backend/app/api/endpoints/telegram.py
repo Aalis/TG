@@ -155,6 +155,8 @@ async def read_groups(
         members_data = [
             {
                 "id": member.id,
+                "user_id": member.user_id,
+                "group_id": member.group_id,
                 "username": member.username,
                 "is_admin": member.is_admin,
                 "is_premium": member.is_premium
@@ -435,6 +437,8 @@ async def read_channels(
         members_data = [
             {
                 "id": member.id,
+                "user_id": member.user_id,
+                "group_id": member.group_id,
                 "username": member.username,
                 "is_admin": member.is_admin,
                 "is_premium": member.is_premium
