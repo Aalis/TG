@@ -123,7 +123,7 @@ async def read_groups(
         offset = (page - 1) * items_per_page
         logging.info(f"Querying database for groups, offset: {offset}, limit: {items_per_page}")
         
-        # Start transaction
+        # Import required modules
         from sqlalchemy.orm import Session, aliased
         from sqlalchemy import text, func, select
         from sqlalchemy.exc import OperationalError, SQLAlchemyError
@@ -143,46 +143,20 @@ async def read_groups(
                     logging.error(f"Database connection failed after {max_retries} attempts: {str(e)}")
                     raise HTTPException(
                         status_code=503,
-                        detail="Database connection error"
+                        detail=f"Database connection error: {str(e)}"
                     )
                 logging.warning(f"Database connection attempt {attempt + 1} failed, retrying in {retry_delay}s")
                 time.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
         
         try:
-            # Use a materialized CTE for better performance
-            base_query = (
-                select(
-                    DBParsedGroup.id,
-                    DBParsedGroup.group_id,
-                    DBParsedGroup.group_name,
-                    DBParsedGroup.group_username,
-                    DBParsedGroup.is_public,
-                    DBParsedGroup.is_channel,
-                    DBParsedGroup.parsed_at,
-                    DBParsedGroup.user_id,
-                    func.count(GroupMember.id).over(partition_by=DBParsedGroup.id).label('member_count')
-                )
-                .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
-                .filter(
-                    DBParsedGroup.user_id == current_user.id,
-                    DBParsedGroup.is_channel == False
-                )
-                .order_by(DBParsedGroup.parsed_at.desc())
-            ).cte('base_query', materialized=True)
+            # Get total count first
+            total_count = db.query(DBParsedGroup).filter(
+                DBParsedGroup.user_id == current_user.id,
+                DBParsedGroup.is_channel == False
+            ).count()
             
-            # Get total count from CTE with retry
-            for attempt in range(max_retries):
-                try:
-                    total_count = db.query(func.count(base_query.c.id).distinct()).scalar()
-                    logging.info(f"Found {total_count} total groups for user {current_user.id}")
-                    break
-                except SQLAlchemyError as e:
-                    if attempt == max_retries - 1:
-                        logging.error(f"Count query failed: {str(e)}")
-                        raise
-                    logging.warning(f"Count query attempt {attempt + 1} failed, retrying")
-                    time.sleep(retry_delay)
+            logging.info(f"Found {total_count} total groups for user {current_user.id}")
             
             if total_count > max_items:
                 total_count = max_items
@@ -191,99 +165,83 @@ async def read_groups(
                 logging.info("No groups found, returning empty list")
                 return []
             
-            # Get paginated results with member counts
-            for attempt in range(max_retries):
-                try:
-                    results = (
-                        db.query(base_query)
-                        .distinct()
-                        .offset(offset)
-                        .limit(items_per_page)
-                        .all()
-                    )
-                    logging.info(f"Retrieved {len(results)} groups from database")
-                    break
-                except SQLAlchemyError as e:
-                    if attempt == max_retries - 1:
-                        logging.error(f"Main query failed: {str(e)}")
-                        raise
-                    logging.warning(f"Main query attempt {attempt + 1} failed, retrying")
-                    time.sleep(retry_delay)
+            # Get groups with member counts
+            groups_with_counts = (
+                db.query(
+                    DBParsedGroup,
+                    func.count(GroupMember.id).label('member_count')
+                )
+                .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
+                .filter(
+                    DBParsedGroup.user_id == current_user.id,
+                    DBParsedGroup.is_channel == False
+                )
+                .group_by(DBParsedGroup.id)
+                .order_by(DBParsedGroup.parsed_at.desc())
+                .offset(offset)
+                .limit(items_per_page)
+                .all()
+            )
             
-            if not results:
+            logging.info(f"Retrieved {len(groups_with_counts)} groups from database")
+            
+            if not groups_with_counts:
                 logging.info("No groups found in page range, returning empty list")
                 return []
             
+            # Get member data efficiently in batches
+            group_ids = [g[0].id for g in groups_with_counts]
+            members_query = (
+                db.query(GroupMember)
+                .filter(GroupMember.group_id.in_(group_ids))
+                .all()
+            )
+            
+            logging.info(f"Retrieved {len(members_query)} total members")
+            
+            # Create a mapping of group_id to members
+            members_map = {}
+            for member in members_query:
+                if member.group_id not in members_map:
+                    members_map[member.group_id] = []
+                members_map[member.group_id].append({
+                    "id": member.id,
+                    "user_id": member.user_id,
+                    "group_id": member.group_id,
+                    "username": member.username,
+                    "is_admin": member.is_admin,
+                    "is_premium": member.is_premium
+                })
+            
+            # Build response data
+            groups_data = []
+            for group, member_count in groups_with_counts:
+                group_dict = {
+                    "id": group.id,
+                    "group_id": group.group_id,
+                    "group_name": group.group_name,
+                    "group_username": group.group_username,
+                    "member_count": member_count,
+                    "is_public": group.is_public,
+                    "is_channel": group.is_channel,
+                    "parsed_at": group.parsed_at,
+                    "user_id": group.user_id,
+                    "members": members_map.get(group.id, []),
+                    "total_count": total_count
+                }
+                groups_data.append(group_dict)
+
+            logging.info(f"Built response data for {len(groups_data)} groups")
+
+            # Cache the results
             try:
-                # Get member data efficiently in batches
-                group_ids = [r.id for r in results]
-                
-                for attempt in range(max_retries):
-                    try:
-                        members_query = (
-                            db.query(GroupMember)
-                            .filter(GroupMember.group_id.in_(group_ids))
-                            .all()
-                        )
-                        logging.info(f"Retrieved {len(members_query)} total members")
-                        break
-                    except SQLAlchemyError as e:
-                        if attempt == max_retries - 1:
-                            logging.error(f"Member data query failed: {str(e)}")
-                            raise
-                        logging.warning(f"Member data query attempt {attempt + 1} failed, retrying")
-                        time.sleep(retry_delay)
-                
-                # Create a mapping of group_id to members
-                members_map = {}
-                for member in members_query:
-                    if member.group_id not in members_map:
-                        members_map[member.group_id] = []
-                    members_map[member.group_id].append({
-                        "id": member.id,
-                        "user_id": member.user_id,
-                        "group_id": member.group_id,
-                        "username": member.username,
-                        "is_admin": member.is_admin,
-                        "is_premium": member.is_premium
-                    })
-                
-                # Build response data
-                groups_data = []
-                for result in results:
-                    group_dict = {
-                        "id": result.id,
-                        "group_id": result.group_id,
-                        "group_name": result.group_name,
-                        "group_username": result.group_username,
-                        "member_count": result.member_count,
-                        "is_public": result.is_public,
-                        "is_channel": result.is_channel,
-                        "parsed_at": result.parsed_at,
-                        "user_id": result.user_id,
-                        "members": members_map.get(result.id, []),
-                        "total_count": total_count
-                    }
-                    groups_data.append(group_dict)
-
-                logging.info(f"Built response data for {len(groups_data)} groups")
-
-                # Cache the results
-                try:
-                    await cache_parsed_groups(current_user.id, groups_data, cache_key, expiry=180)
-                    logging.info(f"Successfully cached {len(groups_data)} groups")
-                except Exception as e:
-                    logging.error(f"Failed to cache groups: {str(e)}")
-                
-                return groups_data
-                
-            except SQLAlchemyError as e:
-                logging.error(f"Error processing member data: {str(e)}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Error processing group member data: {str(e)}"
-                )
-                
+                await cache_parsed_groups(current_user.id, groups_data, cache_key, expiry=180)
+                logging.info(f"Successfully cached {len(groups_data)} groups")
+            except Exception as e:
+                logging.error(f"Failed to cache groups: {str(e)}")
+            
+            return groups_data
+            
         except SQLAlchemyError as e:
             logging.error(f"Database query error: {str(e)}")
             raise HTTPException(
@@ -546,39 +504,13 @@ async def read_channels(
                 retry_delay *= 2  # Exponential backoff
         
         try:
-            # Use a materialized CTE for better performance
-            base_query = (
-                select(
-                    DBParsedGroup.id,
-                    DBParsedGroup.group_id,
-                    DBParsedGroup.group_name,
-                    DBParsedGroup.group_username,
-                    DBParsedGroup.is_public,
-                    DBParsedGroup.is_channel,
-                    DBParsedGroup.parsed_at,
-                    DBParsedGroup.user_id,
-                    func.count(GroupMember.id).over(partition_by=DBParsedGroup.id).label('member_count')
-                )
-                .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
-                .filter(
-                    DBParsedGroup.user_id == current_user.id,
-                    DBParsedGroup.is_channel == True
-                )
-                .order_by(DBParsedGroup.parsed_at.desc())
-            ).cte('base_query', materialized=True)
+            # Get total count first
+            total_count = db.query(DBParsedGroup).filter(
+                DBParsedGroup.user_id == current_user.id,
+                DBParsedGroup.is_channel == True
+            ).count()
             
-            # Get total count from CTE with retry
-            for attempt in range(max_retries):
-                try:
-                    total_count = db.query(func.count(base_query.c.id).distinct()).scalar()
-                    logging.info(f"Found {total_count} total channels for user {current_user.id}")
-                    break
-                except SQLAlchemyError as e:
-                    if attempt == max_retries - 1:
-                        logging.error(f"Count query failed: {str(e)}")
-                        raise
-                    logging.warning(f"Count query attempt {attempt + 1} failed, retrying")
-                    time.sleep(retry_delay)
+            logging.info(f"Found {total_count} total channels for user {current_user.id}")
             
             if total_count > max_items:
                 total_count = max_items
@@ -587,99 +519,83 @@ async def read_channels(
                 logging.info("No channels found, returning empty list")
                 return []
             
-            # Get paginated results with member counts
-            for attempt in range(max_retries):
-                try:
-                    results = (
-                        db.query(base_query)
-                        .distinct()
-                        .offset(offset)
-                        .limit(items_per_page)
-                        .all()
-                    )
-                    logging.info(f"Retrieved {len(results)} channels from database")
-                    break
-                except SQLAlchemyError as e:
-                    if attempt == max_retries - 1:
-                        logging.error(f"Main query failed: {str(e)}")
-                        raise
-                    logging.warning(f"Main query attempt {attempt + 1} failed, retrying")
-                    time.sleep(retry_delay)
+            # Get channels with member counts
+            channels_with_counts = (
+                db.query(
+                    DBParsedGroup,
+                    func.count(GroupMember.id).label('member_count')
+                )
+                .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
+                .filter(
+                    DBParsedGroup.user_id == current_user.id,
+                    DBParsedGroup.is_channel == True
+                )
+                .group_by(DBParsedGroup.id)
+                .order_by(DBParsedGroup.parsed_at.desc())
+                .offset(offset)
+                .limit(items_per_page)
+                .all()
+            )
             
-            if not results:
+            logging.info(f"Retrieved {len(channels_with_counts)} channels from database")
+            
+            if not channels_with_counts:
                 logging.info("No channels found in page range, returning empty list")
                 return []
             
+            # Get member data efficiently in batches
+            channel_ids = [c[0].id for c in channels_with_counts]
+            members_query = (
+                db.query(GroupMember)
+                .filter(GroupMember.group_id.in_(channel_ids))
+                .all()
+            )
+            
+            logging.info(f"Retrieved {len(members_query)} total members")
+            
+            # Create a mapping of channel_id to members
+            members_map = {}
+            for member in members_query:
+                if member.group_id not in members_map:
+                    members_map[member.group_id] = []
+                members_map[member.group_id].append({
+                    "id": member.id,
+                    "user_id": member.user_id,
+                    "group_id": member.group_id,
+                    "username": member.username,
+                    "is_admin": member.is_admin,
+                    "is_premium": member.is_premium
+                })
+            
+            # Build response data
+            channels_data = []
+            for channel, member_count in channels_with_counts:
+                channel_dict = {
+                    "id": channel.id,
+                    "group_id": channel.group_id,
+                    "group_name": channel.group_name,
+                    "group_username": channel.group_username,
+                    "member_count": member_count,
+                    "is_public": channel.is_public,
+                    "is_channel": channel.is_channel,
+                    "parsed_at": channel.parsed_at,
+                    "user_id": channel.user_id,
+                    "members": members_map.get(channel.id, []),
+                    "total_count": total_count
+                }
+                channels_data.append(channel_dict)
+
+            logging.info(f"Built response data for {len(channels_data)} channels")
+
+            # Cache the results
             try:
-                # Get member data efficiently in batches
-                channel_ids = [r.id for r in results]
-                
-                for attempt in range(max_retries):
-                    try:
-                        members_query = (
-                            db.query(GroupMember)
-                            .filter(GroupMember.group_id.in_(channel_ids))
-                            .all()
-                        )
-                        logging.info(f"Retrieved {len(members_query)} total members")
-                        break
-                    except SQLAlchemyError as e:
-                        if attempt == max_retries - 1:
-                            logging.error(f"Member data query failed: {str(e)}")
-                            raise
-                        logging.warning(f"Member data query attempt {attempt + 1} failed, retrying")
-                        time.sleep(retry_delay)
-                
-                # Create a mapping of channel_id to members
-                members_map = {}
-                for member in members_query:
-                    if member.group_id not in members_map:
-                        members_map[member.group_id] = []
-                    members_map[member.group_id].append({
-                        "id": member.id,
-                        "user_id": member.user_id,
-                        "group_id": member.group_id,
-                        "username": member.username,
-                        "is_admin": member.is_admin,
-                        "is_premium": member.is_premium
-                    })
-                
-                # Build response data
-                channels_data = []
-                for result in results:
-                    channel_dict = {
-                        "id": result.id,
-                        "group_id": result.group_id,
-                        "group_name": result.group_name,
-                        "group_username": result.group_username,
-                        "member_count": result.member_count,
-                        "is_public": result.is_public,
-                        "is_channel": result.is_channel,
-                        "parsed_at": result.parsed_at,
-                        "user_id": result.user_id,
-                        "members": members_map.get(result.id, []),
-                        "total_count": total_count
-                    }
-                    channels_data.append(channel_dict)
-
-                logging.info(f"Built response data for {len(channels_data)} channels")
-
-                # Cache the results
-                try:
-                    await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
-                    logging.info(f"Successfully cached {len(channels_data)} channels")
-                except Exception as e:
-                    logging.error(f"Failed to cache channels: {str(e)}")
-                
-                return channels_data
-                
-            except SQLAlchemyError as e:
-                logging.error(f"Error processing member data: {str(e)}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Error processing channel member data: {str(e)}"
-                )
-                
+                await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
+                logging.info(f"Successfully cached {len(channels_data)} channels")
+            except Exception as e:
+                logging.error(f"Failed to cache channels: {str(e)}")
+            
+            return channels_data
+            
         except SQLAlchemyError as e:
             logging.error(f"Database query error: {str(e)}")
             raise HTTPException(
