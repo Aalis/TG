@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Typography,
@@ -50,13 +50,26 @@ import { channelsAPI } from '../services/api';
 import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
 import ParseButtonHeader from '../components/ParseButtonHeader';
+import { useChannels } from '../hooks/useChannels';
+
+// Pagination constants
+const ITEMS_PER_PAGE = 21;
+const MAX_TOTAL_ITEMS = 42;
+
+// Helper function to get page from URL search params
+const getPageFromUrl = (search) => {
+  const searchParams = new URLSearchParams(search);
+  const pageParam = searchParams.get('page');
+  return pageParam ? parseInt(pageParam, 10) : 1;
+};
 
 const ParsedChannels = () => {
   const { t } = useTranslation();
-  const [channels, setChannels] = useState([]);
-  const [filteredChannels, setFilteredChannels] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { enqueueSnackbar } = useSnackbar();
+
+  // Initialize states
   const [searchTerm, setSearchTerm] = useState('');
   const [parseDialogOpen, setParseDialogOpen] = useState(false);
   const [channelLink, setChannelLink] = useState('');
@@ -82,28 +95,13 @@ const ParsedChannels = () => {
   const [dialogError, setDialogError] = useState(null);
   const [selectedDialog, setSelectedDialog] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
-  
-  // Pagination states
-  const ITEMS_PER_PAGE = 21;
-  const MAX_TOTAL_ITEMS = 42;
-  
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { enqueueSnackbar } = useSnackbar();
-
-  // Get page from URL query parameter or default to 1
-  const getPageFromUrl = () => {
-    const searchParams = new URLSearchParams(location.search);
-    const pageParam = searchParams.get('page');
-    return pageParam ? parseInt(pageParam, 10) : 1;
-  };
-
-  // Initialize page from URL on component mount
-  const [page, setPage] = useState(getPageFromUrl());
+  const [page, setPage] = useState(() => getPageFromUrl(location.search));
   const [paginatedChannels, setPaginatedChannels] = useState([]);
-  
+  const [filteredChannels, setFilteredChannels] = useState([]);
+  const [error, setError] = useState(null);
+
   // Sync URL with page state when page changes
-  const updateUrlWithPage = (newPage) => {
+  const updateUrlWithPage = useCallback((newPage) => {
     const searchParams = new URLSearchParams(location.search);
     
     if (newPage === 1) {
@@ -115,29 +113,63 @@ const ParsedChannels = () => {
     const newSearch = searchParams.toString();
     const newPath = location.pathname + (newSearch ? `?${newSearch}` : '');
     
-    // Use push instead of replace to maintain browser history for back button
     navigate(newPath, { replace: false });
-  };
+  }, [location.search, location.pathname, navigate]);
 
-  // Handle page change from pagination component
-  const handlePageChange = (event, newPage) => {
+  // Update URL when page changes
+  const handlePageChange = useCallback((newPage) => {
     setPage(newPage);
     updateUrlWithPage(newPage);
-    window.scrollTo(0, 0);
-  };
+  }, [updateUrlWithPage]);
+
+  // Use the channels hook with the page state
+  const { 
+    channels, 
+    totalCount, 
+    isLoading, 
+    queryError, 
+    refetch 
+  } = useChannels(page);
+
+  // Filter channels based on search term
+  const filteredResults = useMemo(() => {
+    return channels.filter(channel => 
+      channel.group_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      channel.group_username.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [channels, searchTerm]);
+
+  // Update filtered channels when results change
+  useEffect(() => {
+    setFilteredChannels(filteredResults);
+  }, [filteredResults]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (progressPolling) {
+        clearInterval(progressPolling);
+      }
+    };
+  }, [progressPolling]);
+
+  // Show error notification if channels fetch fails
+  useEffect(() => {
+    if (queryError) {
+      enqueueSnackbar('Failed to load channels. Please try again.', { 
+        variant: 'error',
+        autoHideDuration: 3000
+      });
+    }
+  }, [queryError, enqueueSnackbar]);
 
   // Sync page state with URL when URL changes (e.g., back button)
   useEffect(() => {
-    const urlPage = getPageFromUrl();
+    const urlPage = getPageFromUrl(location.search);
     if (page !== urlPage) {
       setPage(urlPage);
     }
-  }, [location.search]);
-
-  // Fetch channels on component mount
-  useEffect(() => {
-    fetchChannels();
-  }, []);
+  }, [location.search, page]);
 
   // Filter channels when search term changes
   useEffect(() => {
@@ -157,7 +189,7 @@ const ParsedChannels = () => {
       setPage(1);
       updateUrlWithPage(1);
     }
-  }, [searchTerm, channels]);
+  }, [searchTerm, channels, page, updateUrlWithPage]);
 
   // Update paginated channels when filtered channels or page changes
   useEffect(() => {
@@ -165,34 +197,6 @@ const ParsedChannels = () => {
     const endIndex = startIndex + ITEMS_PER_PAGE;
     setPaginatedChannels(filteredChannels.slice(startIndex, endIndex));
   }, [filteredChannels, page]);
-
-  // Add cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (progressPolling) {
-        clearInterval(progressPolling);
-      }
-    };
-  }, [progressPolling]);
-
-  const fetchChannels = async () => {
-    try {
-      setLoading(true);
-      const response = await channelsAPI.getAll();
-      // Sort channels by parsed_at in descending order
-      const sortedChannels = response.data.sort((a, b) => 
-        new Date(b.parsed_at) - new Date(a.parsed_at)
-      );
-      setChannels(sortedChannels);
-      setFilteredChannels(sortedChannels);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load channels. Please try again.');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const startProgressPolling = () => {
     // Stop any existing polling
@@ -400,7 +404,7 @@ const ParsedChannels = () => {
       });
       
       // Refresh the channels list
-      await fetchChannels();
+      await refetch();
       
       // Close the dialog and reset form
       setParseDialogOpen(false);
@@ -463,7 +467,7 @@ const ParsedChannels = () => {
 
     try {
       await channelsAPI.deleteChannel(selectedChannelId);
-      await fetchChannels();
+      await refetch();
       setDeleteConfirmOpen(false);
       setError(null); // Clear any previous errors
     } catch (err) {
@@ -549,7 +553,7 @@ const ParsedChannels = () => {
     }
   }, [location]);
 
-  if (loading && channels.length === 0) {
+  if (isLoading && channels.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
         <CircularProgress />
