@@ -128,11 +128,32 @@ def check_environment():
 def initialize_database():
     """Initialize the database"""
     logger.info("Initializing database...")
-    if os.path.isfile("/app/init_db.py"):
-        logger.info("Found init_db.py, attempting to run it...")
-        run_command("python /app/init_db.py", ignore_errors=True)
-    else:
-        logger.warning("Warning: /app/init_db.py not found, skipping database initialization")
+    try:
+        if os.path.isfile("/app/init_db.py"):
+            logger.info("Found init_db.py, attempting to run it...")
+            result = subprocess.run(
+                "python /app/init_db.py",
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                logger.error(f"Database initialization failed with code {result.returncode}")
+                logger.error(f"Stdout: {result.stdout}")
+                logger.error(f"Stderr: {result.stderr}")
+                return False
+            
+            logger.info("Database initialization completed")
+            logger.info(f"Initialization output: {result.stdout}")
+            if result.stderr:
+                logger.warning(f"Initialization stderr: {result.stderr}")
+            return True
+        else:
+            logger.warning("Warning: /app/init_db.py not found, skipping database initialization")
+            return True
+    except Exception as e:
+        logger.error(f"Error during database initialization: {e}")
+        return False
 
 def run_migrations():
     """Run database migrations"""
@@ -341,18 +362,55 @@ def check_redis_connection():
         import redis
         from app.core.config import settings
         
+        # Log Redis configuration (without password)
+        logger.info(f"Redis config - Host: {settings.REDIS_HOST}, Port: {settings.REDIS_PORT}, DB: {settings.REDIS_DB}")
+        
         r = redis.Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
             db=settings.REDIS_DB,
             password=settings.REDIS_PASSWORD or None,
-            socket_timeout=5
+            socket_timeout=5,
+            socket_connect_timeout=5,
+            retry_on_timeout=True
         )
-        r.ping()
-        logger.info("Redis connection successful")
-        return True
+        
+        # Test connection with ping
+        logger.info("Testing Redis connection with PING...")
+        response = r.ping()
+        if response:
+            logger.info("Redis connection successful (PING received)")
+            
+            # Test basic operations
+            logger.info("Testing Redis SET/GET operations...")
+            test_key = "startup_test"
+            test_value = "ok"
+            r.set(test_key, test_value, ex=60)  # 60 seconds expiry
+            retrieved = r.get(test_key)
+            if retrieved and retrieved.decode('utf-8') == test_value:
+                logger.info("Redis SET/GET operations successful")
+            else:
+                logger.warning("Redis SET/GET operations failed")
+                return False
+            
+            # Clean up test key
+            r.delete(test_key)
+            return True
+        else:
+            logger.error("Redis PING failed")
+            return False
+            
+    except redis.ConnectionError as e:
+        logger.error(f"Redis connection error: {e}")
+        return False
+    except redis.RedisError as e:
+        logger.error(f"Redis operation error: {e}")
+        return False
+    except ImportError as e:
+        logger.error(f"Redis module import error: {e}")
+        return False
     except Exception as e:
-        logger.error(f"Redis connection failed: {e}")
+        logger.error(f"Unexpected error during Redis check: {e}")
         return False
 
 def main():
@@ -381,17 +439,26 @@ def main():
         logger.info("Starting application initialization...")
         check_environment()
         install_missing_packages()
-        initialize_database()
+        
+        # Initialize database first
+        db_init_success = initialize_database()
+        if not db_init_success:
+            logger.error("Database initialization failed")
+            # Continue anyway as tables might already exist
         
         # Check Redis connection
         redis_ok = check_redis_connection()
         if not redis_ok:
             logger.warning("Redis connection failed, caching will be disabled")
+            # Set an environment variable to indicate Redis is unavailable
+            os.environ["REDIS_AVAILABLE"] = "false"
+        else:
+            os.environ["REDIS_AVAILABLE"] = "true"
         
         # Run migrations and check result
         migrations_success = run_migrations()
         if not migrations_success:
-            logger.error("Database migrations failed, cannot proceed with application startup")
+            logger.error("Database migrations failed")
             # Try to start the app anyway in case the migrations actually succeeded
             # but reported failure due to a different issue
             logger.warning("Attempting to start application despite migration failure...")
@@ -400,6 +467,8 @@ def main():
         start_application()
     except Exception as e:
         logger.error(f"Fatal error during startup: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         run_health_check_server_only()
 
 if __name__ == "__main__":

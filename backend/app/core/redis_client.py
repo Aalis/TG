@@ -4,6 +4,7 @@ from typing import Any, Optional, Dict, List
 import redis.asyncio as redis
 from app.core.config import settings
 import logging
+import os
 
 # Redis client for session storage
 redis_client = None
@@ -11,14 +12,30 @@ redis_client = None
 async def get_redis_client():
     """Get or create Redis client."""
     global redis_client
+    
+    # Check if Redis is available
+    if os.environ.get("REDIS_AVAILABLE", "true").lower() == "false":
+        return None
+    
     if redis_client is None:
-        redis_client = redis.Redis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            db=settings.REDIS_DB,
-            password=settings.REDIS_PASSWORD or None,
-            decode_responses=False  # We need binary for pickle
-        )
+        try:
+            redis_client = redis.Redis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                db=settings.REDIS_DB,
+                password=settings.REDIS_PASSWORD or None,
+                decode_responses=False,  # We need binary for pickle
+                socket_timeout=5,
+                socket_connect_timeout=5,
+                retry_on_timeout=True
+            )
+            # Test connection
+            await redis_client.ping()
+        except Exception as e:
+            logging.error(f"Failed to initialize Redis client: {e}")
+            redis_client = None
+            os.environ["REDIS_AVAILABLE"] = "false"
+    
     return redis_client
 
 async def store_client_session_data(phone_number: str, session_data: Dict[str, Any], expiry: int = None) -> bool:
@@ -104,6 +121,8 @@ async def cache_parsed_channels(user_id: int, channels_data: List[Dict[str, Any]
     """Store parsed channels data in Redis with pagination support."""
     try:
         r = await get_redis_client()
+        if not r:
+            return False
         
         # Use pickle for faster serialization
         serialized_data = pickle.dumps(channels_data)
@@ -119,6 +138,8 @@ async def get_cached_parsed_channels(user_id: int, cache_key: str) -> Optional[L
     """Retrieve parsed channels data from Redis with pagination support."""
     try:
         r = await get_redis_client()
+        if not r:
+            return None
         
         # Get from Redis
         data = await r.get(cache_key)
@@ -135,6 +156,8 @@ async def invalidate_parsed_channels_cache(user_id: int) -> bool:
     """Invalidate all cached parsed channels data for a user."""
     try:
         r = await get_redis_client()
+        if not r:
+            return False
         
         # Get all keys matching the pattern
         pattern = f"parsed_channels:{user_id}:*"
@@ -153,6 +176,8 @@ async def cache_parsed_groups(user_id: int, groups_data: List[Dict[str, Any]], c
     """Store parsed groups data in Redis with pagination support."""
     try:
         r = await get_redis_client()
+        if not r:
+            return False
         
         # Use pickle for faster serialization
         serialized_data = pickle.dumps(groups_data)
@@ -168,6 +193,8 @@ async def get_cached_parsed_groups(user_id: int, cache_key: str) -> Optional[Lis
     """Retrieve parsed groups data from Redis with pagination support."""
     try:
         r = await get_redis_client()
+        if not r:
+            return None
         
         # Get from Redis
         data = await r.get(cache_key)
@@ -184,6 +211,8 @@ async def invalidate_parsed_groups_cache(user_id: int) -> bool:
     """Invalidate all cached parsed groups data for a user."""
     try:
         r = await get_redis_client()
+        if not r:
+            return False
         
         # Get all keys matching the pattern
         pattern = f"parsed_groups:{user_id}:*"
