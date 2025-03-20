@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from telethon.errors import FloodWaitError, UserDeactivatedBanError
 import logging
+import asyncio
+import os
 
 from app import crud
 from app.api import deps
@@ -169,7 +171,8 @@ async def read_groups(
             groups_with_counts = (
                 db.query(
                     DBParsedGroup,
-                    func.count(GroupMember.id).label('member_count')
+                    func.count(GroupMember.id).label('users_found'),
+                    DBParsedGroup.member_count.label('total_members')
                 )
                 .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
                 .filter(
@@ -215,13 +218,14 @@ async def read_groups(
             
             # Build response data
             groups_data = []
-            for group, member_count in groups_with_counts:
+            for group, users_found, total_members in groups_with_counts:
                 group_dict = {
                     "id": group.id,
                     "group_id": group.group_id,
                     "group_name": group.group_name,
                     "group_username": group.group_username,
-                    "member_count": member_count,
+                    "member_count": total_members or users_found,  # Fallback to users_found if total_members is None
+                    "users_found": users_found,
                     "is_public": group.is_public,
                     "is_channel": group.is_channel,
                     "parsed_at": group.parsed_at,
@@ -523,7 +527,8 @@ async def read_channels(
             channels_with_counts = (
                 db.query(
                     DBParsedGroup,
-                    func.count(GroupMember.id).label('member_count')
+                    func.count(GroupMember.id).label('users_found'),
+                    DBParsedGroup.member_count.label('total_members')
                 )
                 .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
                 .filter(
@@ -569,13 +574,14 @@ async def read_channels(
             
             # Build response data
             channels_data = []
-            for channel, member_count in channels_with_counts:
+            for channel, users_found, total_members in channels_with_counts:
                 channel_dict = {
                     "id": channel.id,
                     "group_id": channel.group_id,
                     "group_name": channel.group_name,
                     "group_username": channel.group_username,
-                    "member_count": member_count,
+                    "member_count": total_members or users_found,  # Fallback to users_found if total_members is None
+                    "users_found": users_found,
                     "is_public": channel.is_public,
                     "is_channel": channel.is_channel,
                     "parsed_at": channel.parsed_at,
@@ -727,4 +733,32 @@ async def cancel_channel_parsing(
 ) -> Any:
     """Cancel the current channel parsing operation"""
     TelegramParserService.cancel_parsing()
-    return {"success": True, "message": "Parsing cancelled"} 
+    return {"success": True, "message": "Parsing cancelled"}
+
+
+@classmethod
+def _reset_progress(cls) -> None:
+    """Reset parsing progress"""
+    progress = cls.get_progress()
+    if progress:
+        if progress.current_phase in ["completed", "cancelled", "error"]:
+            # For these states, keep the message visible longer
+            asyncio.create_task(cls._delayed_reset())
+        else:
+            # For other states, reset immediately
+            if os.path.exists(cls._progress_file):
+                try:
+                    os.remove(cls._progress_file)
+                except Exception as e:
+                    logging.error(f"Error removing progress file: {e}")
+
+
+@classmethod
+async def _delayed_reset(cls) -> None:
+    """Reset progress after a delay to ensure message visibility"""
+    await asyncio.sleep(5)  # Keep message visible for 5 seconds
+    if os.path.exists(cls._progress_file):
+        try:
+            os.remove(cls._progress_file)
+        except Exception as e:
+            logging.error(f"Error removing progress file: {e}") 
