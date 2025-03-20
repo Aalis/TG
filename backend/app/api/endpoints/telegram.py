@@ -125,8 +125,33 @@ async def read_groups(
         .subquery()
     )
 
+    # Get total count efficiently using a materialized CTE
+    count_cte = (
+        db.query(func.count(DBParsedGroup.id))
+        .filter(
+            DBParsedGroup.user_id == current_user.id,
+            DBParsedGroup.is_channel == False
+        )
+        .cte(name='count_cte', materialized=True)
+    )
+    
+    total_count = db.query(count_cte).scalar()
+    if total_count > max_items:
+        total_count = max_items
+
+    # Main query with optimized loading
     query = (
-        db.query(DBParsedGroup, member_count_subq.c.member_count)
+        db.query(
+            DBParsedGroup.id,
+            DBParsedGroup.group_id,
+            DBParsedGroup.group_name,
+            DBParsedGroup.group_username,
+            DBParsedGroup.is_public,
+            DBParsedGroup.is_channel,
+            DBParsedGroup.parsed_at,
+            DBParsedGroup.user_id,
+            member_count_subq.c.member_count
+        )
         .outerjoin(member_count_subq, DBParsedGroup.id == member_count_subq.c.group_id)
         .filter(
             DBParsedGroup.user_id == current_user.id,
@@ -135,66 +160,67 @@ async def read_groups(
         .order_by(DBParsedGroup.parsed_at.desc())
     )
     
-    # Get total count efficiently
-    total_count = db.query(func.count(DBParsedGroup.id)).filter(
-        DBParsedGroup.user_id == current_user.id,
-        DBParsedGroup.is_channel == False
-    ).scalar()
-    
-    if total_count > max_items:
-        total_count = max_items
-    
-    # Get paginated groups with optimized loading
+    # Get paginated results
     results = (
         query
-        .options(
-            joinedload(DBParsedGroup.members).load_only(
-                GroupMember.id,
-                GroupMember.username,
-                GroupMember.is_admin,
-                GroupMember.is_premium,
-                GroupMember.user_id,
-                GroupMember.group_id
-            )
-        )
         .offset(offset)
         .limit(items_per_page)
         .all()
     )
     
-    # Efficient bulk conversion to dict
+    # Get member data in a separate efficient query
+    group_ids = [r[0] for r in results]  # Get group IDs
+    members_query = (
+        db.query(
+            GroupMember.group_id,
+            GroupMember.id,
+            GroupMember.user_id,
+            GroupMember.username,
+            GroupMember.is_admin,
+            GroupMember.is_premium
+        )
+        .filter(GroupMember.group_id.in_(group_ids))
+        .all()
+    )
+    
+    # Create a mapping of group_id to members
+    members_map = {}
+    for member in members_query:
+        if member.group_id not in members_map:
+            members_map[member.group_id] = []
+        members_map[member.group_id].append({
+            "id": member.id,
+            "user_id": member.user_id,
+            "group_id": member.group_id,
+            "username": member.username,
+            "is_admin": member.is_admin,
+            "is_premium": member.is_premium
+        })
+    
+    # Build response data
     groups_data = []
-    for group, member_count in results:
-        members_data = [
-            {
-                "id": member.id,
-                "user_id": member.user_id,
-                "group_id": member.group_id,
-                "username": member.username,
-                "is_admin": member.is_admin,
-                "is_premium": member.is_premium
-            }
-            for member in group.members
-        ]
-        
+    for (
+        id, group_id, group_name, group_username, 
+        is_public, is_channel, parsed_at, user_id, member_count
+    ) in results:
         group_dict = {
-            "id": group.id,
-            "group_id": group.group_id,
-            "group_name": group.group_name,
-            "group_username": group.group_username,
+            "id": id,
+            "group_id": group_id,
+            "group_name": group_name,
+            "group_username": group_username,
             "member_count": member_count or 0,
-            "is_public": group.is_public,
-            "is_channel": group.is_channel,
-            "parsed_at": group.parsed_at,
-            "user_id": group.user_id,
-            "members": members_data,
+            "is_public": is_public,
+            "is_channel": is_channel,
+            "parsed_at": parsed_at,
+            "user_id": user_id,
+            "members": members_map.get(id, []),
             "total_count": total_count
         }
         groups_data.append(group_dict)
 
-    # Cache the results with pagination info
+    # Cache with shorter expiry and compression
     try:
-        await cache_parsed_groups(current_user.id, groups_data, cache_key, expiry=300)  # 5 minutes cache
+        await cache_parsed_groups(current_user.id, groups_data, cache_key, expiry=180)  # 3 minutes cache
     except Exception as e:
         logging.warning(f"Cache storage failed: {e}")
     
@@ -420,8 +446,33 @@ async def read_channels(
         .subquery()
     )
 
+    # Get total count efficiently using a materialized CTE
+    count_cte = (
+        db.query(func.count(DBParsedGroup.id))
+        .filter(
+            DBParsedGroup.user_id == current_user.id,
+            DBParsedGroup.is_channel == True
+        )
+        .cte(name='count_cte', materialized=True)
+    )
+    
+    total_count = db.query(count_cte).scalar()
+    if total_count > max_items:
+        total_count = max_items
+
+    # Main query with optimized loading
     query = (
-        db.query(DBParsedGroup, member_count_subq.c.member_count)
+        db.query(
+            DBParsedGroup.id,
+            DBParsedGroup.group_id,
+            DBParsedGroup.group_name,
+            DBParsedGroup.group_username,
+            DBParsedGroup.is_public,
+            DBParsedGroup.is_channel,
+            DBParsedGroup.parsed_at,
+            DBParsedGroup.user_id,
+            member_count_subq.c.member_count
+        )
         .outerjoin(member_count_subq, DBParsedGroup.id == member_count_subq.c.group_id)
         .filter(
             DBParsedGroup.user_id == current_user.id,
@@ -430,66 +481,67 @@ async def read_channels(
         .order_by(DBParsedGroup.parsed_at.desc())
     )
     
-    # Get total count efficiently
-    total_count = db.query(func.count(DBParsedGroup.id)).filter(
-        DBParsedGroup.user_id == current_user.id,
-        DBParsedGroup.is_channel == True
-    ).scalar()
-    
-    if total_count > max_items:
-        total_count = max_items
-    
-    # Get paginated channels with optimized loading
+    # Get paginated results
     results = (
         query
-        .options(
-            joinedload(DBParsedGroup.members).load_only(
-                GroupMember.id,
-                GroupMember.username,
-                GroupMember.is_admin,
-                GroupMember.is_premium,
-                GroupMember.user_id,
-                GroupMember.group_id
-            )
-        )
         .offset(offset)
         .limit(items_per_page)
         .all()
     )
     
-    # Efficient bulk conversion to dict
+    # Get member data in a separate efficient query
+    channel_ids = [r[0] for r in results]  # Get channel IDs
+    members_query = (
+        db.query(
+            GroupMember.group_id,
+            GroupMember.id,
+            GroupMember.user_id,
+            GroupMember.username,
+            GroupMember.is_admin,
+            GroupMember.is_premium
+        )
+        .filter(GroupMember.group_id.in_(channel_ids))
+        .all()
+    )
+    
+    # Create a mapping of channel_id to members
+    members_map = {}
+    for member in members_query:
+        if member.group_id not in members_map:
+            members_map[member.group_id] = []
+        members_map[member.group_id].append({
+            "id": member.id,
+            "user_id": member.user_id,
+            "group_id": member.group_id,
+            "username": member.username,
+            "is_admin": member.is_admin,
+            "is_premium": member.is_premium
+        })
+    
+    # Build response data
     channels_data = []
-    for channel, member_count in results:
-        members_data = [
-            {
-                "id": member.id,
-                "user_id": member.user_id,
-                "group_id": member.group_id,
-                "username": member.username,
-                "is_admin": member.is_admin,
-                "is_premium": member.is_premium
-            }
-            for member in channel.members
-        ]
-        
+    for (
+        id, group_id, group_name, group_username, 
+        is_public, is_channel, parsed_at, user_id, member_count
+    ) in results:
         channel_dict = {
-            "id": channel.id,
-            "group_id": channel.group_id,
-            "group_name": channel.group_name,
-            "group_username": channel.group_username,
+            "id": id,
+            "group_id": group_id,
+            "group_name": group_name,
+            "group_username": group_username,
             "member_count": member_count or 0,
-            "is_public": channel.is_public,
-            "is_channel": channel.is_channel,
-            "parsed_at": channel.parsed_at,
-            "user_id": channel.user_id,
-            "members": members_data,
+            "is_public": is_public,
+            "is_channel": is_channel,
+            "parsed_at": parsed_at,
+            "user_id": user_id,
+            "members": members_map.get(id, []),
             "total_count": total_count
         }
         channels_data.append(channel_dict)
 
-    # Cache the results with pagination info
+    # Cache with shorter expiry and compression
     try:
-        await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=300)  # 5 minutes cache
+        await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)  # 3 minutes cache
     except Exception as e:
         logging.warning(f"Cache storage failed: {e}")
     
