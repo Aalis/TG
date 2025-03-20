@@ -118,9 +118,16 @@ async def read_groups(
     # Calculate offset
     offset = (page - 1) * items_per_page
     
-    # Efficient single query for groups and total count
+    # Efficient single query for groups and total count using subquery
+    member_count_subq = (
+        db.query(GroupMember.group_id, func.count(GroupMember.id).label('member_count'))
+        .group_by(GroupMember.group_id)
+        .subquery()
+    )
+
     query = (
-        db.query(DBParsedGroup)
+        db.query(DBParsedGroup, member_count_subq.c.member_count)
+        .outerjoin(member_count_subq, DBParsedGroup.id == member_count_subq.c.group_id)
         .filter(
             DBParsedGroup.user_id == current_user.id,
             DBParsedGroup.is_channel == False
@@ -128,13 +135,17 @@ async def read_groups(
         .order_by(DBParsedGroup.parsed_at.desc())
     )
     
-    # Get total count
-    total_count = query.count()
+    # Get total count efficiently
+    total_count = db.query(func.count(DBParsedGroup.id)).filter(
+        DBParsedGroup.user_id == current_user.id,
+        DBParsedGroup.is_channel == False
+    ).scalar()
+    
     if total_count > max_items:
         total_count = max_items
     
-    # Get paginated groups with minimal member data
-    groups = (
+    # Get paginated groups with optimized loading
+    results = (
         query
         .options(
             joinedload(DBParsedGroup.members).load_only(
@@ -153,7 +164,7 @@ async def read_groups(
     
     # Efficient bulk conversion to dict
     groups_data = []
-    for group in groups:
+    for group, member_count in results:
         members_data = [
             {
                 "id": member.id,
@@ -163,7 +174,7 @@ async def read_groups(
                 "is_admin": member.is_admin,
                 "is_premium": member.is_premium
             }
-            for member in group.members  # Remove the [:5] limit to include all members
+            for member in group.members
         ]
         
         group_dict = {
@@ -171,7 +182,7 @@ async def read_groups(
             "group_id": group.group_id,
             "group_name": group.group_name,
             "group_username": group.group_username,
-            "member_count": group.member_count,
+            "member_count": member_count or 0,
             "is_public": group.is_public,
             "is_channel": group.is_channel,
             "parsed_at": group.parsed_at,
@@ -180,10 +191,10 @@ async def read_groups(
             "total_count": total_count
         }
         groups_data.append(group_dict)
-    
+
     # Cache the results with pagination info
     try:
-        await cache_parsed_groups(current_user.id, groups_data, cache_key)
+        await cache_parsed_groups(current_user.id, groups_data, cache_key, expiry=300)  # 5 minutes cache
     except Exception as e:
         logging.warning(f"Cache storage failed: {e}")
     
@@ -402,9 +413,16 @@ async def read_channels(
     # Calculate offset
     offset = (page - 1) * items_per_page
     
-    # Efficient single query for channels and total count
+    # Efficient single query for channels using same optimization
+    member_count_subq = (
+        db.query(GroupMember.group_id, func.count(GroupMember.id).label('member_count'))
+        .group_by(GroupMember.group_id)
+        .subquery()
+    )
+
     query = (
-        db.query(DBParsedGroup)
+        db.query(DBParsedGroup, member_count_subq.c.member_count)
+        .outerjoin(member_count_subq, DBParsedGroup.id == member_count_subq.c.group_id)
         .filter(
             DBParsedGroup.user_id == current_user.id,
             DBParsedGroup.is_channel == True
@@ -412,13 +430,17 @@ async def read_channels(
         .order_by(DBParsedGroup.parsed_at.desc())
     )
     
-    # Get total count
-    total_count = query.count()
+    # Get total count efficiently
+    total_count = db.query(func.count(DBParsedGroup.id)).filter(
+        DBParsedGroup.user_id == current_user.id,
+        DBParsedGroup.is_channel == True
+    ).scalar()
+    
     if total_count > max_items:
         total_count = max_items
     
-    # Get paginated channels with minimal member data
-    channels = (
+    # Get paginated channels with optimized loading
+    results = (
         query
         .options(
             joinedload(DBParsedGroup.members).load_only(
@@ -437,7 +459,7 @@ async def read_channels(
     
     # Efficient bulk conversion to dict
     channels_data = []
-    for channel in channels:
+    for channel, member_count in results:
         members_data = [
             {
                 "id": member.id,
@@ -447,7 +469,7 @@ async def read_channels(
                 "is_admin": member.is_admin,
                 "is_premium": member.is_premium
             }
-            for member in channel.members  # Remove the [:5] limit to include all members
+            for member in channel.members
         ]
         
         channel_dict = {
@@ -455,7 +477,7 @@ async def read_channels(
             "group_id": channel.group_id,
             "group_name": channel.group_name,
             "group_username": channel.group_username,
-            "member_count": channel.member_count,
+            "member_count": member_count or 0,
             "is_public": channel.is_public,
             "is_channel": channel.is_channel,
             "parsed_at": channel.parsed_at,
@@ -464,10 +486,10 @@ async def read_channels(
             "total_count": total_count
         }
         channels_data.append(channel_dict)
-    
+
     # Cache the results with pagination info
     try:
-        await cache_parsed_channels(current_user.id, channels_data, cache_key)
+        await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=300)  # 5 minutes cache
     except Exception as e:
         logging.warning(f"Cache storage failed: {e}")
     
