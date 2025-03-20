@@ -465,22 +465,46 @@ async def read_channels(
         offset = (page - 1) * items_per_page
         logging.info(f"Querying database for channels, offset: {offset}, limit: {items_per_page}")
         
-        # Ensure we have a valid database connection
-        try:
-            db.execute(text("SELECT 1"))
-        except Exception as e:
-            logging.error(f"Database connection check failed: {str(e)}")
-            raise HTTPException(
-                status_code=503,
-                detail="Database connection error"
-            )
+        # Import required modules
+        from sqlalchemy.orm import Session
+        from sqlalchemy import text
+        from sqlalchemy.exc import OperationalError, SQLAlchemyError
+        import time
+        
+        # Retry database connection up to 3 times
+        max_retries = 3
+        retry_delay = 1  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # Test database connection
+                db.execute(text("SELECT 1"))
+                break
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    logging.error(f"Database connection failed after {max_retries} attempts: {str(e)}")
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Database connection error"
+                    )
+                logging.warning(f"Database connection attempt {attempt + 1} failed, retrying in {retry_delay}s")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
         
         try:
-            # Get total count first
-            total_count = db.query(DBParsedGroup).filter(
-                DBParsedGroup.user_id == current_user.id,
-                DBParsedGroup.is_channel == True
-            ).count()
+            # Get total count first with retry
+            for attempt in range(max_retries):
+                try:
+                    total_count = db.query(DBParsedGroup).filter(
+                        DBParsedGroup.user_id == current_user.id,
+                        DBParsedGroup.is_channel == True
+                    ).count()
+                    break
+                except SQLAlchemyError as e:
+                    if attempt == max_retries - 1:
+                        raise
+                    logging.warning(f"Count query attempt {attempt + 1} failed, retrying")
+                    time.sleep(retry_delay)
             
             logging.info(f"Found {total_count} total channels for user {current_user.id}")
             
@@ -491,32 +515,39 @@ async def read_channels(
                 logging.info("No channels found, returning empty list")
                 return []
             
-            # Main query with optimized loading
-            query = (
-                db.query(
-                    DBParsedGroup.id,
-                    DBParsedGroup.group_id,
-                    DBParsedGroup.group_name,
-                    DBParsedGroup.group_username,
-                    DBParsedGroup.is_public,
-                    DBParsedGroup.is_channel,
-                    DBParsedGroup.parsed_at,
-                    DBParsedGroup.user_id
-                )
-                .filter(
-                    DBParsedGroup.user_id == current_user.id,
-                    DBParsedGroup.is_channel == True
-                )
-                .order_by(DBParsedGroup.parsed_at.desc())
-            )
-            
-            # Get paginated results
-            results = (
-                query
-                .offset(offset)
-                .limit(items_per_page)
-                .all()
-            )
+            # Main query with optimized loading and retry
+            for attempt in range(max_retries):
+                try:
+                    query = (
+                        db.query(
+                            DBParsedGroup.id,
+                            DBParsedGroup.group_id,
+                            DBParsedGroup.group_name,
+                            DBParsedGroup.group_username,
+                            DBParsedGroup.is_public,
+                            DBParsedGroup.is_channel,
+                            DBParsedGroup.parsed_at,
+                            DBParsedGroup.user_id
+                        )
+                        .filter(
+                            DBParsedGroup.user_id == current_user.id,
+                            DBParsedGroup.is_channel == True
+                        )
+                        .order_by(DBParsedGroup.parsed_at.desc())
+                    )
+                    
+                    results = (
+                        query
+                        .offset(offset)
+                        .limit(items_per_page)
+                        .all()
+                    )
+                    break
+                except SQLAlchemyError as e:
+                    if attempt == max_retries - 1:
+                        raise
+                    logging.warning(f"Main query attempt {attempt + 1} failed, retrying")
+                    time.sleep(retry_delay)
             
             if not results:
                 logging.info("No channels found in page range, returning empty list")
@@ -525,26 +556,43 @@ async def read_channels(
             logging.info(f"Retrieved {len(results)} channels from database")
             
             try:
-                # Get member counts in a single query
+                # Get member counts in a single query with retry
                 channel_ids = [r[0] for r in results]
-                member_counts = dict(
-                    db.query(
-                        GroupMember.group_id,
-                        func.count(GroupMember.id).label('count')
-                    )
-                    .filter(GroupMember.group_id.in_(channel_ids))
-                    .group_by(GroupMember.group_id)
-                    .all()
-                )
+                
+                for attempt in range(max_retries):
+                    try:
+                        member_counts = dict(
+                            db.query(
+                                GroupMember.group_id,
+                                func.count(GroupMember.id).label('count')
+                            )
+                            .filter(GroupMember.group_id.in_(channel_ids))
+                            .group_by(GroupMember.group_id)
+                            .all()
+                        )
+                        break
+                    except SQLAlchemyError as e:
+                        if attempt == max_retries - 1:
+                            raise
+                        logging.warning(f"Member count query attempt {attempt + 1} failed, retrying")
+                        time.sleep(retry_delay)
                 
                 logging.info(f"Retrieved member counts for {len(member_counts)} channels")
                 
-                # Get member data efficiently
-                members_query = (
-                    db.query(GroupMember)
-                    .filter(GroupMember.group_id.in_(channel_ids))
-                    .all()
-                )
+                # Get member data efficiently with retry
+                for attempt in range(max_retries):
+                    try:
+                        members_query = (
+                            db.query(GroupMember)
+                            .filter(GroupMember.group_id.in_(channel_ids))
+                            .all()
+                        )
+                        break
+                    except SQLAlchemyError as e:
+                        if attempt == max_retries - 1:
+                            raise
+                        logging.warning(f"Member data query attempt {attempt + 1} failed, retrying")
+                        time.sleep(retry_delay)
                 
                 logging.info(f"Retrieved {len(members_query)} total members")
                 
@@ -595,14 +643,14 @@ async def read_channels(
                 
                 return channels_data
                 
-            except Exception as e:
+            except SQLAlchemyError as e:
                 logging.error(f"Error processing member data: {str(e)}")
                 raise HTTPException(
                     status_code=500,
                     detail="Error processing channel member data"
                 )
                 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logging.error(f"Database query error: {str(e)}")
             raise HTTPException(
                 status_code=500,
