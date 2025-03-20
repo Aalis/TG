@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     WORKERS=2 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONPATH=/app/backend \
+    PYTHONPATH=/app \
     STATIC_FILES_DIR=/app/static
 
 WORKDIR /app
@@ -61,12 +61,17 @@ RUN apt-get update && \
 # Create a non-root user to run the application
 RUN useradd -m appuser
 
-# Create static directory and set permissions (as root)
-RUN mkdir -p /app/static && \
+# Create necessary directories and set permissions (as root)
+RUN mkdir -p /app/static /app/app && \
     chmod 777 /app/static
 
 # Copy the application code
-COPY backend /app/backend/
+COPY backend/app /app/app/
+COPY backend/startup.py /app/
+COPY backend/init_db.py /app/
+COPY backend/create_superuser.py /app/
+COPY backend/alembic.ini /app/
+COPY backend/alembic /app/alembic/
 COPY railway.toml /app/
 COPY railway-setup.sh /app/
 
@@ -76,7 +81,7 @@ COPY --from=frontend-builder /frontend/build/ /app/static/
 # Set final permissions
 RUN chown -R appuser:appuser /app && \
     chmod -R 755 /app && \
-    chmod +x /app/backend/startup.py && \
+    chmod +x /app/startup.py && \
     chmod -R 777 /app/static
 
 # Expose the port
@@ -86,4 +91,4 @@ EXPOSE 8000
 USER appuser
 
 # Use the Python startup script
-CMD ["python", "/app/backend/startup.py"]
+CMD ["python", "/app/startup.py"]
