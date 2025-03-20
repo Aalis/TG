@@ -662,9 +662,15 @@ async def get_parsing_progress(
             "current_members": 0
         }
     
-    # Keep progress visible even after completion
-    is_parsing = progress.current_phase not in ["completed", "cancelled", "error"] or \
-                 (hasattr(progress, '_last_update') and time.time() - progress._last_update < 10)
+    # Keep progress visible during parsing and for a while after completion
+    is_parsing = True  # Always show as parsing while progress exists
+    if progress.current_phase in ["completed", "cancelled", "error"]:
+        # For final states, check the timestamp
+        if hasattr(progress, '_last_update'):
+            is_parsing = (time.time() - progress._last_update) < 10
+        else:
+            progress._last_update = time.time()
+            is_parsing = True
     
     return {
         "is_parsing": is_parsing,
@@ -692,8 +698,18 @@ async def get_channel_parsing_progress(
             "current_members": 0
         }
     
+    # Keep progress visible during parsing and for a while after completion
+    is_parsing = True  # Always show as parsing while progress exists
+    if progress.current_phase in ["completed", "cancelled", "error"]:
+        # For final states, check the timestamp
+        if hasattr(progress, '_last_update'):
+            is_parsing = (time.time() - progress._last_update) < 10
+        else:
+            progress._last_update = time.time()
+            is_parsing = True
+    
     return {
-        "is_parsing": True,
+        "is_parsing": is_parsing,
         "phase": progress.current_phase,
         "progress": progress.phase_progress,
         "message": progress.status_message,
@@ -746,6 +762,10 @@ def _update_progress(cls, phase: str, current: int = 0, total: int = 0, message:
     """Update parsing progress"""
     progress = cls.get_progress() or ParsingProgress()
     
+    # Initialize last_update if not present
+    if not hasattr(progress, '_last_update'):
+        progress._last_update = time.time()
+    
     progress.current_phase = phase
     if total > 0:
         progress.total_members = total
@@ -757,7 +777,7 @@ def _update_progress(cls, phase: str, current: int = 0, total: int = 0, message:
     if total > 0:
         progress.phase_progress = (current / total) * 100
     
-    # Add timestamp for tracking last update
+    # Update timestamp
     progress._last_update = time.time()
     
     cls._save_progress(progress)
@@ -768,11 +788,15 @@ def _reset_progress(cls) -> None:
     """Reset parsing progress"""
     progress = cls.get_progress()
     if progress:
+        # Initialize last_update if not present
+        if not hasattr(progress, '_last_update'):
+            progress._last_update = time.time()
+            
         if progress.current_phase in ["completed", "cancelled", "error"]:
             # For these states, keep the message visible longer
             asyncio.create_task(cls._delayed_reset())
         else:
-            # For other states, don't reset immediately
+            # For other states, just update the timestamp and keep progress
             progress._last_update = time.time()
             cls._save_progress(progress)
 
@@ -781,10 +805,17 @@ def _reset_progress(cls) -> None:
 async def _delayed_reset(cls) -> None:
     """Reset progress after a delay to ensure message visibility"""
     await asyncio.sleep(10)  # Keep message visible for 10 seconds
+    
     progress = cls.get_progress()
     if progress and progress.current_phase in ["completed", "cancelled", "error"]:
-        if os.path.exists(cls._progress_file):
-            try:
-                os.remove(cls._progress_file)
-            except Exception as e:
-                logging.error(f"Error removing progress file: {e}") 
+        # Only remove if enough time has passed since last update
+        if hasattr(progress, '_last_update'):
+            if (time.time() - progress._last_update) >= 10:
+                if os.path.exists(cls._progress_file):
+                    try:
+                        os.remove(cls._progress_file)
+                    except Exception as e:
+                        logging.error(f"Error removing progress file: {e}")
+            else:
+                # Schedule another check if not enough time has passed
+                asyncio.create_task(cls._delayed_reset()) 
