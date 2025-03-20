@@ -112,6 +112,14 @@ async def update_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
+    # If trying to activate this session, deactivate all other sessions first
+    if session_data.is_active:
+        db.query(TelegramSession).filter(
+            TelegramSession.user_id == current_user.id,
+            TelegramSession.id != session_id,
+            TelegramSession.is_active == True
+        ).update({"is_active": False})
+    
     session.is_active = session_data.is_active
     db.commit()
     db.refresh(session)
