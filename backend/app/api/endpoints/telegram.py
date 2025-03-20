@@ -8,7 +8,7 @@ import logging
 from app import crud
 from app.api import deps
 from app.core.config import settings
-from app.database.models import User
+from app.database.models import User, ParsedGroup as DBParsedGroup
 from app.schemas.telegram import (
     TelegramToken,
     TelegramTokenCreate,
@@ -111,9 +111,9 @@ async def read_groups(
     offset = (page - 1) * items_per_page
     
     # Get total count first
-    total_count = db.query(ParsedGroup).filter(
-        ParsedGroup.user_id == current_user.id,
-        ParsedGroup.is_channel == False
+    total_count = db.query(DBParsedGroup).filter(
+        DBParsedGroup.user_id == current_user.id,
+        DBParsedGroup.is_channel == False
     ).count()
     
     # Enforce max_items limit
@@ -121,10 +121,10 @@ async def read_groups(
         total_count = max_items
     
     # Get paginated groups
-    groups = db.query(ParsedGroup).filter(
-        ParsedGroup.user_id == current_user.id,
-        ParsedGroup.is_channel == False
-    ).order_by(ParsedGroup.parsed_at.desc()).offset(offset).limit(items_per_page).all()
+    groups = db.query(DBParsedGroup).filter(
+        DBParsedGroup.user_id == current_user.id,
+        DBParsedGroup.is_channel == False
+    ).order_by(DBParsedGroup.parsed_at.desc()).offset(offset).limit(items_per_page).all()
     
     # Convert SQLAlchemy models to dictionaries for caching
     groups_data = []
@@ -370,9 +370,9 @@ async def read_channels(
     offset = (page - 1) * items_per_page
     
     # Get total count first
-    total_count = db.query(ParsedGroup).filter(
-        ParsedGroup.user_id == current_user.id,
-        ParsedGroup.is_channel == True
+    total_count = db.query(DBParsedGroup).filter(
+        DBParsedGroup.user_id == current_user.id,
+        DBParsedGroup.is_channel == True
     ).count()
     
     # Enforce max_items limit
@@ -380,10 +380,10 @@ async def read_channels(
         total_count = max_items
     
     # Get paginated channels
-    channels = db.query(ParsedGroup).filter(
-        ParsedGroup.user_id == current_user.id,
-        ParsedGroup.is_channel == True
-    ).order_by(ParsedGroup.parsed_at.desc()).offset(offset).limit(items_per_page).all()
+    channels = db.query(DBParsedGroup).filter(
+        DBParsedGroup.user_id == current_user.id,
+        DBParsedGroup.is_channel == True
+    ).order_by(DBParsedGroup.parsed_at.desc()).offset(offset).limit(items_per_page).all()
     
     # Convert SQLAlchemy models to dictionaries for caching
     channels_data = []
