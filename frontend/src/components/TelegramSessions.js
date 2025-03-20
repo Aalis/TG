@@ -434,7 +434,10 @@ const TelegramSessions = () => {
         <DialogTitle>{t('actions.confirm')}</DialogTitle>
         <DialogContent>
           <Typography>
-            {t('telegram.deleteSessionConfirm')}
+            {t('telegram.deleteSessionConfirm', {
+              phone: sessionToDelete?.phone,
+              defaultValue: `Are you sure you want to delete the session for phone number "${sessionToDelete?.phone}"? This action cannot be undone.`
+            })}
           </Typography>
         </DialogContent>
         <DialogActions>

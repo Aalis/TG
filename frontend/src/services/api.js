@@ -90,7 +90,7 @@ export const groupsAPI = {
 export const channelsAPI = {
   getAll: () => api.get('/telegram/parsed-channels/'),
   getById: (id) => api.get(`/telegram/parsed-channels/${id}`),
-  delete: (id) => api.delete(`/telegram/parsed-channels/${id}`),
+  deleteChannel: (id) => api.delete(`/telegram/parsed-channels/${id}`),
   parseChannel: (channelLink, postLimit = 100) => 
     api.post('/telegram/parse-channel/', {
       channel_link: channelLink,

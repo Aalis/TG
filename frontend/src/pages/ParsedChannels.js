@@ -88,6 +88,7 @@ const ParsedChannels = () => {
   const [loadingComments, setLoadingComments] = useState({});
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedChannelId, setSelectedChannelId] = useState(null);
+  const [selectedChannelName, setSelectedChannelName] = useState('');
   const [parsingProgress, setParsingProgress] = useState(null);
   const [progressPolling, setProgressPolling] = useState(null);
   const [availableDialogs, setAvailableDialogs] = useState([]);
@@ -459,6 +460,7 @@ const ParsedChannels = () => {
 
   const handleDeleteClick = (channel) => {
     setSelectedChannelId(channel.id);
+    setSelectedChannelName(channel.group_name);
     setDeleteConfirmOpen(true);
   };
 
@@ -945,7 +947,10 @@ const ParsedChannels = () => {
         <DialogTitle>{t('actions.confirm')}</DialogTitle>
         <DialogContent>
           <Typography>
-            {t('telegram.deleteChannelConfirm', 'Are you sure you want to delete this channel? This action cannot be undone.')}
+            {t('telegram.deleteChannelConfirm', {
+              channelName: selectedChannelName,
+              defaultValue: `Are you sure you want to delete "${selectedChannelName}"? This action cannot be undone.`
+            })}
           </Typography>
         </DialogContent>
         <DialogActions>

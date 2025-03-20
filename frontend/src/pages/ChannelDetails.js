@@ -82,6 +82,9 @@ const ChannelDetails = () => {
           return;
         }
         
+        console.log('Channel data:', channel);
+        console.log('Channel members:', channel.members);
+        
         setChannel(channel);
         
         // Fetch posts
@@ -92,8 +95,8 @@ const ChannelDetails = () => {
         setFilteredMembers(channel.members || []);
         
       } catch (err) {
+        console.error('Error fetching channel details:', err);
         setError('Failed to load channel details. Please try again.');
-        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -398,7 +401,9 @@ const ChannelDetails = () => {
                       )}
                     </TableCell>
                     <TableCell sx={{ width: '200px', height: '56px', padding: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {[member.first_name, member.last_name].filter(Boolean).join(' ') || '-'}
+                      {member.name || member.first_name || member.last_name ? 
+                        [member.name, member.first_name, member.last_name].filter(Boolean).join(' ').trim() 
+                        : '-'}
                     </TableCell>
                     <TableCell sx={{ width: '120px', height: '56px', padding: '12px' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
