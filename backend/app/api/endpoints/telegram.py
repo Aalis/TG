@@ -124,88 +124,49 @@ async def read_groups(
         
         # Calculate offset
         offset = (page - 1) * items_per_page
-        logging.info(f"Querying database for groups, offset: {offset}, limit: {items_per_page}")
         
-        # Import required modules
-        from sqlalchemy.orm import Session, aliased
-        from sqlalchemy import text, func, select
-        from sqlalchemy.exc import OperationalError, SQLAlchemyError
-        import time
-        
-        # Retry database connection up to 3 times
-        max_retries = 3
-        retry_delay = 1  # seconds
-        
-        for attempt in range(max_retries):
-            try:
-                # Test database connection
-                db.execute(text("SELECT 1"))
-                break
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    logging.error(f"Database connection failed after {max_retries} attempts: {str(e)}")
-                    raise HTTPException(
-                        status_code=503,
-                        detail=f"Database connection error: {str(e)}"
-                    )
-                logging.warning(f"Database connection attempt {attempt + 1} failed, retrying in {retry_delay}s")
-                time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
-        
-        try:
-            # Get total count first
-            total_count = db.query(DBParsedGroup).filter(
+        # Optimize query to reduce database round trips
+        query = (
+            db.query(
+                DBParsedGroup,
+                func.count(GroupMember.id).label('users_found')
+            )
+            .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
+            .filter(
                 DBParsedGroup.user_id == current_user.id,
                 DBParsedGroup.is_channel == False
-            ).count()
-            
-            logging.info(f"Found {total_count} total groups for user {current_user.id}")
-            
-            if total_count > max_items:
-                total_count = max_items
-                
-            if total_count == 0:
-                logging.info("No groups found, returning empty list")
-                return []
-            
-            # Get groups with member counts
-            groups_with_counts = (
-                db.query(
-                    DBParsedGroup,
-                    func.count(GroupMember.id).label('users_found'),
-                    DBParsedGroup.member_count.label('total_members')
-                )
-                .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
-                .filter(
-                    DBParsedGroup.user_id == current_user.id,
-                    DBParsedGroup.is_channel == False
-                )
-                .group_by(DBParsedGroup.id)
-                .order_by(DBParsedGroup.parsed_at.desc())
-                .offset(offset)
-                .limit(items_per_page)
-                .all()
             )
+            .group_by(DBParsedGroup.id)
+            .order_by(DBParsedGroup.parsed_at.desc())
+        )
+        
+        # Get total count efficiently
+        total_count = query.with_entities(func.count(func.distinct(DBParsedGroup.id))).scalar()
+        
+        if total_count > max_items:
+            total_count = max_items
             
-            logging.info(f"Retrieved {len(groups_with_counts)} groups from database")
-            
-            if not groups_with_counts:
-                logging.info("No groups found in page range, returning empty list")
-                return []
-            
-            # Get member data efficiently in batches
-            group_ids = [g[0].id for g in groups_with_counts]
-            members_query = (
+        if total_count == 0:
+            return []
+        
+        # Get paginated results with member counts
+        groups_with_counts = query.offset(offset).limit(items_per_page).all()
+        
+        if not groups_with_counts:
+            return []
+        
+        # Get member data efficiently using IN clause
+        group_ids = [g[0].id for g in groups_with_counts]
+        members_map = {}
+        
+        if group_ids:
+            members = (
                 db.query(GroupMember)
                 .filter(GroupMember.group_id.in_(group_ids))
                 .all()
             )
             
-            logging.info(f"Retrieved {len(members_query)} total members")
-            
-            # Create a mapping of group_id to members
-            members_map = {}
-            for member in members_query:
+            for member in members:
                 if member.group_id not in members_map:
                     members_map[member.group_id] = []
                 members_map[member.group_id].append({
@@ -216,49 +177,35 @@ async def read_groups(
                     "is_admin": member.is_admin,
                     "is_premium": member.is_premium
                 })
-            
-            # Build response data
-            groups_data = []
-            for group, users_found, total_members in groups_with_counts:
-                group_dict = {
-                    "id": group.id,
-                    "group_id": group.group_id,
-                    "group_name": group.group_name,
-                    "group_username": group.group_username,
-                    "member_count": total_members or users_found,  # Fallback to users_found if total_members is None
-                    "users_found": users_found,
-                    "is_public": group.is_public,
-                    "is_channel": group.is_channel,
-                    "parsed_at": group.parsed_at,
-                    "user_id": group.user_id,
-                    "members": members_map.get(group.id, []),
-                    "total_count": total_count
-                }
-                groups_data.append(group_dict)
-
-            logging.info(f"Built response data for {len(groups_data)} groups")
-
-            # Cache the results
-            try:
-                await cache_parsed_groups(current_user.id, groups_data, cache_key, expiry=180)
-                logging.info(f"Successfully cached {len(groups_data)} groups")
-            except Exception as e:
-                logging.error(f"Failed to cache groups: {str(e)}")
-            
-            return groups_data
-            
-        except SQLAlchemyError as e:
-            logging.error(f"Database query error: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database query failed: {str(e)}"
-            )
         
-    except HTTPException as e:
-        # Re-raise HTTP exceptions with their original status code and detail
-        raise e
+        # Build response data efficiently
+        groups_data = []
+        for group, users_found in groups_with_counts:
+            groups_data.append({
+                "id": group.id,
+                "group_id": group.group_id,
+                "group_name": group.group_name,
+                "group_username": group.group_username,
+                "member_count": group.member_count or users_found,
+                "users_found": users_found,
+                "is_public": group.is_public,
+                "is_channel": group.is_channel,
+                "parsed_at": group.parsed_at,
+                "user_id": group.user_id,
+                "members": members_map.get(group.id, []),
+                "total_count": total_count
+            })
+
+        # Cache results
+        try:
+            await cache_parsed_groups(current_user.id, groups_data, cache_key, expiry=180)
+        except Exception as e:
+            logging.error(f"Failed to cache groups: {str(e)}")
+        
+        return groups_data
+            
     except Exception as e:
-        logging.error(f"Unexpected error in read_groups: {str(e)}")
+        logging.error(f"Error in read_groups: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to load groups: {str(e)}"
@@ -480,88 +427,49 @@ async def read_channels(
         
         # Calculate offset
         offset = (page - 1) * items_per_page
-        logging.info(f"Querying database for channels, offset: {offset}, limit: {items_per_page}")
         
-        # Import required modules
-        from sqlalchemy.orm import Session, aliased
-        from sqlalchemy import text, func, select
-        from sqlalchemy.exc import OperationalError, SQLAlchemyError
-        import time
-        
-        # Retry database connection up to 3 times
-        max_retries = 3
-        retry_delay = 1  # seconds
-        
-        for attempt in range(max_retries):
-            try:
-                # Test database connection
-                db.execute(text("SELECT 1"))
-                break
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    logging.error(f"Database connection failed after {max_retries} attempts: {str(e)}")
-                    raise HTTPException(
-                        status_code=503,
-                        detail=f"Database connection error: {str(e)}"
-                    )
-                logging.warning(f"Database connection attempt {attempt + 1} failed, retrying in {retry_delay}s")
-                time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
-        
-        try:
-            # Get total count first
-            total_count = db.query(DBParsedGroup).filter(
+        # Optimize query to reduce database round trips
+        query = (
+            db.query(
+                DBParsedGroup,
+                func.count(GroupMember.id).label('users_found')
+            )
+            .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
+            .filter(
                 DBParsedGroup.user_id == current_user.id,
                 DBParsedGroup.is_channel == True
-            ).count()
-            
-            logging.info(f"Found {total_count} total channels for user {current_user.id}")
-            
-            if total_count > max_items:
-                total_count = max_items
-                
-            if total_count == 0:
-                logging.info("No channels found, returning empty list")
-                return []
-            
-            # Get channels with member counts
-            channels_with_counts = (
-                db.query(
-                    DBParsedGroup,
-                    func.count(GroupMember.id).label('users_found'),
-                    DBParsedGroup.member_count.label('total_members')
-                )
-                .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
-                .filter(
-                    DBParsedGroup.user_id == current_user.id,
-                    DBParsedGroup.is_channel == True
-                )
-                .group_by(DBParsedGroup.id)
-                .order_by(DBParsedGroup.parsed_at.desc())
-                .offset(offset)
-                .limit(items_per_page)
-                .all()
             )
+            .group_by(DBParsedGroup.id)
+            .order_by(DBParsedGroup.parsed_at.desc())
+        )
+        
+        # Get total count efficiently
+        total_count = query.with_entities(func.count(func.distinct(DBParsedGroup.id))).scalar()
+        
+        if total_count > max_items:
+            total_count = max_items
             
-            logging.info(f"Retrieved {len(channels_with_counts)} channels from database")
-            
-            if not channels_with_counts:
-                logging.info("No channels found in page range, returning empty list")
-                return []
-            
-            # Get member data efficiently in batches
-            channel_ids = [c[0].id for c in channels_with_counts]
-            members_query = (
+        if total_count == 0:
+            return []
+        
+        # Get paginated results with member counts
+        channels_with_counts = query.offset(offset).limit(items_per_page).all()
+        
+        if not channels_with_counts:
+            return []
+        
+        # Get member data efficiently using IN clause
+        channel_ids = [c[0].id for c in channels_with_counts]
+        members_map = {}
+        
+        if channel_ids:
+            members = (
                 db.query(GroupMember)
                 .filter(GroupMember.group_id.in_(channel_ids))
                 .all()
             )
             
-            logging.info(f"Retrieved {len(members_query)} total members")
-            
-            # Create a mapping of channel_id to members
-            members_map = {}
-            for member in members_query:
+            for member in members:
                 if member.group_id not in members_map:
                     members_map[member.group_id] = []
                 members_map[member.group_id].append({
@@ -572,49 +480,35 @@ async def read_channels(
                     "is_admin": member.is_admin,
                     "is_premium": member.is_premium
                 })
-            
-            # Build response data
-            channels_data = []
-            for channel, users_found, total_members in channels_with_counts:
-                channel_dict = {
-                    "id": channel.id,
-                    "group_id": channel.group_id,
-                    "group_name": channel.group_name,
-                    "group_username": channel.group_username,
-                    "member_count": total_members or users_found,  # Fallback to users_found if total_members is None
-                    "users_found": users_found,
-                    "is_public": channel.is_public,
-                    "is_channel": channel.is_channel,
-                    "parsed_at": channel.parsed_at,
-                    "user_id": channel.user_id,
-                    "members": members_map.get(channel.id, []),
-                    "total_count": total_count
-                }
-                channels_data.append(channel_dict)
-
-            logging.info(f"Built response data for {len(channels_data)} channels")
-
-            # Cache the results
-            try:
-                await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
-                logging.info(f"Successfully cached {len(channels_data)} channels")
-            except Exception as e:
-                logging.error(f"Failed to cache channels: {str(e)}")
-            
-            return channels_data
-            
-        except SQLAlchemyError as e:
-            logging.error(f"Database query error: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database query failed: {str(e)}"
-            )
         
-    except HTTPException as e:
-        # Re-raise HTTP exceptions with their original status code and detail
-        raise e
+        # Build response data efficiently
+        channels_data = []
+        for channel, users_found in channels_with_counts:
+            channels_data.append({
+                "id": channel.id,
+                "group_id": channel.group_id,
+                "group_name": channel.group_name,
+                "group_username": channel.group_username,
+                "member_count": channel.member_count or users_found,
+                "users_found": users_found,
+                "is_public": channel.is_public,
+                "is_channel": channel.is_channel,
+                "parsed_at": channel.parsed_at,
+                "user_id": channel.user_id,
+                "members": members_map.get(channel.id, []),
+                "total_count": total_count
+            })
+
+        # Cache results
+        try:
+            await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
+        except Exception as e:
+            logging.error(f"Failed to cache channels: {str(e)}")
+        
+        return channels_data
+            
     except Exception as e:
-        logging.error(f"Unexpected error in read_channels: {str(e)}")
+        logging.error(f"Error in read_channels: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to load channels: {str(e)}"
@@ -762,11 +656,13 @@ def _update_progress(cls, phase: str, current: int = 0, total: int = 0, message:
     """Update parsing progress"""
     progress = cls.get_progress() or ParsingProgress()
     
-    # Initialize last_update if not present
-    if not hasattr(progress, '_last_update'):
-        progress._last_update = time.time()
+    # Initialize or update last_update timestamp
+    progress._last_update = time.time()
     
+    # Store previous phase to detect state transitions
+    previous_phase = getattr(progress, 'current_phase', None)
     progress.current_phase = phase
+    
     if total > 0:
         progress.total_members = total
     if current >= 0:
@@ -777,8 +673,9 @@ def _update_progress(cls, phase: str, current: int = 0, total: int = 0, message:
     if total > 0:
         progress.phase_progress = (current / total) * 100
     
-    # Update timestamp
-    progress._last_update = time.time()
+    # For state transitions to final states, ensure visibility
+    if phase in ["completed", "cancelled", "error"] and previous_phase not in ["completed", "cancelled", "error"]:
+        progress._completion_time = time.time()
     
     cls._save_progress(progress)
 
@@ -788,29 +685,48 @@ def _reset_progress(cls) -> None:
     """Reset parsing progress"""
     progress = cls.get_progress()
     if progress:
-        # Initialize last_update if not present
+        current_time = time.time()
+        
+        # Initialize timestamps if not present
         if not hasattr(progress, '_last_update'):
-            progress._last_update = time.time()
+            progress._last_update = current_time
+        if not hasattr(progress, '_completion_time'):
+            progress._completion_time = current_time
             
         if progress.current_phase in ["completed", "cancelled", "error"]:
-            # For these states, keep the message visible longer
-            asyncio.create_task(cls._delayed_reset())
+            # Keep progress visible for at least 15 seconds after completion
+            time_since_completion = current_time - progress._completion_time
+            if time_since_completion < 15:
+                # Update timestamp and keep progress
+                progress._last_update = current_time
+                cls._save_progress(progress)
+                # Schedule another check
+                asyncio.create_task(cls._delayed_reset())
+            else:
+                # Clear progress after 15 seconds
+                if os.path.exists(cls._progress_file):
+                    try:
+                        os.remove(cls._progress_file)
+                    except Exception as e:
+                        logging.error(f"Error removing progress file: {e}")
         else:
-            # For other states, just update the timestamp and keep progress
-            progress._last_update = time.time()
+            # For active states, just update the timestamp
+            progress._last_update = current_time
             cls._save_progress(progress)
 
 
 @classmethod
 async def _delayed_reset(cls) -> None:
     """Reset progress after a delay to ensure message visibility"""
-    await asyncio.sleep(10)  # Keep message visible for 10 seconds
+    await asyncio.sleep(5)  # Check every 5 seconds
     
     progress = cls.get_progress()
     if progress and progress.current_phase in ["completed", "cancelled", "error"]:
-        # Only remove if enough time has passed since last update
-        if hasattr(progress, '_last_update'):
-            if (time.time() - progress._last_update) >= 10:
+        current_time = time.time()
+        if hasattr(progress, '_completion_time'):
+            time_since_completion = current_time - progress._completion_time
+            if time_since_completion >= 15:
+                # Clear progress after 15 seconds from completion
                 if os.path.exists(cls._progress_file):
                     try:
                         os.remove(cls._progress_file)
@@ -818,4 +734,6 @@ async def _delayed_reset(cls) -> None:
                         logging.error(f"Error removing progress file: {e}")
             else:
                 # Schedule another check if not enough time has passed
+                progress._last_update = current_time
+                cls._save_progress(progress)
                 asyncio.create_task(cls._delayed_reset()) 
