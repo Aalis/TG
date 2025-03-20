@@ -3,6 +3,7 @@ import pickle
 from typing import Any, Optional, Dict, List
 import redis.asyncio as redis
 from app.core.config import settings
+import logging
 
 # Redis client for session storage
 redis_client = None
@@ -174,75 +175,49 @@ async def invalidate_parsed_channels_cache(user_id: int) -> bool:
 
 # Functions for caching parsed groups data
 
-async def cache_parsed_groups(user_id: int, groups_data: List[Dict[str, Any]], expiry: int = 3600) -> bool:
-    """
-    Cache parsed groups data in Redis.
-    
-    Args:
-        user_id: The user ID to associate with the cached data
-        groups_data: List of group data to cache
-        expiry: Cache expiration time in seconds (default: 1 hour)
-        
-    Returns:
-        bool: True if caching was successful, False otherwise
-    """
+async def cache_parsed_groups(user_id: int, groups_data: List[Dict[str, Any]], cache_key: str, expiry: int = 300) -> bool:
+    """Store parsed groups data in Redis with pagination support."""
     try:
         r = await get_redis_client()
-        key = f"parsed_groups:{user_id}"
         
-        # Serialize the groups data using pickle for better object serialization
+        # Use pickle for faster serialization
         serialized_data = pickle.dumps(groups_data)
         
-        # Store in Redis with expiry
-        await r.set(key, serialized_data, ex=expiry)
+        # Store in Redis with shorter expiry (5 minutes)
+        await r.set(cache_key, serialized_data, ex=expiry)
         return True
     except Exception as e:
-        print(f"Error caching parsed groups: {e}")
+        logging.warning(f"Error caching parsed groups: {e}")
         return False
 
-async def get_cached_parsed_groups(user_id: int) -> Optional[List[Dict[str, Any]]]:
-    """
-    Retrieve cached parsed groups data from Redis.
-    
-    Args:
-        user_id: The user ID associated with the cached data
-        
-    Returns:
-        Optional[List[Dict[str, Any]]]: The cached groups data or None if not found
-    """
+async def get_cached_parsed_groups(user_id: int, cache_key: str) -> Optional[List[Dict[str, Any]]]:
+    """Retrieve parsed groups data from Redis with pagination support."""
     try:
         r = await get_redis_client()
-        key = f"parsed_groups:{user_id}"
         
         # Get from Redis
-        data = await r.get(key)
+        data = await r.get(cache_key)
         if not data:
             return None
         
-        # Deserialize the groups data
+        # Deserialize using pickle
         return pickle.loads(data)
     except Exception as e:
-        print(f"Error retrieving cached parsed groups: {e}")
+        logging.warning(f"Error retrieving cached parsed groups: {e}")
         return None
 
 async def invalidate_parsed_groups_cache(user_id: int) -> bool:
-    """
-    Invalidate (delete) the cached parsed groups data for a user.
-    Should be called whenever groups are added, modified, or deleted.
-    
-    Args:
-        user_id: The user ID associated with the cached data
-        
-    Returns:
-        bool: True if invalidation was successful, False otherwise
-    """
+    """Invalidate all cached parsed groups data for a user."""
     try:
         r = await get_redis_client()
-        key = f"parsed_groups:{user_id}"
         
-        # Delete from Redis
-        await r.delete(key)
+        # Get all keys matching the pattern
+        pattern = f"parsed_groups:{user_id}:*"
+        keys = await r.keys(pattern)
+        
+        if keys:
+            await r.delete(*keys)
         return True
     except Exception as e:
-        print(f"Error invalidating parsed groups cache: {e}")
+        logging.warning(f"Error invalidating parsed groups cache: {e}")
         return False 

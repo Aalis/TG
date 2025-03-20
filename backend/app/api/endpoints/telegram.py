@@ -106,9 +106,10 @@ async def read_groups(
     """
     # Try to get groups from cache first
     from app.core.redis_client import get_cached_parsed_groups, cache_parsed_groups
+    cache_key = f"parsed_groups:{current_user.id}:p{page}"
     
     try:
-        cached_data = await get_cached_parsed_groups(current_user.id)
+        cached_data = await get_cached_parsed_groups(current_user.id, cache_key)
         if cached_data:
             return cached_data
     except Exception as e:
@@ -117,53 +118,50 @@ async def read_groups(
     # Calculate offset
     offset = (page - 1) * items_per_page
     
-    # Get total count and groups in a single query using window functions
-    query = db.query(
-        DBParsedGroup,
-        func.count().over().label('total_count'),
-        func.row_number().over(
-            order_by=DBParsedGroup.parsed_at.desc()
-        ).label('row_num')
-    ).filter(
-        DBParsedGroup.user_id == current_user.id,
-        DBParsedGroup.is_channel == False
-    ).subquery()
+    # Efficient single query for groups and total count
+    query = (
+        db.query(DBParsedGroup)
+        .filter(
+            DBParsedGroup.user_id == current_user.id,
+            DBParsedGroup.is_channel == False
+        )
+        .order_by(DBParsedGroup.parsed_at.desc())
+    )
     
-    # Apply pagination
-    groups_with_members = db.query(DBParsedGroup).join(
-        query,
-        DBParsedGroup.id == query.c.id
-    ).options(
-        joinedload(DBParsedGroup.members)
-    ).filter(
-        query.c.row_num > offset,
-        query.c.row_num <= offset + items_per_page
-    ).all()
-    
-    # Get total count from the first row
-    total_count = db.scalar(
-        db.query(query.c.total_count).limit(1)
-    ) or 0
-    
-    # Enforce max_items limit
+    # Get total count
+    total_count = query.count()
     if total_count > max_items:
         total_count = max_items
     
-    # Convert SQLAlchemy models to dictionaries for caching
+    # Get paginated groups with minimal member data
+    groups = (
+        query
+        .options(
+            joinedload(DBParsedGroup.members).load_only(
+                GroupMember.id,
+                GroupMember.username,
+                GroupMember.is_admin,
+                GroupMember.is_premium
+            )
+        )
+        .offset(offset)
+        .limit(items_per_page)
+        .all()
+    )
+    
+    # Efficient bulk conversion to dict
     groups_data = []
-    for group in groups_with_members:
-        members_data = [{
-            "id": member.id,
-            "group_id": member.group_id,
-            "user_id": member.user_id,
-            "username": member.username,
-            "first_name": member.first_name,
-            "last_name": member.last_name,
-            "is_bot": member.is_bot,
-            "is_admin": member.is_admin,
-            "is_premium": member.is_premium
-        } for member in group.members]
-            
+    for group in groups:
+        members_data = [
+            {
+                "id": member.id,
+                "username": member.username,
+                "is_admin": member.is_admin,
+                "is_premium": member.is_premium
+            }
+            for member in group.members[:5]  # Only include first 5 members for list view
+        ]
+        
         group_dict = {
             "id": group.id,
             "group_id": group.group_id,
@@ -179,9 +177,9 @@ async def read_groups(
         }
         groups_data.append(group_dict)
     
-    # Cache the results for future requests
+    # Cache the results with pagination info
     try:
-        await cache_parsed_groups(current_user.id, groups_data)
+        await cache_parsed_groups(current_user.id, groups_data, cache_key)
     except Exception as e:
         logging.warning(f"Cache storage failed: {e}")
     
