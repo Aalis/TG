@@ -138,7 +138,8 @@ def run_migrations():
     """Run database migrations"""
     logger.info("Running database migrations...")
     if os.path.isdir("/app/alembic") and os.path.isfile("/app/alembic.ini"):
-        logger.info("Found alembic files, planning schema modifications...")
+        logger.info("Found alembic files, running migrations...")
+        
         # Set PYTHONPATH environment variable
         os.environ["PYTHONPATH"] = "/app"
         
@@ -148,170 +149,49 @@ def run_migrations():
         if not db_url:
             logger.warning("DATABASE_URL not set, skipping migrations")
             return
+            
+        # Always run Alembic migrations first
+        logger.info("Running Alembic migrations...")
+        success = run_command("alembic -c /app/alembic.ini upgrade head")
         
-        # Try to directly modify the database schema instead of using Alembic
+        if not success:
+            logger.error("Alembic migrations failed")
+            return
+            
+        logger.info("Alembic migrations completed successfully")
+        
+        # Now run any additional schema modifications if needed
         try:
             # Extract database connection parameters from DATABASE_URL
-            # Expected format: postgresql://username:password@host:port/dbname
             match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', db_url)
             if match:
                 username, password, host, port, dbname = match.groups()
-                logger.info(f"Extracted database connection parameters: host={host}, port={port}, dbname={dbname}, user={username}")
+                logger.info(f"Checking for any additional schema modifications needed...")
                 
-                direct_schema_success = True  # Flag to track if direct schema modifications succeeded
+                # Connect to database
+                conn = psycopg2.connect(
+                    host=host,
+                    port=port,
+                    dbname=dbname,
+                    user=username,
+                    password=password
+                )
+                conn.autocommit = True
+                cursor = conn.cursor()
                 
-                # Create dictionary of tables and their columns using psycopg2 directly
-                schema_info = {}
-                try:
-                    # Connect directly with psycopg2
-                    conn = psycopg2.connect(
-                        host=host,
-                        port=port,
-                        dbname=dbname,
-                        user=username,
-                        password=password
-                    )
-                    conn.autocommit = True  # Important: Each query runs in its own transaction
-                    cursor = conn.cursor()
-                    
-                    # Get list of tables
-                    cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public';")
-                    tables = [row[0] for row in cursor.fetchall()]
-                    logger.info(f"Tables found: {tables}")
-                    
-                    # Check if alembic_version table exists - if not, we might need to create it
-                    create_alembic_version = 'alembic_version' not in tables
-                    
-                    # Get columns for each table
-                    for table in tables:
-                        cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}';")
-                        columns = [row[0] for row in cursor.fetchall()]
-                        schema_info[table] = columns
-                    
-                    logger.info(f"Schema info gathered successfully")
-                    
-                    # Now we can execute our DDL operations with separate connections
-                    
-                    # Add missing columns to users table
-                    if 'users' in tables:
-                        user_columns = schema_info['users']
-                        logger.info(f"User columns found: {user_columns}")
-                        
-                        # Add each column in a separate connection
-                        for col_name, col_type in [
-                            ('email_verified', 'BOOLEAN'),
-                            ('verification_token', 'VARCHAR'),
-                            ('verification_token_expires', 'TIMESTAMP WITH TIME ZONE'),
-                            ('password_reset_token', 'VARCHAR'),
-                            ('password_reset_expires', 'TIMESTAMP WITH TIME ZONE')
-                        ]:
-                            if col_name not in user_columns:
-                                try:
-                                    # Create a new connection for each operation
-                                    with psycopg2.connect(
-                                        host=host, port=port, dbname=dbname, 
-                                        user=username, password=password
-                                    ) as new_conn:
-                                        new_conn.autocommit = True
-                                        with new_conn.cursor() as new_cursor:
-                                            new_cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type};")
-                                            logger.info(f"Added {col_name} column to users table")
-                                except Exception as e:
-                                    logger.warning(f"Error adding {col_name} column: {e}")
-                                    if "already exists" not in str(e):
-                                        direct_schema_success = False
-                    
-                    # Drop parsing_progress column if it exists
-                    if 'parsed_groups' in tables:
-                        parsed_groups_columns = schema_info['parsed_groups']
-                        logger.info(f"Parsed groups columns found: {parsed_groups_columns}")
-                        
-                        if 'parsing_progress' in parsed_groups_columns:
-                            try:
-                                # Create a new connection for this operation
-                                with psycopg2.connect(
-                                    host=host, port=port, dbname=dbname, 
-                                    user=username, password=password
-                                ) as new_conn:
-                                    new_conn.autocommit = True
-                                    with new_conn.cursor() as new_cursor:
-                                        new_cursor.execute("ALTER TABLE parsed_groups DROP COLUMN parsing_progress;")
-                                        logger.info("Dropped parsing_progress column")
-                            except Exception as e:
-                                logger.warning(f"Error dropping parsing_progress column: {e}")
-                                direct_schema_success = False
-                    
-                    # Create alembic_version table and set to latest version if needed
-                    # This will make Alembic think all migrations have been applied
-                    if create_alembic_version:
-                        logger.info("Creating alembic_version table to mark migrations as complete")
-                        try:
-                            # Get the latest revision ID
-                            latest_version = None
-                            alembic_dir = "/app/alembic/versions"
-                            if os.path.isdir(alembic_dir):
-                                version_files = [f for f in os.listdir(alembic_dir) if f.endswith('.py')]
-                                for file in version_files:
-                                    with open(os.path.join(alembic_dir, file), 'r') as f:
-                                        content = f.read()
-                                        # Look for revision ID in the file
-                                        match = re.search(r'revision\s*=\s*[\'"]([^\'"]+)[\'"]', content)
-                                        if match:
-                                            # We assume the last file alphabetically has the latest version
-                                            # This is a simplified approach
-                                            latest_version = match.group(1)
-                            
-                            if latest_version:
-                                with psycopg2.connect(
-                                    host=host, port=port, dbname=dbname, 
-                                    user=username, password=password
-                                ) as new_conn:
-                                    new_conn.autocommit = True
-                                    with new_conn.cursor() as new_cursor:
-                                        # Create alembic_version table
-                                        new_cursor.execute("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL);")
-                                        # Insert the latest version
-                                        new_cursor.execute("DELETE FROM alembic_version;")
-                                        new_cursor.execute("INSERT INTO alembic_version (version_num) VALUES (%s);", (latest_version,))
-                                        logger.info(f"Set alembic_version to {latest_version}")
-                        except Exception as e:
-                            logger.warning(f"Error setting up alembic_version: {e}")
-                            direct_schema_success = False
-                    
-                    # Close the cursor and connection
-                    cursor.close()
-                    conn.close()
-                    
-                    logger.info("Direct schema modifications completed")
-                    
-                except Exception as e:
-                    logger.error(f"Error during direct database schema modification: {e}")
-                    direct_schema_success = False
+                # Get list of tables
+                cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public';")
+                tables = [row[0] for row in cursor.fetchall()]
+                logger.info(f"Tables found after migrations: {tables}")
                 
-                # Only run Alembic migrations if direct schema modifications failed
-                if not direct_schema_success:
-                    logger.warning("Direct schema modifications had issues, falling back to Alembic migrations")
-                    run_command("alembic -c /app/alembic.ini upgrade head", ignore_errors=True)
-                else:
-                    logger.info("Skipping Alembic migrations since direct schema modifications succeeded")
+                # Close connections
+                cursor.close()
+                conn.close()
                 
-            else:
-                logger.error(f"Could not parse DATABASE_URL: {db_url}")
-                # Fall back to Alembic migrations
-                logger.warning("Falling back to Alembic migrations")
-                run_command("alembic -c /app/alembic.ini upgrade head", ignore_errors=True)
+                logger.info("Additional schema checks completed")
                 
         except Exception as e:
-            logger.error(f"Error during schema modification: {e}")
-            # Fall back to Alembic migrations
-            logger.warning("Falling back to Alembic migrations due to error")
-            success = run_command("alembic -c /app/alembic.ini upgrade head", ignore_errors=True)
-            
-            if not success:
-                logger.warning("Migration had errors but we're continuing anyway")
-                # Log additional information that might help diagnose the issue
-                logger.info("Checking database schema...")
-                run_command("python -c \"import os, sqlalchemy as sa; engine = sa.create_engine(os.environ.get('DATABASE_URL', '')); conn = engine.connect(); print([table for table in sa.inspect(engine).get_table_names()])\"", ignore_errors=True)
+            logger.error(f"Error during additional schema checks: {e}")
     else:
         logger.warning("Alembic files not found, skipping migrations")
 
