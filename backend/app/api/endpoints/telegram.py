@@ -141,7 +141,9 @@ async def read_groups(
                 GroupMember.id,
                 GroupMember.username,
                 GroupMember.is_admin,
-                GroupMember.is_premium
+                GroupMember.is_premium,
+                GroupMember.user_id,
+                GroupMember.group_id
             )
         )
         .offset(offset)
@@ -161,7 +163,7 @@ async def read_groups(
                 "is_admin": member.is_admin,
                 "is_premium": member.is_premium
             }
-            for member in group.members[:5]  # Only include first 5 members for list view
+            for member in group.members  # Remove the [:5] limit to include all members
         ]
         
         group_dict = {
@@ -423,7 +425,9 @@ async def read_channels(
                 GroupMember.id,
                 GroupMember.username,
                 GroupMember.is_admin,
-                GroupMember.is_premium
+                GroupMember.is_premium,
+                GroupMember.user_id,
+                GroupMember.group_id
             )
         )
         .offset(offset)
@@ -443,7 +447,7 @@ async def read_channels(
                 "is_admin": member.is_admin,
                 "is_premium": member.is_premium
             }
-            for member in channel.members[:5]  # Only include first 5 members for list view
+            for member in channel.members  # Remove the [:5] limit to include all members
         ]
         
         channel_dict = {
