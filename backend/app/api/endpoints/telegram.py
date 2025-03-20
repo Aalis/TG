@@ -97,26 +97,38 @@ def delete_token(
 async def read_groups(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
+    page: int = 1,
+    items_per_page: int = 21,
+    max_items: int = 42
 ) -> Any:
     """
-    Retrieve parsed Telegram groups.
+    Retrieve parsed Telegram groups with pagination.
     """
     # Try to get groups from cache first
     from app.core.redis_client import get_cached_parsed_groups, cache_parsed_groups
     
-    cached_groups = await get_cached_parsed_groups(current_user.id)
-    if cached_groups:
-        # Return cached data if available
-        return cached_groups
+    # Calculate offset
+    offset = (page - 1) * items_per_page
     
-    # If not in cache, fetch from database
-    groups = crud.telegram.get_groups_by_user(db, user_id=current_user.id)
+    # Get total count first
+    total_count = db.query(ParsedGroup).filter(
+        ParsedGroup.user_id == current_user.id,
+        ParsedGroup.is_channel == False
+    ).count()
+    
+    # Enforce max_items limit
+    if total_count > max_items:
+        total_count = max_items
+    
+    # Get paginated groups
+    groups = db.query(ParsedGroup).filter(
+        ParsedGroup.user_id == current_user.id,
+        ParsedGroup.is_channel == False
+    ).order_by(ParsedGroup.parsed_at.desc()).offset(offset).limit(items_per_page).all()
     
     # Convert SQLAlchemy models to dictionaries for caching
-    # We need to handle SQLAlchemy models properly
     groups_data = []
     for group in groups:
-        # Get the members for this group
         members_data = []
         for member in group.members:
             member_dict = {
@@ -142,14 +154,15 @@ async def read_groups(
             "is_channel": group.is_channel,
             "parsed_at": group.parsed_at,
             "user_id": group.user_id,
-            "members": members_data
+            "members": members_data,
+            "total_count": total_count  # Include total count in response
         }
         groups_data.append(group_dict)
     
     # Cache the results for future requests
     await cache_parsed_groups(current_user.id, groups_data)
     
-    return groups
+    return groups_data
 
 
 @router.get("/parsed-groups/{group_id}", response_model=ParsedGroup)
@@ -345,24 +358,36 @@ def read_post_comments(
 async def read_channels(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
+    page: int = 1,
+    items_per_page: int = 21,
+    max_items: int = 42
 ) -> Any:
-    """Get all parsed channels for current user"""
+    """Get all parsed channels for current user with pagination"""
     # Try to get channels from cache first
     from app.core.redis_client import get_cached_parsed_channels, cache_parsed_channels
     
-    cached_channels = await get_cached_parsed_channels(current_user.id)
-    if cached_channels:
-        # Return cached data if available
-        return cached_channels
+    # Calculate offset
+    offset = (page - 1) * items_per_page
     
-    # If not in cache, fetch from database
-    channels = crud.telegram.get_channels_by_user(db, user_id=current_user.id)
+    # Get total count first
+    total_count = db.query(ParsedGroup).filter(
+        ParsedGroup.user_id == current_user.id,
+        ParsedGroup.is_channel == True
+    ).count()
+    
+    # Enforce max_items limit
+    if total_count > max_items:
+        total_count = max_items
+    
+    # Get paginated channels
+    channels = db.query(ParsedGroup).filter(
+        ParsedGroup.user_id == current_user.id,
+        ParsedGroup.is_channel == True
+    ).order_by(ParsedGroup.parsed_at.desc()).offset(offset).limit(items_per_page).all()
     
     # Convert SQLAlchemy models to dictionaries for caching
-    # We need to handle SQLAlchemy models properly
     channels_data = []
     for channel in channels:
-        # Get the members for this channel
         members_data = []
         for member in channel.members:
             member_dict = {
@@ -388,14 +413,15 @@ async def read_channels(
             "is_channel": channel.is_channel,
             "parsed_at": channel.parsed_at,
             "user_id": channel.user_id,
-            "members": members_data
+            "members": members_data,
+            "total_count": total_count  # Include total count in response
         }
         channels_data.append(channel_dict)
     
     # Cache the results for future requests
     await cache_parsed_channels(current_user.id, channels_data)
     
-    return channels
+    return channels_data
 
 
 @router.delete("/parsed-channels/{channel_id}", response_model=dict)
