@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import redis
 import time
 from typing import Dict, Any
@@ -17,8 +18,8 @@ def check_latency(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # Check database latency
     db_start = time.time()
     try:
-        # Simple query to check database connection
-        db.execute("SELECT 1")
+        # Simple query to check database connection using proper text()
+        db.execute(text("SELECT 1"))
         db_latency = (time.time() - db_start) * 1000  # Convert to milliseconds
         db_status = "ok"
     except Exception as e:
@@ -30,6 +31,7 @@ def check_latency(db: Session = Depends(get_db)) -> Dict[str, Any]:
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,
         db=settings.REDIS_DB,
+        password=settings.REDIS_PASSWORD,  # Add Redis password
         decode_responses=True
     )
     

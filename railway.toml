@@ -14,6 +14,7 @@ WORKERS = "2"
 PYTHONUNBUFFERED = "1"
 PYTHONPATH = "/app"
 STATIC_DIR = "/app/static"
+REDIS_PASSWORD = "${REDIS_PASSWORD}"
 
 # Additional Metadata for Railway Dashboard
 [metadata]
