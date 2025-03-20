@@ -1,14 +1,14 @@
 from typing import Any, List
-
+from sqlalchemy import func
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from telethon.errors import FloodWaitError, UserDeactivatedBanError
 import logging
 
 from app import crud
 from app.api import deps
 from app.core.config import settings
-from app.database.models import User, ParsedGroup as DBParsedGroup
+from app.database.models import User, ParsedGroup as DBParsedGroup, GroupMember
 from app.schemas.telegram import (
     TelegramToken,
     TelegramTokenCreate,
@@ -107,42 +107,62 @@ async def read_groups(
     # Try to get groups from cache first
     from app.core.redis_client import get_cached_parsed_groups, cache_parsed_groups
     
+    try:
+        cached_data = await get_cached_parsed_groups(current_user.id)
+        if cached_data:
+            return cached_data
+    except Exception as e:
+        logging.warning(f"Cache retrieval failed: {e}")
+    
     # Calculate offset
     offset = (page - 1) * items_per_page
     
-    # Get total count first
-    total_count = db.query(DBParsedGroup).filter(
+    # Get total count and groups in a single query using window functions
+    query = db.query(
+        DBParsedGroup,
+        func.count().over().label('total_count'),
+        func.row_number().over(
+            order_by=DBParsedGroup.parsed_at.desc()
+        ).label('row_num')
+    ).filter(
         DBParsedGroup.user_id == current_user.id,
         DBParsedGroup.is_channel == False
-    ).count()
+    ).subquery()
+    
+    # Apply pagination
+    groups_with_members = db.query(DBParsedGroup).join(
+        query,
+        DBParsedGroup.id == query.c.id
+    ).options(
+        joinedload(DBParsedGroup.members)
+    ).filter(
+        query.c.row_num > offset,
+        query.c.row_num <= offset + items_per_page
+    ).all()
+    
+    # Get total count from the first row
+    total_count = db.scalar(
+        db.query(query.c.total_count).limit(1)
+    ) or 0
     
     # Enforce max_items limit
     if total_count > max_items:
         total_count = max_items
     
-    # Get paginated groups
-    groups = db.query(DBParsedGroup).filter(
-        DBParsedGroup.user_id == current_user.id,
-        DBParsedGroup.is_channel == False
-    ).order_by(DBParsedGroup.parsed_at.desc()).offset(offset).limit(items_per_page).all()
-    
     # Convert SQLAlchemy models to dictionaries for caching
     groups_data = []
-    for group in groups:
-        members_data = []
-        for member in group.members:
-            member_dict = {
-                "id": member.id,
-                "group_id": member.group_id,
-                "user_id": member.user_id,
-                "username": member.username,
-                "first_name": member.first_name,
-                "last_name": member.last_name,
-                "is_bot": member.is_bot,
-                "is_admin": member.is_admin,
-                "is_premium": member.is_premium
-            }
-            members_data.append(member_dict)
+    for group in groups_with_members:
+        members_data = [{
+            "id": member.id,
+            "group_id": member.group_id,
+            "user_id": member.user_id,
+            "username": member.username,
+            "first_name": member.first_name,
+            "last_name": member.last_name,
+            "is_bot": member.is_bot,
+            "is_admin": member.is_admin,
+            "is_premium": member.is_premium
+        } for member in group.members]
             
         group_dict = {
             "id": group.id,
@@ -155,12 +175,15 @@ async def read_groups(
             "parsed_at": group.parsed_at,
             "user_id": group.user_id,
             "members": members_data,
-            "total_count": total_count  # Include total count in response
+            "total_count": total_count
         }
         groups_data.append(group_dict)
     
     # Cache the results for future requests
-    await cache_parsed_groups(current_user.id, groups_data)
+    try:
+        await cache_parsed_groups(current_user.id, groups_data)
+    except Exception as e:
+        logging.warning(f"Cache storage failed: {e}")
     
     return groups_data
 
@@ -366,42 +389,62 @@ async def read_channels(
     # Try to get channels from cache first
     from app.core.redis_client import get_cached_parsed_channels, cache_parsed_channels
     
+    try:
+        cached_data = await get_cached_parsed_channels(current_user.id)
+        if cached_data:
+            return cached_data
+    except Exception as e:
+        logging.warning(f"Cache retrieval failed: {e}")
+    
     # Calculate offset
     offset = (page - 1) * items_per_page
     
-    # Get total count first
-    total_count = db.query(DBParsedGroup).filter(
+    # Get total count and channels in a single query using window functions
+    query = db.query(
+        DBParsedGroup,
+        func.count().over().label('total_count'),
+        func.row_number().over(
+            order_by=DBParsedGroup.parsed_at.desc()
+        ).label('row_num')
+    ).filter(
         DBParsedGroup.user_id == current_user.id,
         DBParsedGroup.is_channel == True
-    ).count()
+    ).subquery()
+    
+    # Apply pagination
+    channels_with_members = db.query(DBParsedGroup).join(
+        query,
+        DBParsedGroup.id == query.c.id
+    ).options(
+        joinedload(DBParsedGroup.members)
+    ).filter(
+        query.c.row_num > offset,
+        query.c.row_num <= offset + items_per_page
+    ).all()
+    
+    # Get total count from the first row
+    total_count = db.scalar(
+        db.query(query.c.total_count).limit(1)
+    ) or 0
     
     # Enforce max_items limit
     if total_count > max_items:
         total_count = max_items
     
-    # Get paginated channels
-    channels = db.query(DBParsedGroup).filter(
-        DBParsedGroup.user_id == current_user.id,
-        DBParsedGroup.is_channel == True
-    ).order_by(DBParsedGroup.parsed_at.desc()).offset(offset).limit(items_per_page).all()
-    
     # Convert SQLAlchemy models to dictionaries for caching
     channels_data = []
-    for channel in channels:
-        members_data = []
-        for member in channel.members:
-            member_dict = {
-                "id": member.id,
-                "group_id": member.group_id,
-                "user_id": member.user_id,
-                "username": member.username,
-                "first_name": member.first_name,
-                "last_name": member.last_name,
-                "is_bot": member.is_bot,
-                "is_admin": member.is_admin,
-                "is_premium": member.is_premium
-            }
-            members_data.append(member_dict)
+    for channel in channels_with_members:
+        members_data = [{
+            "id": member.id,
+            "group_id": member.group_id,
+            "user_id": member.user_id,
+            "username": member.username,
+            "first_name": member.first_name,
+            "last_name": member.last_name,
+            "is_bot": member.is_bot,
+            "is_admin": member.is_admin,
+            "is_premium": member.is_premium
+        } for member in channel.members]
             
         channel_dict = {
             "id": channel.id,
@@ -414,12 +457,15 @@ async def read_channels(
             "parsed_at": channel.parsed_at,
             "user_id": channel.user_id,
             "members": members_data,
-            "total_count": total_count  # Include total count in response
+            "total_count": total_count
         }
         channels_data.append(channel_dict)
     
     # Cache the results for future requests
-    await cache_parsed_channels(current_user.id, channels_data)
+    try:
+        await cache_parsed_channels(current_user.id, channels_data)
+    except Exception as e:
+        logging.warning(f"Cache storage failed: {e}")
     
     return channels_data
 
