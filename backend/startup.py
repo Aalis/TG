@@ -392,48 +392,32 @@ def start_application():
     sock.close()
     
     # Build the command
-    command = (
-        f"gunicorn --chdir /app app.main:app "
-        f"--workers {workers} "
-        f"--worker-class uvicorn.workers.UvicornWorker "
-        f"--bind 0.0.0.0:{port} "
-        f"--timeout 120 "
-        f"--access-logfile - "
-        f"--error-logfile -"
-    )
+    cmd = [
+        'gunicorn',
+        'app.main:app',
+        f'--workers={workers}',
+        '--worker-class=uvicorn.workers.UvicornWorker',
+        f'--bind=0.0.0.0:{port}',
+        '--log-level=info',
+        '--timeout=300',
+        '--keep-alive=5',
+        '--access-logfile=-',
+        '--error-logfile=-'
+    ]
     
-    logger.info(f"Executing: {command}")
+    logger.info(f"Executing: {cmd}")
     main_app_running = True
     
     # Start the application in a subprocess for better error handling
     try:
-        # Use subprocess to run gunicorn and get output
-        process = subprocess.Popen(
-            command.split(), 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE, 
-            text=True
-        )
-        
-        # Monitor the process
-        while process.poll() is None:
-            stderr_line = process.stderr.readline()
-            if stderr_line:
-                logger.warning(f"Gunicorn stderr: {stderr_line.strip()}")
-            
-            stdout_line = process.stdout.readline()
-            if stdout_line:
-                logger.info(f"Gunicorn stdout: {stdout_line.strip()}")
-        
-        # Process ended - get return code
-        returncode = process.poll()
-        if returncode != 0:
-            logger.error(f"Gunicorn exited with code {returncode}")
-            main_app_running = False
-            run_health_check_server_only()
-        
+        # Run gunicorn
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to start gunicorn: {e}")
+        main_app_running = False
+        run_health_check_server_only()
     except Exception as e:
-        logger.error(f"Error starting Gunicorn: {e}")
+        logger.error(f"Unexpected error: {e}")
         main_app_running = False
         run_health_check_server_only()
 

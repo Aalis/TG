@@ -3,7 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-healthcheckPath = "/health"
+healthcheckPath = "/api/v1/monitoring/health/latency"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5
@@ -12,7 +12,8 @@ restartPolicyMaxRetries = 5
 PORT = "8000"
 WORKERS = "2"
 PYTHONUNBUFFERED = "1"
-STATIC_DIR = "/static"
+PYTHONPATH = "/app/backend"
+STATIC_DIR = "/app/static"
 
 # Additional Metadata for Railway Dashboard
 [metadata]
@@ -45,7 +46,7 @@ name = "redis"
 [plugins.var]
 # These are used by the postgres plugin
 POSTGRES_USER = "postgres"
-POSTGRES_DB = "railway" # Railway Configuration
+POSTGRES_DB = "railway"
 
 # Environment variable for the frontend to know where the backend is
 [services.frontend.env]
@@ -53,5 +54,5 @@ REACT_APP_API_URL = "${RAILWAY_SERVICE_BACKEND_URL}"
 
 # Mount points for static files
 [services.backend.mounts]
-source = "/static"
-destination = "/static"
+source = "/app/static"
+destination = "/app/static"
