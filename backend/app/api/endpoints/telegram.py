@@ -121,8 +121,8 @@ async def read_groups(
         offset = (page - 1) * items_per_page
         
         # Start transaction
-        from sqlalchemy.orm import Session
-        from sqlalchemy import text
+        from sqlalchemy.orm import Session, aliased
+        from sqlalchemy import text, func, select
         
         # Ensure we have a valid database connection
         try:
@@ -134,21 +134,9 @@ async def read_groups(
                 detail="Database connection error"
             )
         
-        # Get total count first
-        total_count = db.query(DBParsedGroup).filter(
-            DBParsedGroup.user_id == current_user.id,
-            DBParsedGroup.is_channel == False
-        ).count()
-        
-        if total_count > max_items:
-            total_count = max_items
-            
-        if total_count == 0:
-            return []
-        
-        # Main query with optimized loading
-        query = (
-            db.query(
+        # Use a CTE for efficient counting and data retrieval
+        base_query = (
+            select(
                 DBParsedGroup.id,
                 DBParsedGroup.group_id,
                 DBParsedGroup.group_name,
@@ -156,18 +144,30 @@ async def read_groups(
                 DBParsedGroup.is_public,
                 DBParsedGroup.is_channel,
                 DBParsedGroup.parsed_at,
-                DBParsedGroup.user_id
+                DBParsedGroup.user_id,
+                func.count(GroupMember.id).over(partition_by=DBParsedGroup.id).label('member_count')
             )
+            .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
             .filter(
                 DBParsedGroup.user_id == current_user.id,
                 DBParsedGroup.is_channel == False
             )
             .order_by(DBParsedGroup.parsed_at.desc())
-        )
+        ).cte('base_query')
         
-        # Get paginated results
+        # Get total count from CTE
+        total_count = db.query(func.count(base_query.c.id).distinct()).scalar()
+        
+        if total_count > max_items:
+            total_count = max_items
+            
+        if total_count == 0:
+            return []
+        
+        # Get paginated results with member counts
         results = (
-            query
+            db.query(base_query)
+            .distinct()
             .offset(offset)
             .limit(items_per_page)
             .all()
@@ -176,19 +176,8 @@ async def read_groups(
         if not results:
             return []
         
-        # Get member counts in a single query
-        group_ids = [r[0] for r in results]
-        member_counts = dict(
-            db.query(
-                GroupMember.group_id,
-                func.count(GroupMember.id).label('count')
-            )
-            .filter(GroupMember.group_id.in_(group_ids))
-            .group_by(GroupMember.group_id)
-            .all()
-        )
-        
-        # Get member data efficiently
+        # Get member data efficiently in batches
+        group_ids = [r.id for r in results]
         members_query = (
             db.query(GroupMember)
             .filter(GroupMember.group_id.in_(group_ids))
@@ -211,21 +200,18 @@ async def read_groups(
         
         # Build response data
         groups_data = []
-        for (
-            id, group_id, group_name, group_username, 
-            is_public, is_channel, parsed_at, user_id
-        ) in results:
+        for result in results:
             group_dict = {
-                "id": id,
-                "group_id": group_id,
-                "group_name": group_name,
-                "group_username": group_username,
-                "member_count": member_counts.get(id, 0),
-                "is_public": is_public,
-                "is_channel": is_channel,
-                "parsed_at": parsed_at,
-                "user_id": user_id,
-                "members": members_map.get(id, []),
+                "id": result.id,
+                "group_id": result.group_id,
+                "group_name": result.group_name,
+                "group_username": result.group_username,
+                "member_count": result.member_count,
+                "is_public": result.is_public,
+                "is_channel": result.is_channel,
+                "parsed_at": result.parsed_at,
+                "user_id": result.user_id,
+                "members": members_map.get(result.id, []),
                 "total_count": total_count
             }
             groups_data.append(group_dict)
@@ -466,8 +452,8 @@ async def read_channels(
         logging.info(f"Querying database for channels, offset: {offset}, limit: {items_per_page}")
         
         # Import required modules
-        from sqlalchemy.orm import Session
-        from sqlalchemy import text
+        from sqlalchemy.orm import Session, aliased
+        from sqlalchemy import text, func, select
         from sqlalchemy.exc import OperationalError, SQLAlchemyError
         import time
         
@@ -492,13 +478,31 @@ async def read_channels(
                 retry_delay *= 2  # Exponential backoff
         
         try:
-            # Get total count first with retry
+            # Use a CTE for efficient counting and data retrieval
+            base_query = (
+                select(
+                    DBParsedGroup.id,
+                    DBParsedGroup.group_id,
+                    DBParsedGroup.group_name,
+                    DBParsedGroup.group_username,
+                    DBParsedGroup.is_public,
+                    DBParsedGroup.is_channel,
+                    DBParsedGroup.parsed_at,
+                    DBParsedGroup.user_id,
+                    func.count(GroupMember.id).over(partition_by=DBParsedGroup.id).label('member_count')
+                )
+                .outerjoin(GroupMember, DBParsedGroup.id == GroupMember.group_id)
+                .filter(
+                    DBParsedGroup.user_id == current_user.id,
+                    DBParsedGroup.is_channel == True
+                )
+                .order_by(DBParsedGroup.parsed_at.desc())
+            ).cte('base_query')
+            
+            # Get total count from CTE with retry
             for attempt in range(max_retries):
                 try:
-                    total_count = db.query(DBParsedGroup).filter(
-                        DBParsedGroup.user_id == current_user.id,
-                        DBParsedGroup.is_channel == True
-                    ).count()
+                    total_count = db.query(func.count(base_query.c.id).distinct()).scalar()
                     break
                 except SQLAlchemyError as e:
                     if attempt == max_retries - 1:
@@ -515,29 +519,12 @@ async def read_channels(
                 logging.info("No channels found, returning empty list")
                 return []
             
-            # Main query with optimized loading and retry
+            # Get paginated results with member counts
             for attempt in range(max_retries):
                 try:
-                    query = (
-                        db.query(
-                            DBParsedGroup.id,
-                            DBParsedGroup.group_id,
-                            DBParsedGroup.group_name,
-                            DBParsedGroup.group_username,
-                            DBParsedGroup.is_public,
-                            DBParsedGroup.is_channel,
-                            DBParsedGroup.parsed_at,
-                            DBParsedGroup.user_id
-                        )
-                        .filter(
-                            DBParsedGroup.user_id == current_user.id,
-                            DBParsedGroup.is_channel == True
-                        )
-                        .order_by(DBParsedGroup.parsed_at.desc())
-                    )
-                    
                     results = (
-                        query
+                        db.query(base_query)
+                        .distinct()
                         .offset(offset)
                         .limit(items_per_page)
                         .all()
@@ -556,30 +543,9 @@ async def read_channels(
             logging.info(f"Retrieved {len(results)} channels from database")
             
             try:
-                # Get member counts in a single query with retry
-                channel_ids = [r[0] for r in results]
+                # Get member data efficiently in batches
+                channel_ids = [r.id for r in results]
                 
-                for attempt in range(max_retries):
-                    try:
-                        member_counts = dict(
-                            db.query(
-                                GroupMember.group_id,
-                                func.count(GroupMember.id).label('count')
-                            )
-                            .filter(GroupMember.group_id.in_(channel_ids))
-                            .group_by(GroupMember.group_id)
-                            .all()
-                        )
-                        break
-                    except SQLAlchemyError as e:
-                        if attempt == max_retries - 1:
-                            raise
-                        logging.warning(f"Member count query attempt {attempt + 1} failed, retrying")
-                        time.sleep(retry_delay)
-                
-                logging.info(f"Retrieved member counts for {len(member_counts)} channels")
-                
-                # Get member data efficiently with retry
                 for attempt in range(max_retries):
                     try:
                         members_query = (
@@ -612,21 +578,18 @@ async def read_channels(
                 
                 # Build response data
                 channels_data = []
-                for (
-                    id, group_id, group_name, group_username, 
-                    is_public, is_channel, parsed_at, user_id
-                ) in results:
+                for result in results:
                     channel_dict = {
-                        "id": id,
-                        "group_id": group_id,
-                        "group_name": group_name,
-                        "group_username": group_username,
-                        "member_count": member_counts.get(id, 0),
-                        "is_public": is_public,
-                        "is_channel": is_channel,
-                        "parsed_at": parsed_at,
-                        "user_id": user_id,
-                        "members": members_map.get(id, []),
+                        "id": result.id,
+                        "group_id": result.group_id,
+                        "group_name": result.group_name,
+                        "group_username": result.group_username,
+                        "member_count": result.member_count,
+                        "is_public": result.is_public,
+                        "is_channel": result.is_channel,
+                        "parsed_at": result.parsed_at,
+                        "user_id": result.user_id,
+                        "members": members_map.get(result.id, []),
                         "total_count": total_count
                     }
                     channels_data.append(channel_dict)
