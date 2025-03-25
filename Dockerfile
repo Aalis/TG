@@ -33,13 +33,17 @@ RUN pip install --no-cache-dir -r requirements.txt -r root-requirements.txt
 # Frontend build stage
 FROM node:18 as frontend-builder
 
+# Add build argument for cache busting
+ARG CACHE_BUST=1
+
 WORKDIR /frontend
 
 # Copy frontend source
 COPY frontend/ .
 
 # Install dependencies and build
-RUN npm install --legacy-peer-deps && \
+RUN echo "Cache bust: ${CACHE_BUST}" && \
+    npm install --legacy-peer-deps && \
     npm run build
 
 # Final stage
