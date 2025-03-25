@@ -160,7 +160,7 @@ const Subscribe = () => {
           display: 'none'
         }}
       >
-        {t('subscribe.title')}
+        {t('subscription.title')}
       </Typography>
 
       <Paper 
@@ -178,7 +178,7 @@ const Subscribe = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <InfoIcon sx={{ color: '#2196f3' }} />
             <Typography variant="subtitle1" sx={{ color: 'text.primary' }}>
-              {t('subscribe.testPeriod')}
+              {t('subscription.testPeriod')}
             </Typography>
           </Box>
         </Box>
@@ -192,7 +192,7 @@ const Subscribe = () => {
             mb: 3
           }}>
             <Typography>
-              {t('subscribe.contactText')}
+              {t('subscription.contactText')}
             </Typography>
             <Link
               href="https://t.me/aalis92"
@@ -213,7 +213,7 @@ const Subscribe = () => {
               @aalis92
             </Link>
             <Typography>
-              {t('subscribe.onTelegram')}
+              {t('subscription.onTelegram')}
             </Typography>
           </Box>
 
@@ -227,7 +227,7 @@ const Subscribe = () => {
                 <CalendarIcon sx={{ color: '#2196f3' }} />
               </ListItemIcon>
               <ListItemText 
-                primary={t('subscribe.price1Day')}
+                primary={t('subscription.price1Day')}
                 sx={{ 
                   '& .MuiListItemText-primary': { 
                     color: 'text.primary',
@@ -243,7 +243,7 @@ const Subscribe = () => {
                 <CalendarIcon sx={{ color: '#2196f3' }} />
               </ListItemIcon>
               <ListItemText 
-                primary={t('subscribe.price5Days')}
+                primary={t('subscription.price5Days')}
                 sx={{ 
                   '& .MuiListItemText-primary': { 
                     color: 'text.primary',
@@ -259,7 +259,7 @@ const Subscribe = () => {
                 <CalendarIcon sx={{ color: '#2196f3' }} />
               </ListItemIcon>
               <ListItemText 
-                primary={t('subscribe.price20Days')}
+                primary={t('subscription.price20Days')}
                 sx={{ 
                   '& .MuiListItemText-primary': { 
                     color: 'text.primary',
@@ -275,17 +275,17 @@ const Subscribe = () => {
             <CryptoAddress 
               type="usdt"
               address={addresses.usdt}
-              label={t('subscribe.usdtAddress')}
+              label={t('subscription.usdtAddress')}
             />
             <CryptoAddress 
               type="eth"
               address={addresses.eth}
-              label={t('subscribe.ethAddress')}
+              label={t('subscription.ethAddress')}
             />
             <CryptoAddress 
               type="btc"
               address={addresses.btc}
-              label={t('subscribe.btcAddress')}
+              label={t('subscription.btcAddress')}
             />
           </Stack>
         </Box>
@@ -341,7 +341,7 @@ const Subscribe = () => {
             {qrCodeUrl && (
               <img 
                 src={qrCodeUrl} 
-                alt={t('subscribe.qrCodeAlt')}
+                alt={t('subscription.qrCodeAlt')}
                 style={{ 
                   width: '100%',
                   height: '100%',
