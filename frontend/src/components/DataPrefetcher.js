@@ -31,7 +31,8 @@ const DataPrefetcher = () => {
             await queryClient.prefetchQuery({
               queryKey,
               queryFn: async () => {
-                const response = await fetch(`/api/telegram/${item.type}s/${item.id}`);
+                const endpoint = item.type === 'channel' ? 'parsed-channels' : 'parsed-groups';
+                const response = await fetch(`/api/telegram/${endpoint}/${item.id}`);
                 if (!response.ok) throw new Error('Failed to fetch');
                 return response.json();
               },
