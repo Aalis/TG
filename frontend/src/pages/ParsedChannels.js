@@ -53,14 +53,12 @@ import ParseButtonHeader from '../components/ParseButtonHeader';
 import { useChannels } from '../hooks/useChannels';
 
 // Pagination constants
-const ITEMS_PER_PAGE = 21;
+const ITEMS_PER_PAGE = 42;
 const MAX_TOTAL_ITEMS = 42;
 
 // Helper function to get page from URL search params
 const getPageFromUrl = (search) => {
-  const searchParams = new URLSearchParams(search);
-  const pageParam = searchParams.get('page');
-  return pageParam ? parseInt(pageParam, 10) : 1;
+  return 1;  // Always return 1 since we're showing all items
 };
 
 const ParsedChannels = () => {
@@ -192,12 +190,10 @@ const ParsedChannels = () => {
     }
   }, [searchTerm, channels, page, updateUrlWithPage]);
 
-  // Update paginated channels when filtered channels or page changes
+  // Update paginated channels when filtered channels changes
   useEffect(() => {
-    const startIndex = (page - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    setPaginatedChannels(filteredChannels.slice(startIndex, endIndex));
-  }, [filteredChannels, page]);
+    setPaginatedChannels(filteredChannels);
+  }, [filteredChannels]);
 
   const startProgressPolling = () => {
     // Stop any existing polling
@@ -736,21 +732,6 @@ const ParsedChannels = () => {
               </Grid>
             ))}
           </Grid>
-          
-          {/* Pagination */}
-          {filteredChannels.length > ITEMS_PER_PAGE && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
-              <Pagination 
-                count={Math.ceil(filteredChannels.length / ITEMS_PER_PAGE)} 
-                page={page} 
-                onChange={handlePageChange}
-                color="primary"
-                size="large"
-                showFirstButton
-                showLastButton
-              />
-            </Box>
-          )}
         </>
       )}
 

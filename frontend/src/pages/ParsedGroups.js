@@ -69,7 +69,7 @@ const ParsedGroups = () => {
   });
   
   // Pagination constants
-  const ITEMS_PER_PAGE = 21;
+  const ITEMS_PER_PAGE = 42;
   const MAX_TOTAL_ITEMS = 42;
   
   const navigate = useNavigate();
@@ -78,10 +78,8 @@ const ParsedGroups = () => {
 
   // Get page from URL query parameter or default to 1
   const getPageFromUrl = useCallback(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const pageParam = searchParams.get('page');
-    return pageParam ? parseInt(pageParam, 10) : 1;
-  }, [location.search]);
+    return 1;  // Always return 1 since we're showing all items
+  }, []);
 
   // Initialize page from URL on component mount
   const [page, setPage] = useState(getPageFromUrl());
@@ -148,12 +146,10 @@ const ParsedGroups = () => {
     }
   }, [searchTerm, groups, page, updateUrlWithPage]);
 
-  // Update paginated groups when filtered groups or page changes
+  // Update paginated groups when filtered groups changes
   useEffect(() => {
-    const startIndex = (page - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    setPaginatedGroups(filteredGroups.slice(startIndex, endIndex));
-  }, [filteredGroups, page]);
+    setPaginatedGroups(filteredGroups);
+  }, [filteredGroups]);
 
   // Add cleanup on unmount
   useEffect(() => {
@@ -650,21 +646,6 @@ const ParsedGroups = () => {
               </Grid>
             ))}
           </Grid>
-          
-          {/* Pagination */}
-          {filteredGroups.length > ITEMS_PER_PAGE && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
-              <Pagination 
-                count={Math.ceil(filteredGroups.length / ITEMS_PER_PAGE)} 
-                page={page} 
-                onChange={handlePageChange}
-                color="primary"
-                size="large"
-                showFirstButton
-                showLastButton
-              />
-            </Box>
-          )}
         </>
       )}
       

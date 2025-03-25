@@ -72,7 +72,8 @@ export const sessionsAPI = {
 
 // Telegram Groups API
 export const groupsAPI = {
-  getAll: () => api.get('/telegram/parsed-groups/'),
+  getAll: (page = 1, items_per_page = 42) => 
+    api.get(`/telegram/parsed-groups/?page=${page}&items_per_page=${items_per_page}`),
   getById: (id) => api.get(`/telegram/parsed-groups/${id}`),
   delete: (id) => api.delete(`/telegram/parsed-groups/${id}`),
   parseGroup: (groupLink, scanComments = false, commentLimit = 100) => 
@@ -88,7 +89,8 @@ export const groupsAPI = {
 
 // Telegram Channels API
 export const channelsAPI = {
-  getAll: () => api.get('/telegram/parsed-channels/'),
+  getAll: (page = 1, items_per_page = 42) => 
+    api.get(`/telegram/parsed-channels/?page=${page}&items_per_page=${items_per_page}`),
   getById: (id) => api.get(`/telegram/parsed-channels/${id}`),
   deleteChannel: (id) => api.delete(`/telegram/parsed-channels/${id}`),
   parseChannel: (channelLink, postLimit = 100) => 
