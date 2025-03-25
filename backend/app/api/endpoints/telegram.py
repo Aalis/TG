@@ -429,16 +429,16 @@ async def read_channels(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
     page: int = 1,
-    items_per_page: int = 21,
+    items_per_page: int = 42,  # Default to max items
     max_items: int = 42
 ) -> Any:
-    """Get all parsed channels for current user with pagination"""
+    """Get all parsed channels for current user"""
     try:
-        logging.info(f"Starting read_channels for user {current_user.id}, page {page}")
+        logging.info(f"Starting read_channels for user {current_user.id}")
         
         # Try to get channels from cache first
         from app.core.redis_client import get_cached_parsed_channels, cache_parsed_channels
-        cache_key = f"parsed_channels:{current_user.id}:p{page}"
+        cache_key = f"parsed_channels:{current_user.id}"
         
         try:
             cached_data = await get_cached_parsed_channels(current_user.id, cache_key)
@@ -447,9 +447,6 @@ async def read_channels(
                 return cached_data
         except Exception as e:
             logging.error(f"Cache retrieval failed: {str(e)}")
-        
-        # Calculate offset
-        offset = (page - 1) * items_per_page
         
         try:
             # Get total count first
@@ -468,7 +465,7 @@ async def read_channels(
             if total_count == 0:
                 return []
             
-            # Get channels with member counts
+            # Get all channels up to max_items
             channels = (
                 db.query(DBParsedGroup)
                 .filter(
@@ -476,8 +473,7 @@ async def read_channels(
                     DBParsedGroup.is_channel == True
                 )
                 .order_by(DBParsedGroup.parsed_at.desc())
-                .offset(offset)
-                .limit(items_per_page)
+                .limit(max_items)
                 .all()
             )
             

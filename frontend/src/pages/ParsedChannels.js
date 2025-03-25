@@ -53,7 +53,7 @@ import ParseButtonHeader from '../components/ParseButtonHeader';
 import { useChannels } from '../hooks/useChannels';
 
 // Pagination constants
-const ITEMS_PER_PAGE = 42;
+const ITEMS_PER_PAGE = 42;  // Show all items at once
 const MAX_TOTAL_ITEMS = 42;
 
 // Helper function to get page from URL search params
@@ -190,10 +190,12 @@ const ParsedChannels = () => {
     }
   }, [searchTerm, channels, page, updateUrlWithPage]);
 
-  // Update paginated channels when filtered channels changes
+  // Update paginated channels when filtered channels or page changes
   useEffect(() => {
-    setPaginatedChannels(filteredChannels);
-  }, [filteredChannels]);
+    const startIndex = (page - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    setPaginatedChannels(filteredChannels.slice(startIndex, endIndex));
+  }, [filteredChannels, page]);
 
   const startProgressPolling = () => {
     // Stop any existing polling
@@ -637,7 +639,7 @@ const ParsedChannels = () => {
       ) : (
         <>
           <Grid container spacing={3}>
-            {paginatedChannels.map((channel) => (
+            {filteredChannels.map((channel) => (
               <Grid item xs={12} sm={6} md={4} key={channel.id}>
                 <Card 
                   className="card-hover"
