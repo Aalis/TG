@@ -38,13 +38,20 @@ ARG CACHE_BUST=1
 
 WORKDIR /frontend
 
+# Copy package files first
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm install --legacy-peer-deps
+
 # Copy frontend source
 COPY frontend/ .
 
-# Install dependencies and build
-RUN echo "Cache bust: ${CACHE_BUST}" && \
-    npm install --legacy-peer-deps && \
-    npm run build
+# Install Material-UI dependencies explicitly
+RUN npm install @mui/material @mui/icons-material @emotion/react @emotion/styled @babel/runtime --legacy-peer-deps
+
+# Build the application
+RUN npm run build
 
 # Final stage
 FROM base
