@@ -33,8 +33,9 @@ RUN pip install --no-cache-dir -r requirements.txt -r root-requirements.txt
 # Frontend build stage
 FROM node:18 as frontend-builder
 
-# Add build argument for cache busting
-ARG CACHE_BUST=1
+# Add build argument that changes with each build
+ARG CACHE_BUST_TIME
+RUN echo "Cache bust at: $CACHE_BUST_TIME"
 
 WORKDIR /frontend
 
@@ -50,8 +51,8 @@ COPY frontend/ .
 # Install Material-UI dependencies explicitly
 RUN npm install @mui/material @mui/icons-material @emotion/react @emotion/styled @babel/runtime --legacy-peer-deps
 
-# Build the application
-RUN npm run build
+# Force cache invalidation by using the build argument
+RUN echo "Building at: $CACHE_BUST_TIME" && npm run build
 
 # Final stage
 FROM base
