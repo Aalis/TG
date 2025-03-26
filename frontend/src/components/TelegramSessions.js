@@ -166,23 +166,64 @@ const TelegramSessions = () => {
 
   const handleDeleteSession = async () => {
     try {
-      await sessionsAPI.delete(sessionToDelete.id);
-      await fetchSessions();
-      setSuccess(t('telegram.sessionDeletedSuccessfully'));
+      // Store current sessions state for potential rollback
+      const previousSessions = [...sessions];
+      
+      // Optimistically update UI immediately
+      const updatedSessions = sessions.filter(session => session.id !== sessionToDelete.id);
+      setSessions(updatedSessions);
+      
+      // Close dialog immediately for better UX
       setDeleteDialogOpen(false);
       setSessionToDelete(null);
+      
+      // Show success message immediately
+      setSuccess(t('telegram.sessionDeletedSuccessfully'));
+      
+      // Then perform the actual API call in the background
+      await sessionsAPI.delete(sessionToDelete.id);
+      // No need to refresh sessions, we already updated optimistically
+      console.log('Session deleted successfully');
     } catch (err) {
       console.error('Error deleting session:', err);
       setError(t('telegram.failedToDeleteSession'));
+      
+      // If error occurred after dialog was closed, we should re-fetch sessions
+      // to ensure UI is in sync with backend
+      fetchSessions();
     }
   };
 
   const handleToggleStatus = async (sessionId, currentStatus) => {
+    // Store current sessions state for potential rollback
+    const previousSessions = [...sessions];
+    
+    // Optimistically update UI immediately
+    const newStatus = !currentStatus;
+    const updatedSessions = sessions.map(session => {
+      // If activating a session, deactivate all others (matching backend behavior)
+      if (newStatus && session.id !== sessionId) {
+        return { ...session, is_active: false };
+      }
+      // Toggle the clicked session
+      if (session.id === sessionId) {
+        return { ...session, is_active: newStatus };
+      }
+      return session;
+    });
+    
+    // Update UI immediately
+    setSessions(updatedSessions);
+    
+    // Then perform the actual API call in the background
     try {
-      await sessionsAPI.update(sessionId, !currentStatus);
-      await fetchSessions();
+      await sessionsAPI.update(sessionId, newStatus);
+      // No need to refresh sessions, we already updated optimistically
+      console.log('Session status updated successfully');
     } catch (err) {
+      // If there's an error, revert to previous state
       console.error('Error updating session status:', err);
+      setSessions(previousSessions);
       setError(t('telegram.failedToUpdateSessionStatus'));
     }
   };
