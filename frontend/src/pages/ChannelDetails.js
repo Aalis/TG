@@ -47,20 +47,16 @@ import {
 } from '@mui/icons-material';
 import { channelsAPI } from '../services/api';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 
 const ChannelDetails = () => {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   
-  const [channel, setChannel] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showOnlyPremium, setShowOnlyPremium] = useState(false);
   const [showOnlyWithUsername, setShowOnlyWithUsername] = useState(false);
-  const [posts, setPosts] = useState([]);
-  const [filteredPosts, setFilteredPosts] = useState([]);
   const [expandedPosts, setExpandedPosts] = useState({});
   const [comments, setComments] = useState({});
   const [loadingComments, setLoadingComments] = useState({});
@@ -69,45 +65,47 @@ const ChannelDetails = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [showBots, setShowBots] = useState(true);
 
-  // Fetch channel details and posts on component mount
-  useEffect(() => {
-    const fetchChannelDetails = async () => {
-      try {
-        setLoading(true);
-        // Use getById instead of getAll to ensure we get the latest data directly from the server
-        const channelResponse = await channelsAPI.getById(id);
-        const channel = channelResponse.data;
-        
-        if (!channel) {
-          setError('Channel not found');
-          return;
-        }
-        
-        console.log('Channel data:', channel);
-        console.log('Channel members:', channel.members);
-        
-        setChannel(channel);
-        
-        // Fetch posts
-        const postsResponse = await channelsAPI.getPosts(channel.id);
-        setPosts(postsResponse.data);
-        setFilteredPosts(postsResponse.data);
-        
-        setFilteredMembers(channel.members || []);
-        
-      } catch (err) {
-        console.error('Error fetching channel details:', err);
-        setError('Failed to load channel details. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchChannelDetails();
-  }, [id]);
+  // Use React Query to fetch channel details
+  const { 
+    data: channel, 
+    isLoading, 
+    error: queryError,
+    refetch 
+  } = useQuery({
+    queryKey: ['channel', id],
+    queryFn: () => channelsAPI.getById(id),
+    select: (response) => response.data,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    cacheTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+  });
 
-  // Filter posts when search term changes
+  // Use React Query to fetch posts
+  const { 
+    data: posts = [], 
+    isLoading: postsLoading
+  } = useQuery({
+    queryKey: ['channelPosts', id],
+    queryFn: () => channelsAPI.getPosts(id),
+    select: (response) => response.data,
+    staleTime: 5 * 60 * 1000,
+    cacheTime: 30 * 60 * 1000,
+    enabled: !!channel, // Only run this query if channel data is available
+  });
+
+  // Filtered posts state
+  const [filteredPosts, setFilteredPosts] = useState([]);
+  
+  // Update filtered members when channel data changes
   useEffect(() => {
+    if (channel?.members) {
+      setFilteredMembers(channel.members);
+    }
+  }, [channel]);
+  
+  // Update filtered posts when posts or search term changes
+  useEffect(() => {
+    if (!posts) return;
+    
     if (searchTerm.trim() === '') {
       setFilteredPosts(posts);
     } else {
@@ -208,7 +206,7 @@ const ChannelDetails = () => {
     URL.revokeObjectURL(url); // Clean up the URL object
   };
 
-  if (loading) {
+  if (isLoading || postsLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
         <CircularProgress />
@@ -216,7 +214,7 @@ const ChannelDetails = () => {
     );
   }
 
-  if (error) {
+  if (queryError) {
     return (
       <Box>
         <Button
@@ -228,7 +226,7 @@ const ChannelDetails = () => {
         </Button>
         
         <Alert severity="error">
-          {error}
+          {queryError.message || 'Failed to load channel details. Please try again.'}
         </Alert>
       </Box>
     );
