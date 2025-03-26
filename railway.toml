@@ -5,6 +5,8 @@
 builder = "dockerfile"
 dockerfile = "Dockerfile"
 dockerfilePath = "Dockerfile"
+buildArgs = { BUILD_DATE = "${DATE}", CACHE_BUST_TIME = "${DATE}_${TIMESTAMP}" }
+watchPaths = [".forcereload", "Dockerfile", "frontend/src/components/DataPrefetcherNew.js"]
 
 [deploy]
 healthcheckPath = "/api/v1/monitoring/health/latency"
