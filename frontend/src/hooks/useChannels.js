@@ -47,23 +47,33 @@ export const useChannels = (skipCache = false) => {
       
       // Optimistically update the cache
       if (previousData) {
-        const updatedData = {
-          ...previousData,
-          data: previousData.data.filter(channel => channel.id !== channelId)
-        };
-        queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+        // Need to check the structure of the data
+        if (Array.isArray(previousData)) {
+          // If data is an array, filter directly
+          queryClient.setQueryData(CHANNELS_QUERY_KEY, 
+            previousData.filter(channel => channel.id !== channelId)
+          );
+        } else if (previousData.data && Array.isArray(previousData.data)) {
+          // If data is in a nested structure (common with axios responses)
+          const updatedData = {
+            ...previousData,
+            data: previousData.data.filter(channel => channel.id !== channelId)
+          };
+          queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+        }
       }
       
       // Return a context with the previous value
       return { previousData };
     },
     onError: (err, channelId, context) => {
+      console.error("Error deleting channel:", err);
       // If the mutation fails, use the context to roll back
       if (context?.previousData) {
         queryClient.setQueryData(CHANNELS_QUERY_KEY, context.previousData);
       }
-      // Return the error for UI handling
-      return err;
+      // Re-throw the error for UI handling
+      throw err;
     },
     onSettled: () => {
       // Always refetch after error or success to make sure the server state is reflected

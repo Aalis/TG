@@ -488,13 +488,18 @@ const ParsedChannels = () => {
       setDeleteConfirmOpen(false);
       
       // Show info message
-      enqueueSnackbar(`Deleting channel "${selectedChannelName}"...`, { 
+      const infoMessage = enqueueSnackbar(`Deleting channel "${selectedChannelName}"...`, { 
         variant: 'info',
-        autoHideDuration: 1500
+        persist: true // Keep this message until we replace it
       });
       
       // Use the async mutation from useChannels hook which handles optimistic updates
       await deleteChannelAsync(selectedChannelId);
+      
+      // Remove the info message
+      if (infoMessage) {
+        enqueueSnackbar.close(infoMessage);
+      }
       
       // Show success notification
       enqueueSnackbar(`Channel "${selectedChannelName}" was deleted successfully`, { 
@@ -507,14 +512,29 @@ const ParsedChannels = () => {
     } catch (err) {
       console.error('Failed to delete channel', err);
       
+      // Get specific error message
+      let errorMessage = 'Unknown error';
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       // Show error notification
-      enqueueSnackbar(`Failed to delete channel: ${err.response?.data?.detail || 'Unknown error'}`, { 
+      enqueueSnackbar(`Failed to delete channel: ${errorMessage}`, { 
         variant: 'error',
         autoHideDuration: 5000
       });
       
       // Set error state for UI feedback
-      setError('Failed to delete channel. Please try again.');
+      setError(`Failed to delete channel "${selectedChannelName}": ${errorMessage}`);
+      
+      // Force refetch to ensure UI matches backend state
+      await refetch();
+    } finally {
+      // Clear selected channel
+      setSelectedChannelId(null);
+      setSelectedChannelName('');
     }
   };
 
@@ -594,6 +614,18 @@ const ParsedChannels = () => {
       navigate(location.pathname, { replace: true });
     }
   }, [location]);
+
+  // Cleanup and refresh
+  useEffect(() => {
+    // When component mounts, always refetch to ensure latest data
+    refetch();
+    
+    // Return cleanup function
+    return () => {
+      // Clear any error state when unmounting
+      setError(null);
+    };
+  }, [refetch]);
 
   if (isLoading && channels.length === 0) {
     return (

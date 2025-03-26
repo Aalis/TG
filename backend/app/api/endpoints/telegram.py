@@ -623,8 +623,16 @@ async def delete_channel(
         channel = crud.telegram.get_group_by_id(db, group_id=channel_id)
         
         if not channel:
-            logging.warning(f"Channel with ID {channel_id} not found for user {current_user.id}")
-            raise HTTPException(status_code=404, detail="Channel not found")
+            # Special case: The UI might show a channel that's already deleted
+            # Instead of erroring, we'll invalidate the cache and return success
+            logging.warning(f"Channel with ID {channel_id} not found for user {current_user.id} - may have already been deleted")
+            
+            # Invalidate cache to ensure UI is updated
+            from app.core.redis_client import invalidate_parsed_channels_cache
+            await invalidate_parsed_channels_cache(current_user.id)
+            
+            # Return success to allow the UI to proceed and refetch
+            return {"success": True, "message": "Channel not found, cache invalidated"}
             
         if channel.user_id != current_user.id:
             logging.warning(f"Permission denied: User {current_user.id} attempted to delete channel {channel_id} owned by user {channel.user_id}")
@@ -643,7 +651,7 @@ async def delete_channel(
         await invalidate_parsed_channels_cache(current_user.id)
         
         logging.info(f"Successfully deleted channel {channel_id} for user {current_user.id}")
-        return {"success": True}
+        return {"success": True, "message": "Channel deleted successfully"}
         
     except HTTPException:
         # Re-raise HTTP exceptions to preserve status codes
