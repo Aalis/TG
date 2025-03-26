@@ -5,7 +5,7 @@ import { useGroups } from '../hooks/useGroups';
 import { groupsAPI, channelsAPI } from '../services/api';
 
 // Constants
-const MAX_PREFETCH_ITEMS = 10; // Limit the number of items to prefetch
+const MAX_PREFETCH_ITEMS = 30; // Limit the number of items to prefetch
 const PREFETCH_DELAY_MS = 500; // Delay between prefetch requests
 const MAX_RETRIES = 2; // Maximum number of retries for failed prefetch
 const RETRY_DELAY_MS = 2000; // Delay before retry
