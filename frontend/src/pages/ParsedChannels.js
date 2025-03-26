@@ -503,15 +503,27 @@ const ParsedChannels = () => {
       // Close the dialog immediately for better UX
       setDeleteConfirmOpen(false);
       
-      // Track that we're deleting this channel
-      setDeletingChannels(prev => ({
-        ...prev,
-        [selectedChannelId]: true
-      }));
-      
       // Get the channel name and id for use in UI feedback
       const channelName = selectedChannelName;
       const channelId = selectedChannelId;
+      
+      // Track that we're deleting this channel
+      setDeletingChannels(prev => ({
+        ...prev,
+        [channelId]: true
+      }));
+      
+      // Remove from local state immediately for immediate UI update
+      const removeFromLocalState = () => {
+        // Filter out the channel from filtered channels
+        setFilteredChannels(prev => prev.filter(ch => ch.id !== channelId));
+        
+        // Update paginated channels too
+        setPaginatedChannels(prev => prev.filter(ch => ch.id !== channelId));
+      };
+      
+      // Remove channel from UI immediately
+      removeFromLocalState();
       
       // Show info message
       const infoMessage = enqueueSnackbar(`Deleting channel "${channelName}"...`, { 
@@ -525,9 +537,9 @@ const ParsedChannels = () => {
       );
       
       // Use the async mutation from useChannels hook which handles optimistic updates
-      await deleteChannelAsync(channelId);
+      const result = await deleteChannelAsync(channelId);
       
-      // Remove the info message
+      // Clean up UI feedback
       if (infoMessage) {
         closeSnackbar(infoMessage);
       }
@@ -538,7 +550,7 @@ const ParsedChannels = () => {
         autoHideDuration: 3000
       });
       
-      // If we found duplicates, offer to delete them too
+      // Handle duplicate channels
       if (duplicateChannels.length > 0) {
         const confirmDelete = window.confirm(
           `Found ${duplicateChannels.length} more channel(s) with the same name. Delete them too?`
@@ -610,9 +622,19 @@ const ParsedChannels = () => {
         errorMessage = err.message;
       }
       
-      // Don't show error for "not found" (already deleted)
-      if (!errorMessage.includes('not found')) {
-        // Show error notification
+      // Special handling for "not found" errors
+      if (errorMessage.includes('not found')) {
+        // If channel not found, it was probably already deleted
+        enqueueSnackbar(`Channel "${selectedChannelName}" was already deleted or not found`, { 
+          variant: 'info',
+          autoHideDuration: 3000
+        });
+        
+        // Remove the channel from UI to avoid confusion
+        setFilteredChannels(prev => prev.filter(ch => ch.id !== selectedChannelId));
+        setPaginatedChannels(prev => prev.filter(ch => ch.id !== selectedChannelId));
+      } else {
+        // For real errors, show error notification
         enqueueSnackbar(`Failed to delete channel: ${errorMessage}`, { 
           variant: 'error',
           autoHideDuration: 5000
@@ -620,12 +642,6 @@ const ParsedChannels = () => {
         
         // Set error state for UI feedback
         setError(`Failed to delete channel "${selectedChannelName}": ${errorMessage}`);
-      } else {
-        // If channel not found, it was probably already deleted
-        enqueueSnackbar(`Channel "${selectedChannelName}" was already deleted or not found`, { 
-          variant: 'info',
-          autoHideDuration: 3000
-        });
       }
       
       // Force refetch to ensure UI matches backend state

@@ -617,47 +617,96 @@ async def delete_channel(
     """Delete a parsed channel."""
     try:
         # Log the deletion attempt for debugging
-        logging.info(f"Attempting to delete channel ID {channel_id} for user {current_user.id}")
+        logging.info(f"[DELETE-CHANNEL][{current_user.id}][START] Attempting to delete channel ID {channel_id}")
         
-        # Get the channel first to check if it exists
+        # First check if the channel exists in redis cache
+        from app.core.redis_client import get_cached_parsed_channels, invalidate_parsed_channels_cache
+        cache_key = f"parsed_channels:{current_user.id}"
+        cached_channels = await get_cached_parsed_channels(current_user.id, cache_key)
+        
+        # Always invalidate cache first, regardless of what happens after
+        # This ensures we don't have stale data in cache
+        logging.info(f"[DELETE-CHANNEL][{current_user.id}] Invalidating cache preemptively")
+        await invalidate_parsed_channels_cache(current_user.id)
+        
+        channel_in_cache = False
+        channel_name = None
+        if cached_channels:
+            # Check if the channel exists in the cache
+            for cached_channel in cached_channels:
+                if cached_channel.get('id') == channel_id:
+                    channel_in_cache = True
+                    channel_name = cached_channel.get('group_name', 'Unknown channel')
+                    logging.info(f"[DELETE-CHANNEL][{current_user.id}] Channel {channel_id} ({channel_name}) found in cache")
+                    break
+        
+        # Get the channel from the database
         channel = crud.telegram.get_group_by_id(db, group_id=channel_id)
         
         if not channel:
             # Special case: The UI might show a channel that's already deleted
-            # Instead of erroring, we'll invalidate the cache and return success
-            logging.warning(f"Channel with ID {channel_id} not found for user {current_user.id} - may have already been deleted")
+            logging.warning(f"[DELETE-CHANNEL][{current_user.id}][NOT-FOUND] Channel {channel_id} not found in database" + 
+                          (f" but was in cache as '{channel_name}'" if channel_in_cache else ""))
             
-            # Invalidate cache to ensure UI is updated
-            from app.core.redis_client import invalidate_parsed_channels_cache
-            await invalidate_parsed_channels_cache(current_user.id)
-            
-            # Return success to allow the UI to proceed and refetch
-            return {"success": True, "message": "Channel not found, cache invalidated"}
+            # Return success to allow the UI to proceed
+            return {
+                "success": True, 
+                "message": "Channel not found, cache invalidated",
+                "channel_id": channel_id,
+                "channel_name": channel_name
+            }
             
         if channel.user_id != current_user.id:
-            logging.warning(f"Permission denied: User {current_user.id} attempted to delete channel {channel_id} owned by user {channel.user_id}")
+            logging.warning(f"[DELETE-CHANNEL][{current_user.id}][PERMISSION-DENIED] User attempted to delete channel {channel_id} owned by user {channel.user_id}")
             raise HTTPException(status_code=400, detail="Not enough permissions")
             
         if not channel.is_channel:
-            logging.warning(f"ID {channel_id} is not a channel but a group")
+            logging.warning(f"[DELETE-CHANNEL][{current_user.id}][NOT-CHANNEL] ID {channel_id} is not a channel but a group")
             raise HTTPException(status_code=400, detail="Specified ID is not a channel")
         
+        # Store channel name for response
+        channel_name = channel.group_name
+        
         # Delete the channel
-        logging.info(f"Deleting channel {channel_id} ('{channel.group_name}') for user {current_user.id}")
+        logging.info(f"[DELETE-CHANNEL][{current_user.id}][DELETING] Channel '{channel_name}' (ID: {channel_id})")
+        
+        # Check for duplicate names in the database
+        duplicates = db.query(ParsedGroup).filter(
+            ParsedGroup.user_id == current_user.id,
+            ParsedGroup.is_channel == True,
+            ParsedGroup.group_name == channel_name,
+            ParsedGroup.id != channel_id
+        ).all()
+        
+        if duplicates:
+            logging.info(f"[DELETE-CHANNEL][{current_user.id}] Found {len(duplicates)} duplicate channels with name '{channel_name}'")
+            duplicate_ids = [d.id for d in duplicates]
+            logging.info(f"[DELETE-CHANNEL][{current_user.id}] Duplicate IDs: {duplicate_ids}")
+        
+        # Perform the deletion
         crud.telegram.delete_group(db, group_id=channel_id)
         
-        # Invalidate cache after deletion
-        from app.core.redis_client import invalidate_parsed_channels_cache
-        await invalidate_parsed_channels_cache(current_user.id)
-        
-        logging.info(f"Successfully deleted channel {channel_id} for user {current_user.id}")
-        return {"success": True, "message": "Channel deleted successfully"}
+        logging.info(f"[DELETE-CHANNEL][{current_user.id}][SUCCESS] Successfully deleted channel {channel_id} ({channel_name})")
+        return {
+            "success": True, 
+            "message": "Channel deleted successfully", 
+            "channel_id": channel_id,
+            "channel_name": channel_name
+        }
         
     except HTTPException:
         # Re-raise HTTP exceptions to preserve status codes
         raise
     except Exception as e:
-        logging.error(f"Unexpected error deleting channel {channel_id}: {str(e)}")
+        logging.error(f"[DELETE-CHANNEL][{current_user.id}][ERROR] Unexpected error deleting channel {channel_id}: {str(e)}")
+        # Always invalidate cache on error
+        try:
+            from app.core.redis_client import invalidate_parsed_channels_cache
+            await invalidate_parsed_channels_cache(current_user.id)
+            logging.info(f"[DELETE-CHANNEL][{current_user.id}][ERROR-RECOVERY] Cache invalidated after error")
+        except Exception as cache_error:
+            logging.error(f"[DELETE-CHANNEL][{current_user.id}][ERROR-RECOVERY-FAILED] Failed to invalidate cache: {str(cache_error)}")
+            
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete channel: {str(e)}"

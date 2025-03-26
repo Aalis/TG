@@ -39,44 +39,116 @@ export const useChannels = (skipCache = false) => {
   const deleteChannelMutation = useMutation({
     mutationFn: (channelId) => channelsAPI.deleteChannel(channelId),
     onMutate: async (channelId) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: CHANNELS_QUERY_KEY });
-      
-      // Snapshot the previous value
-      const previousData = queryClient.getQueryData(CHANNELS_QUERY_KEY);
-      
-      // Optimistically update the cache
-      if (previousData) {
-        // Need to check the structure of the data
-        if (Array.isArray(previousData)) {
-          // If data is an array, filter directly
-          queryClient.setQueryData(CHANNELS_QUERY_KEY, 
-            previousData.filter(channel => channel.id !== channelId)
-          );
-        } else if (previousData.data && Array.isArray(previousData.data)) {
-          // If data is in a nested structure (common with axios responses)
-          const updatedData = {
-            ...previousData,
-            data: previousData.data.filter(channel => channel.id !== channelId)
-          };
-          queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+      try {
+        // Cancel any outgoing refetches
+        await queryClient.cancelQueries({ queryKey: CHANNELS_QUERY_KEY });
+        
+        // Snapshot the previous value
+        const previousData = queryClient.getQueryData(CHANNELS_QUERY_KEY);
+        console.log("Delete - Previous data structure:", 
+          previousData ? 
+          (Array.isArray(previousData) ? "Array" : "Object with data property") : 
+          "No data in cache");
+        
+        // Find the channel to delete for future reference
+        let channelToDelete = null;
+        if (previousData) {
+          if (Array.isArray(previousData)) {
+            channelToDelete = previousData.find(channel => channel.id === channelId);
+            // Optimistically update the cache by removing the channel
+            queryClient.setQueryData(CHANNELS_QUERY_KEY, 
+              previousData.filter(channel => channel.id !== channelId)
+            );
+          } else if (previousData.data && Array.isArray(previousData.data)) {
+            channelToDelete = previousData.data.find(channel => channel.id === channelId);
+            // Optimistically update the cache by removing the channel
+            const updatedData = {
+              ...previousData,
+              data: previousData.data.filter(channel => channel.id !== channelId)
+            };
+            queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+          }
         }
+        
+        // Return a context with the previous value and channel info
+        return { previousData, channelToDelete };
+      } catch (error) {
+        console.error("Error during optimistic update:", error);
+        return { error };
       }
-      
-      // Return a context with the previous value
-      return { previousData };
     },
     onError: (err, channelId, context) => {
       console.error("Error deleting channel:", err);
-      // If the mutation fails, use the context to roll back
+      
+      const errorMessage = err.response?.data?.detail || '';
+      
+      // If the error is "not found" or "channel not found, cache invalidated"
+      // we consider this a successful deletion (already deleted)
+      if (errorMessage.includes('not found') || 
+          errorMessage.includes('cache invalidated')) {
+        console.log("Channel was already deleted on server but still in cache");
+        
+        // Still treat this as success - no need to rollback
+        // Just make sure it's gone from the UI
+        const currentData = queryClient.getQueryData(CHANNELS_QUERY_KEY);
+        
+        if (currentData) {
+          if (Array.isArray(currentData)) {
+            // Make sure the channel is removed from the UI
+            queryClient.setQueryData(CHANNELS_QUERY_KEY, 
+              currentData.filter(channel => channel.id !== channelId)
+            );
+          } else if (currentData.data && Array.isArray(currentData.data)) {
+            const updatedData = {
+              ...currentData,
+              data: currentData.data.filter(channel => channel.id !== channelId)
+            };
+            queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+          }
+        }
+        
+        // Consider this a success and don't propagate the error
+        return;
+      }
+      
+      // For other real errors, roll back to previous state
       if (context?.previousData) {
         queryClient.setQueryData(CHANNELS_QUERY_KEY, context.previousData);
       }
+      
       // Re-throw the error for UI handling
       throw err;
     },
+    onSuccess: (data, channelId) => {
+      console.log(`Channel ${channelId} deleted successfully`);
+      
+      // Double-check that the channel is removed from UI
+      const currentData = queryClient.getQueryData(CHANNELS_QUERY_KEY);
+      if (currentData) {
+        if (Array.isArray(currentData)) {
+          if (currentData.some(channel => channel.id === channelId)) {
+            // If channel still exists in the UI, remove it
+            queryClient.setQueryData(CHANNELS_QUERY_KEY, 
+              currentData.filter(channel => channel.id !== channelId)
+            );
+          }
+        } else if (currentData.data && Array.isArray(currentData.data)) {
+          if (currentData.data.some(channel => channel.id === channelId)) {
+            // If channel still exists in the UI, remove it
+            const updatedData = {
+              ...currentData,
+              data: currentData.data.filter(channel => channel.id !== channelId)
+            };
+            queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+          }
+        }
+      }
+      
+      // Always refetch to ensure UI state is in sync
+      queryClient.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
+    },
     onSettled: () => {
-      // Always refetch after error or success to make sure the server state is reflected
+      // Refetch after any outcome to ensure UI state is correct
       queryClient.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
     }
   });
