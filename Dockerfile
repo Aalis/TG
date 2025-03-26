@@ -46,15 +46,16 @@ COPY frontend/package*.json ./
 RUN npm install --legacy-peer-deps
 
 # Copy frontend source with cache busting comments
-# FORCE REBUILD 2025-03-26: Changing MAX_PREFETCH_ITEMS from 10 to 30
-# Cache busting for DataPrefetcher: $CACHE_BUST_TIME
+# FORCE REBUILD 2025-03-26: Using DataPrefetcherNew instead of DataPrefetcher
+# Cache busting for DataPrefetcherNew: $CACHE_BUST_TIME
 # Cache busting for useChannels: $CACHE_BUST_TIME
 # Cache busting for ParsedChannels: $CACHE_BUST_TIME
 # Cache busting for api.js: $CACHE_BUST_TIME
 COPY frontend/ .
 
 # Add force rebuild command to clear any caches - this line should always be different on every build
-RUN echo "FORCE REBUILD AT: $CACHE_BUST_TIME" > /frontend/src/components/build-timestamp.txt
+RUN echo "FORCE REBUILD AT: $CACHE_BUST_TIME" > /frontend/src/components/build-timestamp.txt && \
+    echo "Using DataPrefetcherNew with MAX_PREFETCH_ITEMS=30" >> /frontend/src/components/build-timestamp.txt
 
 # Install Material-UI dependencies explicitly
 RUN npm install @mui/material @mui/icons-material @emotion/react @emotion/styled @babel/runtime --legacy-peer-deps
