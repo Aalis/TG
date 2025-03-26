@@ -1,4 +1,6 @@
 # Base image
+# ABSOLUTE FORCE REBUILD TIMESTAMP: 2023-03-26-13:45:22
+# CACHE_BUST_ATTEMPT: USE DATAPREFETCHERNEW WITH MAX_PREFETCH_ITEMS=30
 FROM python:3.11-slim as base
 
 # Add build date argument to force rebuild every time
