@@ -1,6 +1,10 @@
 # Base image
 FROM python:3.11-slim as base
 
+# Add build date argument to force rebuild every time
+ARG BUILD_DATE=unknown
+RUN echo "Build date: $BUILD_DATE"
+
 # Set up environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -8,7 +12,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONPATH=/app \
-    STATIC_FILES_DIR=/app/static
+    STATIC_FILES_DIR=/app/static \
+    NO_CACHE=1
 
 WORKDIR /app
 
@@ -32,6 +37,10 @@ RUN pip install --no-cache-dir -r requirements.txt -r root-requirements.txt
 
 # Frontend build stage
 FROM node:18 as frontend-builder
+
+# Add build date argument to force rebuild every time
+ARG BUILD_DATE=unknown
+RUN echo "Frontend build date: $BUILD_DATE"
 
 # Add build argument that changes with each build
 ARG CACHE_BUST_TIME
