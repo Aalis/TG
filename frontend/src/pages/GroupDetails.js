@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Typography,
@@ -39,15 +39,23 @@ import {
 import { groupsAPI } from '../services/api';
 import { useTranslation } from 'react-i18next';
 import ParseButtonHeader from '../components/ParseButtonHeader';
+import { useGroupDetails } from '../hooks/useGroupDetails';
 
 const GroupDetails = () => {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   
-  const [group, setGroup] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Use React Query hook instead of manual fetching
+  const { 
+    group, 
+    isLoading, 
+    isError, 
+    error: queryError, 
+    refetch 
+  } = useGroupDetails(id);
+  
+  // Local state for UI
   const [searchTerm, setSearchTerm] = useState('');
   const [showOnlyPremium, setShowOnlyPremium] = useState(false);
   const [showOnlyWithUsername, setShowOnlyWithUsername] = useState(false);
@@ -56,31 +64,18 @@ const GroupDetails = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [showBots, setShowBots] = useState(true);
 
-  // Fetch group details on component mount
+  // Set initial filtered members when group data changes
   useEffect(() => {
-    const fetchGroupDetails = async () => {
-      try {
-        setLoading(true);
-        const response = await groupsAPI.getById(id);
-        setGroup(response.data);
-        setFilteredMembers(response.data.members);
-        setError(null);
-      } catch (err) {
-        setError('Failed to load group details. Please try again.');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchGroupDetails();
-  }, [id]);
+    if (group && group.members) {
+      setFilteredMembers(group.members);
+    }
+  }, [group]);
 
-  // Update filter members effect to include new filters
-  useEffect(() => {
-    if (!group) return;
+  // Use memo to calculate filtered members based on filters
+  const calculateFilteredMembers = useMemo(() => {
+    if (!group || !group.members) return [];
     
-    let filtered = group.members;
+    let filtered = [...group.members];
     
     // Apply premium filter
     if (showOnlyPremium) {
@@ -95,20 +90,23 @@ const GroupDetails = () => {
     // Apply search term filter
     if (searchTerm.trim() !== '') {
       const term = searchTerm.toLowerCase();
-      const filtered = group.members.filter(
+      filtered = filtered.filter(
         (member) =>
           (member.username && member.username.toLowerCase().includes(term)) ||
           (member.first_name && member.first_name.toLowerCase().includes(term)) ||
           (member.last_name && member.last_name.toLowerCase().includes(term))
       );
-      setFilteredMembers(filtered);
-    } else {
-      setFilteredMembers(filtered);
     }
     
+    return filtered;
+  }, [group, searchTerm, showOnlyPremium, showOnlyWithUsername]);
+  
+  // Update filtered members whenever calculation changes
+  useEffect(() => {
+    setFilteredMembers(calculateFilteredMembers);
     // Reset to first page when filtering
     setPage(0);
-  }, [searchTerm, group, showOnlyPremium, showOnlyWithUsername]);
+  }, [calculateFilteredMembers]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -149,7 +147,7 @@ const GroupDetails = () => {
     document.body.removeChild(link);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
         <CircularProgress />
@@ -157,7 +155,7 @@ const GroupDetails = () => {
     );
   }
 
-  if (error) {
+  if (isError) {
     return (
       <Box>
         <Button
@@ -165,11 +163,11 @@ const GroupDetails = () => {
           onClick={() => navigate('/groups')}
           sx={{ mb: 3 }}
         >
-          Back to Groups
+          {t('common.back')}
         </Button>
         
         <Alert severity="error">
-          {error}
+          {queryError?.message || 'Failed to load group details. Please try again.'}
         </Alert>
       </Box>
     );
@@ -183,11 +181,11 @@ const GroupDetails = () => {
           onClick={() => navigate('/groups')}
           sx={{ mb: 3 }}
         >
-          Back to Groups
+          {t('common.back')}
         </Button>
         
         <Alert severity="warning">
-          Group not found.
+          {t('telegram.groupNotFound')}
         </Alert>
       </Box>
     );

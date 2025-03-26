@@ -197,3 +197,35 @@ API documentation is available at `/docs` or `/redoc` when the backend server is
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Performance Optimizations
+
+### React Query Implementation
+
+We've implemented React Query throughout the application to improve data fetching, caching, and UI performance:
+
+#### Key Improvements:
+
+1. **Efficient Data Fetching**
+   - Replaced manual useEffect fetching with React Query's declarative data fetching
+   - Added proper caching configuration with staleTime (5 minutes) and cacheTime (30 minutes)
+   - Separate queries for related data with proper dependencies
+
+2. **Optimized Loading States**
+   - Implemented consistent loading states across components
+   - Simplified error handling with React Query's built-in error states
+
+3. **Optimistic Updates**
+   - Implemented optimistic UI updates for better user experience
+   - Actions like deleting or toggling sessions now update the UI immediately
+   - Background synchronization with the server ensures data consistency
+
+4. **Better Performance with Parallel Requests**
+   - Dependent queries only run after their prerequisites are available
+   - Data transformation happens efficiently with React Query's select option
+
+5. **Code Organization**
+   - Created custom hooks for complex data fetching logic
+   - Separated UI components from data fetching concerns
+
+These improvements result in a more responsive application with faster perceived performance and reduced server load.

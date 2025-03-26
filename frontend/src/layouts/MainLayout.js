@@ -42,6 +42,8 @@ import { useTheme } from '../context/ThemeContext';
 import ParsePermissionCountdown from '../components/ParsePermissionCountdown';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
+import { prefetchSessions } from '../hooks/useSessions';
 
 const drawerWidth = 240;
 
@@ -51,6 +53,7 @@ const MainLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorElUser, setAnchorElUser] = useState(null);
@@ -82,6 +85,10 @@ const MainLayout = () => {
   const handleNavigate = (path) => {
     navigate(path);
     setMobileOpen(false);
+  };
+
+  const handlePrefetchSessions = () => {
+    prefetchSessions(queryClient);
   };
 
   const drawer = (
@@ -117,6 +124,7 @@ const MainLayout = () => {
           button 
           onClick={() => handleNavigate('/')}
           selected={location.pathname === '/'}
+          onMouseEnter={handlePrefetchSessions}
         >
           <ListItemIcon>
             <SessionsIcon />

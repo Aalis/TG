@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Typography,
   Button,
@@ -28,10 +28,28 @@ import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import { sessionsAPI } from '../services/api';
 import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
+import { useSessions } from '../hooks/useSessions';
 
 const TelegramSessions = () => {
-  const { t } = useTranslation();
-  const [sessions, setSessions] = useState([]);
+  const { t, i18n } = useTranslation();
+  const isRussian = i18n.language === 'ru';
+  
+  // Use React Query hook instead of manual state and fetching
+  const {
+    sessions,
+    isLoading,
+    isError,
+    error: queryError,
+    toggleSession,
+    deleteSession,
+    sendVerificationCode,
+    verifyCode,
+    isDeleting,
+    isToggling,
+    isSendingCode,
+    isVerifying
+  } = useSessions();
+  
   const [openDialog, setOpenDialog] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState(null);
@@ -39,46 +57,66 @@ const TelegramSessions = () => {
   const [verificationCode, setVerificationCode] = useState('');
   const [twoFactorPassword, setTwoFactorPassword] = useState('');
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeStep, setActiveStep] = useState(0);
   const [needsPassword, setNeedsPassword] = useState(false);
 
-  const steps = [
-    t('telegram.enterPhoneNumber'),
-    t('telegram.verifyCode'),
-    t('common.complete')
-  ];
-
-  // Remove redundant language refresh
-  useEffect(() => {
-    fetchSessions();
-  }, []);
-
-  const fetchSessions = async () => {
-    try {
-      const response = await sessionsAPI.getAll();
-      // Add debug logging
-      console.log('Sessions response:', response.data);
-      
-      // Sort sessions by creation date to maintain stable order
-      const sortedSessions = response.data.sort((a, b) => 
-        new Date(a.created_at) - new Date(b.created_at)
-      );
-      console.log('Sorted sessions:', sortedSessions);
-      setSessions(sortedSessions || []);
-      setError('');
-    } catch (err) {
-      console.error('Error fetching sessions:', err);
-      // Only set error if it's not a 401 (unauthorized) error
-      if (!err.response || err.response.status !== 401) {
-        setError(t('telegram.failedToFetchSessions'));
-      }
-    } finally {
-      setLoading(false);
-    }
+  // Text content based on language
+  const texts = {
+    // Page header
+    pageTitle: isRussian ? "Сессии Telegram" : "Telegram Sessions",
+    addNewSession: isRussian ? "Добавить новую сессию" : "Add New Session",
+    
+    // Table headers
+    phoneNumber: isRussian ? "Номер телефона" : "Phone Number",
+    createdAt: isRussian ? "Создано" : "Created At",
+    lastUsed: isRussian ? "Последнее использование" : "Last Used",
+    active: isRussian ? "Активно" : "Active",
+    actions: isRussian ? "Действия" : "Actions",
+    
+    // Empty state
+    noSessionsFound: isRussian ? "Сессии не найдены" : "No Sessions Found",
+    addYourFirstSession: isRussian ? "Добавьте вашу первую сессию Telegram, чтобы начать работу с TG Parser" : "Add your first Telegram session to start working with TG Parser",
+    addSession: isRussian ? "Добавить сессию" : "Add Session",
+    
+    // Dialog
+    addTelegramSession: isRussian ? "Добавить сессию Telegram" : "Add Telegram Session",
+    enterPhoneNumber: isRussian ? "Введите номер телефона" : "Enter Phone Number",
+    verifyCode: isRussian ? "Подтвердить код" : "Verify Code",
+    complete: isRussian ? "Завершено" : "Complete",
+    enterPhoneNumberWithCountryCode: isRussian ? "Введите номер телефона с кодом страны" : "Enter your phone number with country code",
+    phoneNumberPlaceholder: "+1234567890",
+    phoneNumberHelperText: isRussian ? "Включите код страны (например, +7 для России)" : "Include country code (e.g. +1 for USA)",
+    verificationCodeSent: isRussian ? "Код верификации отправлен" : "Verification code has been sent",
+    verificationCodeLabel: isRussian ? "Код подтверждения" : "Verification Code",
+    twoFactorAuthRequired: isRussian ? "Требуется двухфакторная аутентификация" : "Two-factor authentication is required",
+    twoFactorPassword: isRussian ? "Пароль двухфакторной аутентификации" : "Two-Factor Password",
+    cancel: isRussian ? "Отмена" : "Cancel",
+    sendCode: isRussian ? "Отправить код" : "Send Code",
+    verifyAndLogin: isRussian ? "Подтвердить и войти" : "Verify and Login",
+    
+    // Delete confirmation
+    confirm: isRussian ? "Подтвердить" : "Confirm",
+    deleteConfirmation: isRussian ? "Вы уверены, что хотите удалить эту сессию? Это действие нельзя отменить." : "Are you sure you want to delete this session? This action cannot be undone.",
+    delete: isRussian ? "Удалить" : "Delete",
+    
+    // Errors and success messages
+    fetchError: isRussian ? "Не удалось загрузить сессии. Пожалуйста, попробуйте снова." : "Failed to fetch sessions. Please try again.",
+    phoneNumberRequired: isRussian ? "Требуется номер телефона" : "Phone number is required",
+    verificationCodeRequired: isRussian ? "Требуется код подтверждения" : "Verification code is required",
+    failedToSendCode: isRussian ? "Не удалось отправить код подтверждения" : "Failed to send verification code",
+    failedToVerifyCode: isRussian ? "Не удалось подтвердить код" : "Failed to verify code",
+    sessionAddedSuccess: isRussian ? "Сессия успешно добавлена" : "Session added successfully",
+    sessionDeletedSuccess: isRussian ? "Сессия успешно удалена" : "Session deleted successfully",
+    failedToDeleteSession: isRussian ? "Не удалось удалить сессию" : "Failed to delete session"
   };
+
+  const steps = [
+    texts.enterPhoneNumber,
+    texts.verifyCode,
+    texts.complete
+  ];
 
   const handleAddSession = () => {
     setOpenDialog(true);
@@ -104,13 +142,13 @@ const TelegramSessions = () => {
 
   const handleSendCode = async () => {
     if (!phoneNumber) {
-      setError(t('telegram.phoneNumberRequired'));
+      setError(texts.phoneNumberRequired);
       return;
     }
 
     try {
       setError('');
-      const response = await sessionsAPI.verifyPhone(phoneNumber);
+      const response = await sendVerificationCode(phoneNumber);
       if (response.data && response.data.phone_code_hash) {
         setPhoneCodeHash(response.data.phone_code_hash);
         setActiveStep(1);
@@ -119,38 +157,34 @@ const TelegramSessions = () => {
       }
     } catch (err) {
       console.error('Error sending code:', err);
-      setError(err.response?.data?.detail || t('telegram.failedToSendVerificationCode'));
+      setError(err.response?.data?.detail || texts.failedToSendCode);
     }
   };
 
   const handleVerifyCode = async () => {
     if (!verificationCode) {
-      setError(t('telegram.verificationCodeRequired'));
+      setError(texts.verificationCodeRequired);
       return;
     }
 
-    setLoading(true);
     try {
-      await sessionsAPI.verifyCode(
+      await verifyCode({
         phoneNumber,
-        verificationCode,
+        code: verificationCode,
         phoneCodeHash,
-        needsPassword ? twoFactorPassword : undefined
-      );
-      await fetchSessions();
-      setSuccess(t('telegram.sessionAddedSuccessfully'));
+        password: needsPassword ? twoFactorPassword : undefined
+      });
+      setSuccess(texts.sessionAddedSuccess);
       handleCloseDialog();
     } catch (err) {
       console.error('Error verifying code:', err);
       const errorMessage = err.response?.data?.detail;
       if (errorMessage === 'Two-factor authentication required') {
         setNeedsPassword(true);
-        setError(t('telegram.twoFactorAuthRequired'));
+        setError(texts.twoFactorAuthRequired);
       } else {
-        setError(errorMessage || t('telegram.failedToVerifyCode'));
+        setError(errorMessage || texts.failedToVerifyCode);
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -166,71 +200,25 @@ const TelegramSessions = () => {
 
   const handleDeleteSession = async () => {
     try {
-      // Store current sessions state for potential rollback
-      const previousSessions = [...sessions];
+      await deleteSession(sessionToDelete.id);
       
-      // Optimistically update UI immediately
-      const updatedSessions = sessions.filter(session => session.id !== sessionToDelete.id);
-      setSessions(updatedSessions);
-      
-      // Close dialog immediately for better UX
+      // UI feedback after successful deletion
       setDeleteDialogOpen(false);
       setSessionToDelete(null);
-      
-      // Show success message immediately
-      setSuccess(t('telegram.sessionDeletedSuccessfully'));
-      
-      // Then perform the actual API call in the background
-      await sessionsAPI.delete(sessionToDelete.id);
-      // No need to refresh sessions, we already updated optimistically
-      console.log('Session deleted successfully');
+      setSuccess(texts.sessionDeletedSuccess);
     } catch (err) {
       console.error('Error deleting session:', err);
-      setError(t('telegram.failedToDeleteSession'));
-      
-      // If error occurred after dialog was closed, we should re-fetch sessions
-      // to ensure UI is in sync with backend
-      fetchSessions();
+      setError(texts.failedToDeleteSession);
     }
   };
 
-  const handleToggleStatus = async (sessionId, currentStatus) => {
-    // Store current sessions state for potential rollback
-    const previousSessions = [...sessions];
-    
-    // Optimistically update UI immediately
+  const handleToggleStatus = (sessionId, currentStatus) => {
     const newStatus = !currentStatus;
-    const updatedSessions = sessions.map(session => {
-      // If activating a session, deactivate all others (matching backend behavior)
-      if (newStatus && session.id !== sessionId) {
-        return { ...session, is_active: false };
-      }
-      // Toggle the clicked session
-      if (session.id === sessionId) {
-        return { ...session, is_active: newStatus };
-      }
-      return session;
-    });
-    
-    // Update UI immediately
-    setSessions(updatedSessions);
-    
-    // Then perform the actual API call in the background
-    try {
-      await sessionsAPI.update(sessionId, newStatus);
-      // No need to refresh sessions, we already updated optimistically
-      console.log('Session status updated successfully');
-    } catch (err) {
-      // If there's an error, revert to previous state
-      console.error('Error updating session status:', err);
-      setSessions(previousSessions);
-      setError(t('telegram.failedToUpdateSessionStatus'));
-    }
+    toggleSession(sessionId, newStatus);
   };
 
   // Format phone number for display
   const formatPhoneNumber = (phone) => {
-    console.log('Formatting phone number:', phone);
     return phone || '-'; // Return dash if phone is null/undefined
   };
 
@@ -238,7 +226,7 @@ const TelegramSessions = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" component="h1" sx={{ fontWeight: 500 }}>
-          {t('telegram.telegramSessions')}
+          {texts.pageTitle}
         </Typography>
         <Button
           variant="contained"
@@ -248,130 +236,90 @@ const TelegramSessions = () => {
           sx={{ 
             textTransform: 'none',
             borderRadius: 2,
-            px: 3
           }}
         >
-          {t('telegram.addSession')}
+          {texts.addNewSession}
         </Button>
       </Box>
-
-      {error && !loading && (
-        <Alert 
-          severity="error" 
-          sx={{ 
-            mb: 3,
-            '& .MuiAlert-message': { width: '100%' }
-          }}
-        >
+      
+      {queryError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {typeof queryError === 'string' 
+            ? queryError 
+            : texts.fetchError}
+        </Alert>
+      )}
+      
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
-
+      
       {success && (
-        <Alert 
-          severity="success" 
-          sx={{ 
-            mb: 3,
-            '& .MuiAlert-message': { width: '100%' }
-          }}
-        >
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess('')}>
           {success}
         </Alert>
       )}
-
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+      
+      {isLoading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
           <CircularProgress />
         </Box>
       ) : sessions.length === 0 ? (
-        <Paper 
-          sx={{ 
-            p: 4, 
-            textAlign: 'center', 
-            bgcolor: 'background.paper',
-            borderRadius: 2,
-            boxShadow: (theme) => theme.shadows[2]
-          }}
-        >
+        <Paper sx={{ p: 5, textAlign: 'center' }}>
           <Typography variant="h6" gutterBottom>
-            {t('telegram.noSessionsFound')}
+            {texts.noSessionsFound}
           </Typography>
-          <Typography variant="body1" color="text.secondary" paragraph>
-            {t('telegram.addSessionToStart')}
+          <Typography variant="body1" paragraph>
+            {texts.addYourFirstSession}
           </Typography>
           <Button
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleAddSession}
-            sx={{ 
-              textTransform: 'none',
-              borderRadius: 2,
-              px: 3
-            }}
           >
-            {t('telegram.addFirstSession')}
+            {texts.addSession}
           </Button>
         </Paper>
       ) : (
-        <TableContainer 
-          component={Paper}
-          sx={{ 
-            borderRadius: 2,
-            boxShadow: (theme) => theme.shadows[2]
-          }}
-        >
-          <Table>
+        <TableContainer component={Paper}>
+          <Table sx={{ minWidth: 650 }}>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 500 }}>
-                  {t('telegram.phoneNumber')}
-                </TableCell>
-                <TableCell sx={{ fontWeight: 500 }}>
-                  {t('telegram.createdAt')}
-                </TableCell>
-                <TableCell align="center" sx={{ fontWeight: 500 }}>
-                  {t('telegram.status')}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 500 }}>
-                  {t('common.actions')}
-                </TableCell>
+                <TableCell sx={{ width: '30%' }}>{texts.phoneNumber}</TableCell>
+                <TableCell sx={{ width: '20%' }}>{texts.createdAt}</TableCell>
+                <TableCell sx={{ width: '20%' }}>{texts.lastUsed}</TableCell>
+                <TableCell sx={{ width: '15%' }} align="center">{texts.active}</TableCell>
+                <TableCell sx={{ width: '15%' }} align="center">{texts.actions}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {sessions.map((session) => (
-                <TableRow 
-                  key={session.id}
-                  sx={{ 
-                    '&:hover': { 
-                      bgcolor: 'action.hover' 
-                    }
-                  }}
-                >
-                  <TableCell sx={{ color: session.is_active ? 'text.primary' : 'text.secondary', minWidth: 150 }}>
-                    {session.phone ? session.phone : '-'}
+                <TableRow key={session.id}>
+                  <TableCell>
+                    {formatPhoneNumber(session.phone)}
                   </TableCell>
-                  <TableCell sx={{ color: session.is_active ? 'text.primary' : 'text.secondary' }}>
-                    {format(new Date(session.created_at), 'dd.MM.yyyy HH:mm')}
+                  <TableCell>
+                    {session.created_at ? format(new Date(session.created_at), 'yyyy-MM-dd HH:mm') : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {session.last_used ? format(new Date(session.last_used), 'yyyy-MM-dd HH:mm') : '-'}
                   </TableCell>
                   <TableCell align="center">
                     <Switch
                       checked={session.is_active}
                       onChange={() => handleToggleStatus(session.id, session.is_active)}
-                      color="primary"
+                      disabled={isToggling}
                     />
                   </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title={t('actions.delete')}>
-                      <IconButton
-                        color="error"
+                  <TableCell align="center">
+                    <Tooltip title={texts.delete}>
+                      <IconButton 
+                        color="error" 
                         onClick={() => handleDeleteClick(session)}
-                        size="small"
-                        sx={{ 
-                          '&:hover': { 
-                            bgcolor: 'error.lighter'
-                          }
-                        }}
+                        disabled={isDeleting}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -383,108 +331,143 @@ const TelegramSessions = () => {
           </Table>
         </TableContainer>
       )}
-
+      
       {/* Add Session Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {t('telegram.addNewSession')}
-        </DialogTitle>
-        <Box sx={{ width: '100%', px: 3 }}>
-          <Stepper activeStep={activeStep} alternativeLabel>
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{texts.addTelegramSession}</DialogTitle>
+        <DialogContent>
+          <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4, mt: 2 }}>
             {steps.map((label) => (
               <Step key={label}>
                 <StepLabel>{label}</StepLabel>
               </Step>
             ))}
           </Stepper>
-        </Box>
-        {error && (
-          <Alert severity="error" sx={{ mx: 3, mt: 2 }}>
-            {error}
-          </Alert>
-        )}
-        {activeStep === 0 ? (
-          <>
-            <DialogContent>
+          
+          {activeStep === 0 && (
+            <Box>
+              <Typography variant="subtitle1" gutterBottom>
+                {texts.enterPhoneNumberWithCountryCode}
+              </Typography>
               <TextField
-                autoFocus
-                margin="dense"
-                label={t('telegram.phoneNumber')}
-                type="text"
                 fullWidth
+                label={texts.phoneNumber}
+                variant="outlined"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="+1234567890"
-                disabled={loading}
+                margin="normal"
+                placeholder={texts.phoneNumberPlaceholder}
+                error={!!error}
+                helperText={error || texts.phoneNumberHelperText}
+                disabled={isSendingCode}
               />
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleCloseDialog}>{t('common.cancel')}</Button>
-              <Button
-                onClick={handleSendCode}
-                variant="contained"
-                color="primary"
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={24} /> : t('telegram.sendCode')}
-              </Button>
-            </DialogActions>
-          </>
-        ) : (
-          <>
-            <DialogContent>
+            </Box>
+          )}
+          
+          {activeStep === 1 && (
+            <Box>
+              <Typography variant="subtitle1" gutterBottom>
+                {texts.verificationCodeSent}
+              </Typography>
+              
               <TextField
-                autoFocus
-                margin="dense"
-                label={t('telegram.verificationCode')}
-                type="text"
                 fullWidth
+                label={texts.verificationCodeLabel}
+                variant="outlined"
                 value={verificationCode}
                 onChange={(e) => setVerificationCode(e.target.value)}
-                disabled={loading}
+                margin="normal"
+                error={!!error && !needsPassword}
+                helperText={!needsPassword && error}
+                disabled={isVerifying}
               />
+              
               {needsPassword && (
-                <TextField
-                  margin="dense"
-                  label={t('telegram.twoFactorPassword')}
-                  type="password"
-                  fullWidth
-                  value={twoFactorPassword}
-                  onChange={(e) => setTwoFactorPassword(e.target.value)}
-                  disabled={loading}
-                />
+                <Box mt={2}>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    {texts.twoFactorAuthRequired}
+                  </Alert>
+                  <TextField
+                    fullWidth
+                    label={texts.twoFactorPassword}
+                    variant="outlined"
+                    type="password"
+                    value={twoFactorPassword}
+                    onChange={(e) => setTwoFactorPassword(e.target.value)}
+                    margin="normal"
+                    error={!!error}
+                    helperText={error}
+                    disabled={isVerifying}
+                  />
+                </Box>
               )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleCloseDialog}>{t('common.cancel')}</Button>
-              <Button
-                onClick={handleVerifyCode}
-                variant="contained"
-                color="primary"
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={24} /> : t('telegram.verify')}
-              </Button>
-            </DialogActions>
-          </>
-        )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button 
+            onClick={handleCloseDialog} 
+            disabled={isSendingCode || isVerifying}
+          >
+            {texts.cancel}
+          </Button>
+          
+          {activeStep === 0 && (
+            <Button 
+              onClick={handleSendCode} 
+              variant="contained" 
+              color="primary"
+              disabled={!phoneNumber || isSendingCode}
+            >
+              {isSendingCode ? (
+                <CircularProgress size={24} />
+              ) : (
+                texts.sendCode
+              )}
+            </Button>
+          )}
+          
+          {activeStep === 1 && (
+            <Button 
+              onClick={handleVerifyCode} 
+              variant="contained" 
+              color="primary"
+              disabled={!verificationCode || (needsPassword && !twoFactorPassword) || isVerifying}
+            >
+              {isVerifying ? (
+                <CircularProgress size={24} />
+              ) : (
+                texts.verifyAndLogin
+              )}
+            </Button>
+          )}
+        </DialogActions>
       </Dialog>
-
+      
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onClose={handleDeleteCancel}>
-        <DialogTitle>{t('actions.confirm')}</DialogTitle>
+        <DialogTitle>{texts.confirm}</DialogTitle>
         <DialogContent>
           <Typography>
-            {t('telegram.deleteSessionConfirm', {
-              phone: sessionToDelete?.phone,
-              defaultValue: `Are you sure you want to delete the session for phone number "${sessionToDelete?.phone}"? This action cannot be undone.`
-            })}
+            {texts.deleteConfirmation}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDeleteCancel}>{t('common.cancel')}</Button>
-          <Button onClick={handleDeleteSession} color="error" variant="contained">
-            {t('actions.delete')}
+          <Button onClick={handleDeleteCancel} disabled={isDeleting}>
+            {texts.cancel}
+          </Button>
+          <Button 
+            onClick={handleDeleteSession} 
+            color="error" 
+            variant="contained" 
+            disabled={isDeleting}
+          >
+            {isDeleting ? <CircularProgress size={24} /> : texts.delete}
           </Button>
         </DialogActions>
       </Dialog>

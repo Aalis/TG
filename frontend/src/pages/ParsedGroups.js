@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   Typography,
@@ -45,6 +45,7 @@ import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
 import ParseButtonHeader from '../components/ParseButtonHeader';
 import { useGroups } from '../hooks/useGroups';
+import { useQueryClient } from '@tanstack/react-query';
 
 const ParsedGroups = () => {
   const { t } = useTranslation();
@@ -75,6 +76,7 @@ const ParsedGroups = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
 
   // Get page from URL query parameter or default to 1
   const getPageFromUrl = useCallback(() => {
@@ -125,31 +127,32 @@ const ParsedGroups = () => {
     }
   }, [location.search, getPageFromUrl, page]);
 
-  // Filter groups when search term changes
-  const [filteredGroups, setFilteredGroups] = useState([]);
-  useEffect(() => {
+  // Use memo for filtering groups
+  const filteredGroups = useMemo(() => {
+    if (!groups || groups.length === 0) return [];
+    
     if (searchTerm.trim() === '') {
-      setFilteredGroups(groups);
+      return groups;
     } else {
       const term = searchTerm.toLowerCase();
-      const filtered = groups.filter(
+      return groups.filter(
         (group) =>
           group.group_name.toLowerCase().includes(term) ||
           (group.group_username && group.group_username.toLowerCase().includes(term))
       );
-      setFilteredGroups(filtered);
     }
-    // Reset to first page when search changes
-    if (page !== 1) {
-      setPage(1);
-      updateUrlWithPage(1);
-    }
-  }, [searchTerm, groups, page, updateUrlWithPage]);
+  }, [searchTerm, groups]);
 
   // Update paginated groups when filtered groups changes
   useEffect(() => {
     setPaginatedGroups(filteredGroups);
-  }, [filteredGroups]);
+    
+    // Reset to first page when search changes the results
+    if (page !== 1 && searchTerm.trim() !== '') {
+      setPage(1);
+      updateUrlWithPage(1);
+    }
+  }, [filteredGroups, page, searchTerm, updateUrlWithPage]);
 
   // Add cleanup on unmount
   useEffect(() => {
@@ -176,20 +179,46 @@ const ParsedGroups = () => {
   };
 
   const handleDeleteConfirm = async () => {
+    if (!groupToDelete) return;
+    
     try {
-      await groupsAPI.delete(groupToDelete.id);
-      
-      // Refresh groups list using the cached query
-      await refetch();
+      // Update cached data optimistically
+      queryClient.setQueryData(['groups'], (oldData) => {
+        if (!oldData) return oldData;
+        
+        // Filter out the deleted group
+        const updatedGroups = oldData.data.filter(g => g.id !== groupToDelete.id);
+        return {
+          ...oldData,
+          data: updatedGroups
+        };
+      });
       
       // Close dialog
       setDeleteConfirmOpen(false);
       setGroupToDelete(null);
       
-    } catch (err) {
-      enqueueSnackbar(err.response?.data?.detail || 'Failed to delete group', { 
-        variant: 'error' 
+      // Show success message
+      enqueueSnackbar(t('telegram.groupDeletedSuccessfully'), { 
+        variant: 'success',
+        autoHideDuration: 3000
       });
+      
+      // Perform actual delete in the background
+      await groupsAPI.delete(groupToDelete.id);
+      
+      // Refresh cache in React Query
+      await refetch();
+      
+    } catch (err) {
+      console.error('Error deleting group:', err);
+      enqueueSnackbar(err.response?.data?.detail || t('telegram.failedToDeleteGroup'), { 
+        variant: 'error',
+        autoHideDuration: 3000
+      });
+      
+      // Refresh data from server on error
+      await refetch();
     }
   };
 
