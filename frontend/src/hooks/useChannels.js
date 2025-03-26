@@ -37,15 +37,21 @@ export const useChannels = (skipCache = false) => {
 
   // Mutation for deleting a channel with optimistic updates
   const deleteChannelMutation = useMutation({
-    mutationFn: (channelId) => channelsAPI.deleteChannel(channelId),
+    mutationFn: (channelId) => {
+      console.log(`Starting actual deletion of channel ID: ${channelId}`);
+      return channelsAPI.deleteChannel(channelId);
+    },
+    
     onMutate: async (channelId) => {
       try {
+        console.log(`Optimistic update for channel ID: ${channelId}`);
+        
         // Cancel any outgoing refetches
         await queryClient.cancelQueries({ queryKey: CHANNELS_QUERY_KEY });
         
         // Snapshot the previous value
         const previousData = queryClient.getQueryData(CHANNELS_QUERY_KEY);
-        console.log("Delete - Previous data structure:", 
+        console.log("Delete - Data structure:", 
           previousData ? 
           (Array.isArray(previousData) ? "Array" : "Object with data property") : 
           "No data in cache");
@@ -55,19 +61,38 @@ export const useChannels = (skipCache = false) => {
         if (previousData) {
           if (Array.isArray(previousData)) {
             channelToDelete = previousData.find(channel => channel.id === channelId);
-            // Optimistically update the cache by removing the channel
-            queryClient.setQueryData(CHANNELS_QUERY_KEY, 
-              previousData.filter(channel => channel.id !== channelId)
-            );
+            
+            if (channelToDelete) {
+              console.log(`Found channel to delete in cache: "${channelToDelete.group_name}" (ID: ${channelId})`);
+              
+              // Optimistically update the cache by removing the channel
+              const filteredData = previousData.filter(channel => channel.id !== channelId);
+              console.log(`Removed channel from cache. Before: ${previousData.length}, After: ${filteredData.length}`);
+              
+              queryClient.setQueryData(CHANNELS_QUERY_KEY, filteredData);
+            } else {
+              console.log(`Channel with ID ${channelId} not found in cache array`);
+            }
           } else if (previousData.data && Array.isArray(previousData.data)) {
             channelToDelete = previousData.data.find(channel => channel.id === channelId);
-            // Optimistically update the cache by removing the channel
-            const updatedData = {
-              ...previousData,
-              data: previousData.data.filter(channel => channel.id !== channelId)
-            };
-            queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+            
+            if (channelToDelete) {
+              console.log(`Found channel to delete in cache data: "${channelToDelete.group_name}" (ID: ${channelId})`);
+              
+              // Optimistically update the cache by removing the channel
+              const updatedData = {
+                ...previousData,
+                data: previousData.data.filter(channel => channel.id !== channelId)
+              };
+              console.log(`Removed channel from cache data. Before: ${previousData.data.length}, After: ${updatedData.data.length}`);
+              
+              queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+            } else {
+              console.log(`Channel with ID ${channelId} not found in cache data object`);
+            }
           }
+        } else {
+          console.log("No previous data in cache to update");
         }
         
         // Return a context with the previous value and channel info
@@ -77,78 +102,108 @@ export const useChannels = (skipCache = false) => {
         return { error };
       }
     },
+    
     onError: (err, channelId, context) => {
-      console.error("Error deleting channel:", err);
-      
+      console.error(`Error deleting channel ${channelId}:`, err);
       const errorMessage = err.response?.data?.detail || '';
       
-      // If the error is "not found" or "channel not found, cache invalidated"
-      // we consider this a successful deletion (already deleted)
-      if (errorMessage.includes('not found') || 
-          errorMessage.includes('cache invalidated')) {
-        console.log("Channel was already deleted on server but still in cache");
+      // "not found" errors should be treated as success
+      if (errorMessage.includes('not found') || errorMessage.includes('cache invalidated')) {
+        console.log(`Channel ${channelId} was not found on server (likely already deleted)`);
         
-        // Still treat this as success - no need to rollback
-        // Just make sure it's gone from the UI
+        // Still make sure it's gone from the cache
         const currentData = queryClient.getQueryData(CHANNELS_QUERY_KEY);
         
         if (currentData) {
+          // Remove from current data if still present
           if (Array.isArray(currentData)) {
-            // Make sure the channel is removed from the UI
-            queryClient.setQueryData(CHANNELS_QUERY_KEY, 
-              currentData.filter(channel => channel.id !== channelId)
-            );
+            const stillExists = currentData.some(channel => channel.id === channelId);
+            
+            if (stillExists) {
+              console.log(`Channel ${channelId} still exists in cache after "not found" error - removing it`);
+              queryClient.setQueryData(
+                CHANNELS_QUERY_KEY, 
+                currentData.filter(channel => channel.id !== channelId)
+              );
+            }
           } else if (currentData.data && Array.isArray(currentData.data)) {
-            const updatedData = {
-              ...currentData,
-              data: currentData.data.filter(channel => channel.id !== channelId)
-            };
-            queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+            const stillExists = currentData.data.some(channel => channel.id === channelId);
+            
+            if (stillExists) {
+              console.log(`Channel ${channelId} still exists in cache data after "not found" error - removing it`);
+              queryClient.setQueryData(
+                CHANNELS_QUERY_KEY, 
+                {
+                  ...currentData,
+                  data: currentData.data.filter(channel => channel.id !== channelId)
+                }
+              );
+            }
           }
         }
         
-        // Consider this a success and don't propagate the error
-        return;
+        // Force a refetch to ensure consistency
+        queryClient.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
+        return; // Don't propagate the error
       }
       
-      // For other real errors, roll back to previous state
+      // For real errors, roll back the optimistic update
       if (context?.previousData) {
+        console.log(`Rolling back optimistic update for channel ${channelId}`);
         queryClient.setQueryData(CHANNELS_QUERY_KEY, context.previousData);
       }
       
-      // Re-throw the error for UI handling
+      // Re-throw for UI handling
       throw err;
     },
-    onSuccess: (data, channelId) => {
-      console.log(`Channel ${channelId} deleted successfully`);
+    
+    onSuccess: (result, channelId) => {
+      console.log(`Successfully deleted channel ${channelId} on server`);
       
-      // Double-check that the channel is removed from UI
+      // Double-check cache to ensure deleted channel is gone
       const currentData = queryClient.getQueryData(CHANNELS_QUERY_KEY);
+      let wasRemoved = false;
+      
       if (currentData) {
         if (Array.isArray(currentData)) {
-          if (currentData.some(channel => channel.id === channelId)) {
-            // If channel still exists in the UI, remove it
-            queryClient.setQueryData(CHANNELS_QUERY_KEY, 
+          const stillExists = currentData.some(channel => channel.id === channelId);
+          
+          if (stillExists) {
+            console.log(`Channel ${channelId} still in cache after successful deletion - removing it`);
+            queryClient.setQueryData(
+              CHANNELS_QUERY_KEY, 
               currentData.filter(channel => channel.id !== channelId)
             );
+            wasRemoved = true;
           }
         } else if (currentData.data && Array.isArray(currentData.data)) {
-          if (currentData.data.some(channel => channel.id === channelId)) {
-            // If channel still exists in the UI, remove it
-            const updatedData = {
-              ...currentData,
-              data: currentData.data.filter(channel => channel.id !== channelId)
-            };
-            queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+          const stillExists = currentData.data.some(channel => channel.id === channelId);
+          
+          if (stillExists) {
+            console.log(`Channel ${channelId} still in cache data after successful deletion - removing it`);
+            queryClient.setQueryData(
+              CHANNELS_QUERY_KEY, 
+              {
+                ...currentData,
+                data: currentData.data.filter(channel => channel.id !== channelId)
+              }
+            );
+            wasRemoved = true;
           }
         }
       }
       
-      // Always refetch to ensure UI state is in sync
+      // If we had to remove it again, log this unusual situation
+      if (wasRemoved) {
+        console.warn(`Had to remove channel ${channelId} from cache even after success - this is unusual`);
+      }
+      
+      // Always invalidate to ensure we have fresh data
       queryClient.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
     },
+    
     onSettled: () => {
-      // Refetch after any outcome to ensure UI state is correct
+      // Always refetch after any outcome to ensure UI state is correct
       queryClient.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
     }
   });

@@ -507,23 +507,35 @@ const ParsedChannels = () => {
       const channelName = selectedChannelName;
       const channelId = selectedChannelId;
       
-      // Track that we're deleting this channel
-      setDeletingChannels(prev => ({
-        ...prev,
-        [channelId]: true
-      }));
-      
-      // Remove from local state immediately for immediate UI update
-      const removeFromLocalState = () => {
-        // Filter out the channel from filtered channels
-        setFilteredChannels(prev => prev.filter(ch => ch.id !== channelId));
+      // More aggressive removal from UI state first
+      const removeFromUI = (id) => {
+        console.log(`Removing channel ${id} from UI immediately`);
         
-        // Update paginated channels too
-        setPaginatedChannels(prev => prev.filter(ch => ch.id !== channelId));
+        // Remove from all state variables that store channels
+        setFilteredChannels(prev => prev.filter(ch => ch.id !== id));
+        setPaginatedChannels(prev => prev.filter(ch => ch.id !== id));
+        
+        // Mark as deleting
+        setDeletingChannels(prev => ({
+          ...prev,
+          [id]: true
+        }));
       };
       
-      // Remove channel from UI immediately
-      removeFromLocalState();
+      // Remove immediately from UI
+      removeFromUI(channelId);
+      
+      // Find all duplicate channels (with the same name)
+      const duplicateChannels = channels.filter(c => 
+        c.group_name === channelName && c.id !== channelId
+      );
+      
+      if (duplicateChannels.length > 0) {
+        console.log(`Found ${duplicateChannels.length} duplicate channels with name "${channelName}"`);
+        duplicateChannels.forEach(dup => {
+          console.log(`Duplicate: ID=${dup.id}, name=${dup.group_name}`);
+        });
+      }
       
       // Show info message
       const infoMessage = enqueueSnackbar(`Deleting channel "${channelName}"...`, { 
@@ -531,12 +543,7 @@ const ParsedChannels = () => {
         persist: true // Keep this message until we replace it
       });
       
-      // Find duplicate channels with the same name but different IDs
-      const duplicateChannels = channels.filter(c => 
-        c.group_name === channelName && c.id !== channelId
-      );
-      
-      // Use the async mutation from useChannels hook which handles optimistic updates
+      // Use the async mutation from useChannels hook
       const result = await deleteChannelAsync(channelId);
       
       // Clean up UI feedback
@@ -553,17 +560,15 @@ const ParsedChannels = () => {
       // Handle duplicate channels
       if (duplicateChannels.length > 0) {
         const confirmDelete = window.confirm(
-          `Found ${duplicateChannels.length} more channel(s) with the same name. Delete them too?`
+          `Found ${duplicateChannels.length} more channel(s) with the same name "${channelName}". Delete them too?`
         );
         
         if (confirmDelete) {
           // Delete each duplicate one by one
           for (const dupChannel of duplicateChannels) {
             try {
-              setDeletingChannels(prev => ({
-                ...prev,
-                [dupChannel.id]: true
-              }));
+              // Remove from UI immediately
+              removeFromUI(dupChannel.id);
               
               const dupInfoMsg = enqueueSnackbar(`Deleting duplicate channel "${dupChannel.group_name}"...`, { 
                 variant: 'info',
@@ -576,7 +581,7 @@ const ParsedChannels = () => {
                 closeSnackbar(dupInfoMsg);
               }
               
-              enqueueSnackbar(`Duplicate channel deleted successfully`, { 
+              enqueueSnackbar(`Duplicate channel "${dupChannel.group_name}" deleted successfully`, { 
                 variant: 'success',
                 autoHideDuration: 2000
               });
@@ -598,16 +603,15 @@ const ParsedChannels = () => {
                 });
               }
             } finally {
-              // Remove from deleting state
-              setDeletingChannels(prev => {
-                const updated = {...prev};
-                delete updated[dupChannel.id];
-                return updated;
-              });
+              // Keep channel marked as deleting
+              // We'll remove from the deletingChannels state during refetch
             }
           }
         }
       }
+      
+      // Force a refetch after all deletions
+      await refetch();
       
       // Clear any previous errors
       setError(null);
@@ -640,6 +644,13 @@ const ParsedChannels = () => {
           autoHideDuration: 5000
         });
         
+        // Remove deleting state to allow retry
+        setDeletingChannels(prev => {
+          const updated = {...prev};
+          delete updated[selectedChannelId];
+          return updated;
+        });
+        
         // Set error state for UI feedback
         setError(`Failed to delete channel "${selectedChannelName}": ${errorMessage}`);
       }
@@ -651,10 +662,17 @@ const ParsedChannels = () => {
       setSelectedChannelId(null);
       setSelectedChannelName('');
       
-      // Remove from deleting state
+      // Clean up any completed deleting states after refetch
       setDeletingChannels(prev => {
         const updated = {...prev};
-        delete updated[selectedChannelId];
+        // Only keep channels that still exist in the actual data
+        // This ensures we don't have phantom deleting states
+        const existingIds = new Set(channels.map(ch => ch.id));
+        Object.keys(updated).forEach(id => {
+          if (!existingIds.has(parseInt(id, 10))) {
+            delete updated[id];
+          }
+        });
         return updated;
       });
     }
@@ -740,14 +758,34 @@ const ParsedChannels = () => {
   // Cleanup and refresh
   useEffect(() => {
     // When component mounts, always refetch to ensure latest data
-    refetch();
+    const fetchLatestData = async () => {
+      try {
+        console.log("Fetching fresh data on component mount");
+        await refetchWithoutCache();
+        
+        // Force clear any deleting states after refetch
+        setDeletingChannels({});
+        
+        // Ensure our local state matches the fresh data
+        setFilteredChannels(channels);
+        setPaginatedChannels(channels.slice(0, ITEMS_PER_PAGE));
+        
+        // Clear any lingering errors
+        setError(null);
+      } catch (e) {
+        console.error("Error refreshing data on mount:", e);
+      }
+    };
+    
+    fetchLatestData();
     
     // Return cleanup function
     return () => {
       // Clear any error state when unmounting
       setError(null);
+      setDeletingChannels({});
     };
-  }, [refetch]);
+  }, [refetchWithoutCache, channels]);
 
   if (isLoading && channels.length === 0) {
     return (
@@ -778,6 +816,28 @@ const ParsedChannels = () => {
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
+        </Alert>
+      )}
+      
+      {/* Special notification for deleting channels */}
+      {Object.keys(deletingChannels).length > 0 && (
+        <Alert 
+          severity="info" 
+          sx={{ 
+            mb: 3,
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <CircularProgress size={16} sx={{ mr: 1 }} />
+            <Typography>
+              {Object.keys(deletingChannels).length === 1
+                ? "Deleting 1 channel... Cards with red borders are being removed."
+                : `Deleting ${Object.keys(deletingChannels).length} channels... Cards with red borders are being removed.`
+              }
+            </Typography>
+          </Box>
         </Alert>
       )}
       
@@ -840,13 +900,15 @@ const ParsedChannels = () => {
                 <Card 
                   className="card-hover"
                   sx={{ 
-                    cursor: 'pointer',
+                    cursor: deletingChannels[channel.id] ? 'not-allowed' : 'pointer',
                     '&:hover': {
-                      transform: 'translateY(-4px)',
+                      transform: deletingChannels[channel.id] ? 'none' : 'translateY(-4px)',
                       transition: 'transform 0.2s ease-in-out',
                     },
-                    opacity: deletingChannels[channel.id] ? 0.6 : 1,
-                    position: 'relative'
+                    opacity: deletingChannels[channel.id] ? 0.5 : 1,
+                    position: 'relative',
+                    border: deletingChannels[channel.id] ? '1px dashed #ff5252' : 'none',
+                    pointerEvents: deletingChannels[channel.id] ? 'none' : 'auto'
                   }}
                   onClick={(e) => {
                     // Prevent navigation if clicking delete button or if being deleted
