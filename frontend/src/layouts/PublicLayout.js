@@ -23,8 +23,23 @@ const PublicLayout = () => {
   const { t } = useTranslation();
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <AppBar position="fixed">
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        minHeight: '100vh',
+        bgcolor: darkMode ? 'background.default' : 'background.default',
+        transition: 'none', // Disable transition on initial render
+      }}
+      className="public-layout"
+    >
+      <AppBar 
+        position="fixed"
+        sx={{
+          backgroundColor: darkMode ? '#272727' : 'primary.main',
+          transition: 'none', // Disable transition on initial render
+        }}
+      >
         <Container maxWidth="xl">
           <Toolbar disableGutters>
             <Typography
@@ -77,7 +92,8 @@ const PublicLayout = () => {
           flexGrow: 1,
           mt: '64px',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          bgcolor: darkMode ? 'background.default' : 'background.default',
         }}
       >
         <Container maxWidth="lg" sx={{ flexGrow: 1, py: 3 }}>
@@ -87,5 +103,19 @@ const PublicLayout = () => {
     </Box>
   );
 };
+
+// Add an effect to restore transitions after initial render
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const layoutElements = document.querySelectorAll('.public-layout, .public-layout .MuiAppBar-root');
+      layoutElements.forEach(el => {
+        if (el && el.style) {
+          el.style.transition = '';
+        }
+      });
+    }, 300);
+  });
+}
 
 export default PublicLayout; 

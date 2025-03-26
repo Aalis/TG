@@ -5,6 +5,45 @@
   box-sizing: border-box;
 }
 
+/* Apply theme transitions with high specificity to override MUI */
+html[data-theme], 
+html[data-theme] body, 
+html[data-theme] #root, 
+html[data-theme] .MuiPaper-root, 
+html[data-theme] .MuiAppBar-root, 
+html[data-theme] .MuiCard-root {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+/* Theme-specific styles with high specificity */
+html[data-theme='dark'] {
+  background-color: #121212 !important;
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] {
+  background-color: #f5f5f5 !important;
+  color: #000000 !important;
+}
+
+html[data-theme='dark'] .MuiAppBar-root {
+  background-color: #272727 !important;
+}
+
+html[data-theme='dark'] .MuiPaper-root {
+  background-color: #1e1e1e !important;
+}
+
+/* Prevent content from shifting during theme change */
+html {
+  height: 100%;
+  overflow-y: scroll;
+}
+
+body {
+  min-height: 100%;
+}
+
 /* Dark scrollbar styles */
 ::-webkit-scrollbar {
   width: 10px;
@@ -37,7 +76,16 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f5f5;
+}
+
+/* Add theme preloading styles to handle initial render */
+#root {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.theme-initializing #root {
+  opacity: 0;
 }
 
 code {

@@ -20,6 +20,91 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/icon?family=Material+Icons"
     />
+    <!-- Theme preloading script to prevent theme flicker -->
+    <script>
+      (function() {
+        try {
+          // Determine theme mode before React loads
+          const savedTheme = localStorage.getItem('theme');
+          const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const isDarkMode = savedTheme ? savedTheme === 'dark' : prefersDarkMode;
+          
+          // Apply theme to both html and body elements
+          document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+          
+          // Apply background color to multiple elements to ensure coverage
+          const darkBg = '#121212';
+          const lightBg = '#f5f5f5';
+          const darkText = '#ffffff';
+          const lightText = '#000000';
+          
+          document.documentElement.style.backgroundColor = isDarkMode ? darkBg : lightBg;
+          document.documentElement.style.color = isDarkMode ? darkText : lightText;
+          
+          // Also set body styles even before it's fully loaded
+          const css = `
+            body {
+              background-color: ${isDarkMode ? darkBg : lightBg} !important;
+              color: ${isDarkMode ? darkText : lightText} !important;
+            }
+            #root {
+              visibility: hidden;
+            }
+            .MuiPaper-root {
+              background-color: ${isDarkMode ? '#1e1e1e' : '#ffffff'} !important;
+            }
+            .MuiAppBar-root {
+              background-color: ${isDarkMode ? '#272727' : '#1976d2'} !important;
+            }
+          `;
+          
+          const styleEl = document.createElement('style');
+          styleEl.id = 'theme-preload-forceful';
+          styleEl.appendChild(document.createTextNode(css));
+          document.head.appendChild(styleEl);
+          
+          // Remove visibility hidden after a short delay
+          window.addEventListener('load', function() {
+            setTimeout(function() {
+              document.getElementById('root').style.visibility = 'visible';
+              const forceStyle = document.getElementById('theme-preload-forceful');
+              if (forceStyle) {
+                forceStyle.remove();
+              }
+            }, 50);
+          });
+        } catch (e) {
+          console.error('Theme preloading error:', e);
+        }
+      })();
+    </script>
+    <!-- Inlined theme CSS to prevent FOUC (Flash of Unstyled Content) -->
+    <style>
+      html, body, #root, .MuiPaper-root, .MuiAppBar-root {
+        transition: background-color 0.2s ease, color 0.2s ease;
+      }
+      
+      html[data-theme='dark'] {
+        background-color: #121212;
+        color: #ffffff;
+      }
+      
+      html[data-theme='light'] {
+        background-color: #f5f5f5;
+        color: #000000;
+      }
+      
+      body {
+        min-height: 100vh;
+        margin: 0;
+      }
+      
+      /* Prevent content from shifting during theme change */
+      html {
+        height: 100%;
+        overflow-y: scroll;
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

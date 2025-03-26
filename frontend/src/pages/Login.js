@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../context/ThemeContext';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ const Login = () => {
   const { enqueueSnackbar } = useSnackbar();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
+  const { darkMode } = useTheme();
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -71,6 +73,7 @@ const Login = () => {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: 'calc(100vh - 120px)',
+        backgroundColor: darkMode ? '#121212' : '#f5f5f5',
       }}
     >
       <Paper
@@ -80,6 +83,8 @@ const Login = () => {
           width: '100%',
           maxWidth: '400px',
           borderRadius: 2,
+          backgroundColor: darkMode ? '#1e1e1e' : '#ffffff',
+          transition: 'none', // Prevent transition on initial render
         }}
       >
         <Typography variant="h5" align="center" gutterBottom>
