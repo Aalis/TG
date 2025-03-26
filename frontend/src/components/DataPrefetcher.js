@@ -1,3 +1,4 @@
+// This file has been renamed from DataPrefetcher.js to DataPrefetcherNew.js
 import React, { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useChannels } from '../hooks/useChannels';
