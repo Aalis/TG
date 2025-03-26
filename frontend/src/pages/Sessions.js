@@ -3,6 +3,7 @@ import {
   Typography,
   Box,
   Grid,
+  Container,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import TelegramSessions from '../components/TelegramSessions';
@@ -39,18 +40,20 @@ const Sessions = () => {
   const greeting = isRussian ? "Привет" : "Hello";
 
   return (
-    <Box>
-      <Typography variant="h4" component="h1" gutterBottom>
-        {greeting}, {user?.username}!
-      </Typography>
-      
-      <Grid container spacing={3}>
-        {/* Telegram Sessions */}
-        <Grid item xs={12}>
-          <TelegramSessions />
+    <Container maxWidth="lg">
+      <Box>
+        <Typography variant="h4" component="h1" gutterBottom>
+          {greeting}, {user?.username}!
+        </Typography>
+        
+        <Grid container spacing={3}>
+          {/* Telegram Sessions */}
+          <Grid item xs={12}>
+            <TelegramSessions />
+          </Grid>
         </Grid>
-      </Grid>
-    </Box>
+      </Box>
+    </Container>
   );
 };
 

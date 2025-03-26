@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
   Box,
@@ -27,14 +27,12 @@ import {
   Menu as MenuIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
-  ChevronLeft as ChevronLeftIcon,
   Group as GroupsIcon,
   Forum as ChannelsIcon,
   Person as ProfileIcon,
   Logout as LogoutIcon,
   AdminPanelSettings as AdminIcon,
   ShoppingCart as ShoppingCartIcon,
-  AccountCircle as AccountCircleIcon,
   History as SessionsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
@@ -47,9 +45,9 @@ import { prefetchSessions } from '../hooks/useSessions';
 
 const drawerWidth = 240;
 
-const MainLayout = () => {
+const MainLayout = ({ children }) => {
   const { user, logout } = useAuth();
-  const { darkMode, toggleTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
@@ -108,7 +106,7 @@ const MainLayout = () => {
           <ListItemIcon>
             <GroupsIcon />
           </ListItemIcon>
-          <ListItemText primary={t('navigation.parsedGroups')} />
+          <ListItemText primary={t('navigation.parsedGroups', 'Groups')} />
         </ListItem>
         <ListItem 
           button 
@@ -118,7 +116,7 @@ const MainLayout = () => {
           <ListItemIcon>
             <ChannelsIcon />
           </ListItemIcon>
-          <ListItemText primary={t('navigation.parsedChannels')} />
+          <ListItemText primary={t('navigation.parsedChannels', 'Channels')} />
         </ListItem>
         <ListItem 
           button 
@@ -129,7 +127,7 @@ const MainLayout = () => {
           <ListItemIcon>
             <SessionsIcon />
           </ListItemIcon>
-          <ListItemText primary={t('navigation.sessions')} />
+          <ListItemText primary={t('navigation.sessions', 'Sessions')} />
         </ListItem>
       </List>
       <Divider />
@@ -142,7 +140,7 @@ const MainLayout = () => {
           <ListItemIcon>
             <ShoppingCartIcon />
           </ListItemIcon>
-          <ListItemText primary={t('common.subscribe')} />
+          <ListItemText primary={t('common.subscribe', 'Subscribe')} />
         </ListItem>
         {user?.is_superuser && (
           <ListItem 
@@ -153,7 +151,7 @@ const MainLayout = () => {
             <ListItemIcon>
               <AdminIcon />
             </ListItemIcon>
-            <ListItemText primary={t('navigation.admin')} />
+            <ListItemText primary={t('navigation.admin', 'Admin')} />
           </ListItem>
         )}
         <ListItem 
@@ -164,13 +162,13 @@ const MainLayout = () => {
           <ListItemIcon>
             <ProfileIcon />
           </ListItemIcon>
-          <ListItemText primary={t('navigation.profile')} />
+          <ListItemText primary={t('navigation.profile', 'Profile')} />
         </ListItem>
         <ListItem button onClick={handleLogoutClick}>
           <ListItemIcon>
             <LogoutIcon />
           </ListItemIcon>
-          <ListItemText primary={t('common.logout')} />
+          <ListItemText primary={t('common.logout', 'Logout')} />
         </ListItem>
       </List>
     </div>
@@ -197,7 +195,7 @@ const MainLayout = () => {
               <MenuIcon />
             </IconButton>
             <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-              {t('common.welcome')}
+              {t('common.welcome', 'Welcome to Telegram Group Parser')}
             </Typography>
             
             <Box sx={{ flexGrow: 0, display: 'flex', alignItems: 'center' }}>
@@ -206,7 +204,7 @@ const MainLayout = () => {
                 canParse={user?.can_parse}
               />
               <IconButton sx={{ ml: 1 }} onClick={toggleTheme} color="inherit">
-                {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
+                {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
               </IconButton>
               <Tooltip title={user?.email || ''}>
                 <IconButton onClick={handleOpenUserMenu} sx={{ p: 0, ml: 1 }}>
@@ -231,10 +229,10 @@ const MainLayout = () => {
                 onClose={handleCloseUserMenu}
               >
                 <MenuItem onClick={() => { handleCloseUserMenu(); navigate('/profile'); }}>
-                  <Typography textAlign="center">{t('navigation.profile')}</Typography>
+                  <Typography textAlign="center">{t('navigation.profile', 'Profile')}</Typography>
                 </MenuItem>
                 <MenuItem onClick={handleLogoutClick}>
-                  <Typography textAlign="center">{t('common.logout')}</Typography>
+                  <Typography textAlign="center">{t('common.logout', 'Logout')}</Typography>
                 </MenuItem>
               </Menu>
             </Box>
@@ -273,41 +271,40 @@ const MainLayout = () => {
         </Drawer>
       </Box>
       
-      {/* Logout Confirmation Dialog */}
-      <Dialog
-        open={logoutDialogOpen}
-        onClose={() => setLogoutDialogOpen(false)}
-        aria-labelledby="logout-dialog-title"
-      >
-        <DialogTitle id="logout-dialog-title">
-          {t('auth.confirmLogout', 'Confirm Logout')}
-        </DialogTitle>
-        <DialogContent>
-          <Typography>
-            {t('auth.logoutConfirmMessage', 'Are you sure you want to log out? You will need to sign in again to access your account.')}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLogoutDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleLogoutConfirm} color="error" variant="contained">
-            {t('common.logout')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       <Box
         component="main"
-        sx={{ 
-          flexGrow: 1, 
-          p: 3, 
+        sx={{
+          flexGrow: 1,
+          p: 3,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           mt: '64px'
         }}
       >
         <Container maxWidth="lg">
-          <Outlet />
+          {children}
         </Container>
       </Box>
+
+      {/* Logout confirmation dialog */}
+      <Dialog
+        open={logoutDialogOpen}
+        onClose={() => setLogoutDialogOpen(false)}
+      >
+        <DialogTitle>{t('dialogs.logoutConfirmTitle', 'Confirm Logout')}</DialogTitle>
+        <DialogContent>
+          <Typography>
+            {t('dialogs.logoutConfirmMessage', 'Are you sure you want to log out?')}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLogoutDialogOpen(false)}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button onClick={handleLogoutConfirm} color="primary" autoFocus>
+            {t('common.logout', 'Logout')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

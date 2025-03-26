@@ -1,44 +1,53 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import axios from 'axios';
 
+// Create context
 const AuthContext = createContext();
 
+// Custom hook to access auth context
 export const useAuth = () => useContext(AuthContext);
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+// Global state outside of React to prevent reinitialization
+let globalAuthState = {
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+  initialized: false
+};
 
-  // Check if user is already logged in on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem('token');
-      
-      if (token) {
-        try {
-          // Set default auth header
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          
-          // Verify token validity
-          const response = await axios.post('/api/v1/login/test-token');
-          
-          setUser(response.data);
-          setIsAuthenticated(true);
-        } catch (err) {
-          // Token is invalid or expired
-          localStorage.removeItem('token');
-          delete axios.defaults.headers.common['Authorization'];
-          setError('Session expired. Please login again.');
-        }
-      }
-      
-      setIsLoading(false);
-    };
+export const AuthProvider = ({ children }) => {
+  // Initialize state from global state
+  const [user, setUser] = useState(globalAuthState.user);
+  const [isAuthenticated, setIsAuthenticated] = useState(globalAuthState.isAuthenticated);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // Initialize auth only once, outside of render cycle
+  if (!globalAuthState.initialized) {
+    globalAuthState.initialized = true;
     
-    checkAuth();
-  }, []);
+    const token = localStorage.getItem('token');
+    if (token) {
+      // Set auth header
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      // Make API call without affecting rendering - we'll update state after
+      setTimeout(() => {
+        axios.post('/api/v1/login/test-token', null, { timeout: 8000 })
+          .then(response => {
+            globalAuthState.user = response.data;
+            globalAuthState.isAuthenticated = true;
+            setUser(response.data);
+            setIsAuthenticated(true);
+          })
+          .catch(() => {
+            // Token invalid - clear everything
+            localStorage.removeItem('token');
+            delete axios.defaults.headers.common['Authorization'];
+          });
+      }, 0);
+    }
+  }
 
   // Login function
   const login = async (username, password) => {
@@ -50,7 +59,9 @@ export const AuthProvider = ({ children }) => {
       formData.append('username', username);
       formData.append('password', password);
       
-      const response = await axios.post('/api/v1/login/access-token', formData);
+      const response = await axios.post('/api/v1/login/access-token', formData, {
+        timeout: 10000
+      });
       
       const { access_token } = response.data;
       
@@ -61,16 +72,26 @@ export const AuthProvider = ({ children }) => {
       axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       
       // Get user data
-      const userResponse = await axios.post('/api/v1/login/test-token');
+      const userResponse = await axios.post('/api/v1/login/test-token', null, {
+        timeout: 8000
+      });
       
-      setUser(userResponse.data);
+      // Update both local and global state
+      const userData = userResponse.data;
+      globalAuthState.user = userData;
+      globalAuthState.isAuthenticated = true;
+      
+      setUser(userData);
       setIsAuthenticated(true);
       setIsLoading(false);
       
       return true;
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Please try again.');
+      console.error('Login failed:', err);
+      const errorMessage = err.response?.data?.detail || 'Login failed. Please try again.';
+      setError(errorMessage);
       setIsLoading(false);
+      
       return false;
     }
   };
@@ -85,14 +106,18 @@ export const AuthProvider = ({ children }) => {
         email,
         username,
         password
+      }, {
+        timeout: 10000
       });
       
       setIsLoading(false);
       return true;
     } catch (err) {
-      setError(err.response?.data?.detail || 'Registration failed. Please try again.');
+      console.error('Registration failed:', err);
+      const errorMessage = err.response?.data?.detail || 'Registration failed. Please try again.';
+      setError(errorMessage);
       setIsLoading(false);
-      throw err; // Throw the error so it can be caught in the Register component
+      throw err;
     }
   };
 
@@ -100,6 +125,11 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
+    
+    // Update both local and global state
+    globalAuthState.user = null;
+    globalAuthState.isAuthenticated = false;
+    
     setUser(null);
     setIsAuthenticated(false);
   };
@@ -117,10 +147,15 @@ export const AuthProvider = ({ children }) => {
       }
       
       // Make the API call to update the profile
-      const response = await axios.put('/api/v1/users/me', data);
+      const response = await axios.put('/api/v1/users/me', data, {
+        timeout: 10000
+      });
       
-      // Update the user state with the new data
-      setUser(response.data);
+      // Update both local and global state
+      const userData = response.data;
+      globalAuthState.user = userData;
+      
+      setUser(userData);
       setIsLoading(false);
       return true;
     } catch (err) {

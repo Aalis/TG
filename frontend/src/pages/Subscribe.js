@@ -16,6 +16,7 @@ import {
   Stack,
   Dialog,
   DialogContent,
+  useTheme,
 } from '@mui/material';
 import {
   Telegram as TelegramIcon,
@@ -29,6 +30,7 @@ import QRCode from 'qrcode';
 
 const Subscribe = () => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const [qrDialog, setQrDialog] = useState({ open: false, address: '', label: '', type: '' });
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   
@@ -80,9 +82,9 @@ const Subscribe = () => {
   const CryptoAddress = ({ type, address, label }) => (
     <Box sx={{ 
       p: 2, 
-      bgcolor: '#1e1e1e', 
+      bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.03)',
       borderRadius: 1,
-      border: '1px solid rgba(255, 255, 255, 0.1)'
+      border: `1px solid ${theme.palette.divider}`
     }}>
       <Typography 
         variant="subtitle2" 
@@ -97,10 +99,10 @@ const Subscribe = () => {
         display: 'flex', 
         alignItems: 'center',
         gap: 1,
-        bgcolor: 'rgba(255, 255, 255, 0.05)',
+        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
         p: 1.5,
         borderRadius: 1,
-        border: '1px solid rgba(255, 255, 255, 0.1)'
+        border: `1px solid ${theme.palette.divider}`
       }}>
         <Typography 
           sx={{ 
@@ -119,9 +121,11 @@ const Subscribe = () => {
               onClick={() => handleOpenQR(address, label, type)}
               size="small"
               sx={{ 
-                color: '#2196f3',
+                color: theme.palette.primary.main,
                 '&:hover': {
-                  bgcolor: 'rgba(33, 150, 243, 0.1)'
+                  bgcolor: theme.palette.mode === 'dark' 
+                    ? 'rgba(33, 150, 243, 0.1)' 
+                    : 'rgba(33, 150, 243, 0.05)'
                 }
               }}
             >
@@ -133,9 +137,11 @@ const Subscribe = () => {
               onClick={() => handleCopyAddress(address)}
               size="small"
               sx={{ 
-                color: '#2196f3',
+                color: theme.palette.primary.main,
                 '&:hover': {
-                  bgcolor: 'rgba(33, 150, 243, 0.1)'
+                  bgcolor: theme.palette.mode === 'dark' 
+                    ? 'rgba(33, 150, 243, 0.1)' 
+                    : 'rgba(33, 150, 243, 0.05)'
                 }
               }}
             >
@@ -172,12 +178,12 @@ const Subscribe = () => {
       >
         <Box sx={{ 
           p: 2, 
-          bgcolor: '#1e1e1e',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : theme.palette.primary.light,
+          borderBottom: `1px solid ${theme.palette.divider}`
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <InfoIcon sx={{ color: '#2196f3' }} />
-            <Typography variant="subtitle1" sx={{ color: 'text.primary' }}>
+            <InfoIcon sx={{ color: theme.palette.primary.main }} />
+            <Typography variant="subtitle1" sx={{ color: theme.palette.mode === 'dark' ? 'text.primary' : theme.palette.primary.contrastText }}>
               {t('subscription.testPeriod')}
             </Typography>
           </Box>
@@ -202,7 +208,7 @@ const Subscribe = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 0.5,
-                color: '#2196f3',
+                color: theme.palette.primary.main,
                 textDecoration: 'none',
                 '&:hover': {
                   textDecoration: 'underline'
@@ -218,13 +224,13 @@ const Subscribe = () => {
           </Box>
 
           <List sx={{ 
-            bgcolor: '#1e1e1e', 
+            bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.03)',
             borderRadius: 1,
             overflow: 'hidden'
           }}>
             <ListItem>
               <ListItemIcon>
-                <CalendarIcon sx={{ color: '#2196f3' }} />
+                <CalendarIcon sx={{ color: theme.palette.primary.main }} />
               </ListItemIcon>
               <ListItemText 
                 primary={t('subscription.price1Day')}
@@ -237,10 +243,10 @@ const Subscribe = () => {
                 }}
               />
             </ListItem>
-            <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.1)' }} />
+            <Divider sx={{ borderColor: theme.palette.divider }} />
             <ListItem>
               <ListItemIcon>
-                <CalendarIcon sx={{ color: '#2196f3' }} />
+                <CalendarIcon sx={{ color: theme.palette.primary.main }} />
               </ListItemIcon>
               <ListItemText 
                 primary={t('subscription.price5Days')}
@@ -253,10 +259,10 @@ const Subscribe = () => {
                 }}
               />
             </ListItem>
-            <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.1)' }} />
+            <Divider sx={{ borderColor: theme.palette.divider }} />
             <ListItem>
               <ListItemIcon>
-                <CalendarIcon sx={{ color: '#2196f3' }} />
+                <CalendarIcon sx={{ color: theme.palette.primary.main }} />
               </ListItemIcon>
               <ListItemText 
                 primary={t('subscription.price20Days')}
@@ -296,7 +302,7 @@ const Subscribe = () => {
         onClose={handleCloseQR}
         PaperProps={{
           sx: {
-            bgcolor: '#1e1e1e',
+            bgcolor: 'background.paper',
             color: 'text.primary',
             maxWidth: '90vw',
             width: 'auto'
@@ -308,7 +314,7 @@ const Subscribe = () => {
           justifyContent: 'space-between', 
           alignItems: 'center',
           p: 2,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+          borderBottom: `1px solid ${theme.palette.divider}`
         }}>
           <Typography variant="h6">
             {qrDialog.label}
@@ -326,7 +332,7 @@ const Subscribe = () => {
           alignItems: 'center',
           gap: 2,
           p: 3,
-          bgcolor: '#1e1e1e'
+          bgcolor: 'background.paper'
         }}>
           <Box sx={{ 
             bgcolor: '#fff', 
@@ -336,7 +342,8 @@ const Subscribe = () => {
             justifyContent: 'center',
             alignItems: 'center',
             width: 200,
-            height: 200
+            height: 200,
+            border: theme.palette.mode === 'light' ? '1px solid rgba(0, 0, 0, 0.1)' : 'none'
           }}>
             {qrCodeUrl && (
               <img 

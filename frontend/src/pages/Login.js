@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link as RouterLink, useSearchParams } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
   TextField,
@@ -8,46 +8,30 @@ import {
   Link,
   Paper,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../context/ThemeContext';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, error: authError } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
-  const [searchParams] = useSearchParams();
   const { t } = useTranslation();
-  const { darkMode } = useTheme();
   const [formData, setFormData] = useState({
     username: '',
     password: '',
   });
-
-  // Check for verification status and stored username
-  useEffect(() => {
-    const isVerified = searchParams.get('verified') === 'true';
-    const storedUsername = localStorage.getItem('lastRegisteredUsername');
-    
-    if (isVerified) {
-      enqueueSnackbar(t('auth.emailVerified', 'Email verified successfully! Please log in.'), { 
-        variant: 'success',
-        autoHideDuration: 6000
-      });
-    }
-    
-    if (storedUsername) {
-      setFormData(prev => ({
-        ...prev,
-        username: storedUsername
-      }));
-      localStorage.removeItem('lastRegisteredUsername'); // Clean up
-    }
-  }, [searchParams, enqueueSnackbar, t]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const handleChange = (e) => {
+    // Clear error when typing
+    if (formError) {
+      setFormError('');
+    }
+    
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -56,13 +40,36 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Don't submit if already submitting
+    if (isSubmitting) return;
+    
+    // Basic validation
+    if (!formData.username.trim() || !formData.password.trim()) {
+      setFormError('Username and password are required');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
     try {
       const success = await login(formData.username, formData.password);
       if (success) {
-        navigate('/');
+        // Reset form data
+        setFormData({
+          username: '',
+          password: '',
+        });
+        navigate('/', { replace: true });
+      } else {
+        setFormError(authError || 'Login failed. Please try again.');
       }
     } catch (error) {
-      enqueueSnackbar(error.response?.data?.detail || t('auth.loginError'), { variant: 'error' });
+      console.error('Login error:', error);
+      setFormError('Login failed. Please try again.');
+      enqueueSnackbar('Login failed. Please try again.', { variant: 'error' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -73,7 +80,6 @@ const Login = () => {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: 'calc(100vh - 120px)',
-        backgroundColor: darkMode ? '#121212' : '#f5f5f5',
       }}
     >
       <Paper
@@ -83,18 +89,18 @@ const Login = () => {
           width: '100%',
           maxWidth: '400px',
           borderRadius: 2,
-          backgroundColor: darkMode ? '#1e1e1e' : '#ffffff',
-          transition: 'none', // Prevent transition on initial render
         }}
       >
         <Typography variant="h5" align="center" gutterBottom>
-          {t('auth.loginTitle')}
+          {t('auth.loginTitle', 'Sign In')}
         </Typography>
-        {searchParams.get('verified') === 'true' && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {t('auth.emailVerified', 'Email verified successfully! Please log in.')}
+        
+        {formError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {formError}
           </Alert>
         )}
+        
         <Box
           component="form"
           onSubmit={handleSubmit}
@@ -103,27 +109,36 @@ const Login = () => {
             flexDirection: 'column',
             gap: 2,
           }}
+          noValidate
         >
           <TextField
             required
             fullWidth
             size="small"
-            label={t('common.username')}
+            label={t('common.username', 'Username')}
             name="username"
             value={formData.username}
             onChange={handleChange}
             autoComplete="username"
+            disabled={isSubmitting}
+            error={!!formError}
+            inputProps={{ 
+              autoCapitalize: "none",
+              spellCheck: "false"
+            }}
           />
           <TextField
             required
             fullWidth
             size="small"
-            label={t('common.password')}
+            label={t('common.password', 'Password')}
             name="password"
             type="password"
             value={formData.password}
             onChange={handleChange}
             autoComplete="current-password"
+            disabled={isSubmitting}
+            error={!!formError}
           />
           <Box sx={{ width: '100%', textAlign: 'right' }}>
             <Link
@@ -132,22 +147,32 @@ const Login = () => {
               variant="body2"
               sx={{ textDecoration: 'none' }}
             >
-              {t('auth.forgotPassword')}
+              {t('auth.forgotPassword', 'Forgot Password?')}
             </Link>
           </Box>
           <Button
             type="submit"
             fullWidth
             variant="contained"
-            sx={{ mt: 1 }}
+            sx={{ mt: 1, position: 'relative' }}
+            disabled={isSubmitting}
           >
-            {t('auth.signIn')}
+            {isSubmitting ? (
+              <>
+                <CircularProgress size={24} sx={{ 
+                  position: 'absolute',
+                  left: '10%',
+                  color: 'inherit'
+                }} />
+                {t('common.signingIn', 'Signing in...')}
+              </>
+            ) : t('auth.signIn', 'Sign In')}
           </Button>
           <Box sx={{ textAlign: 'center', mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              {t('auth.noAccount')}{' '}
+              {t('auth.noAccount', "Don't have an account?")}{' '}
               <Link component={RouterLink} to="/register">
-                {t('common.register')}
+                {t('common.register', 'Register')}
               </Link>
             </Typography>
           </Box>

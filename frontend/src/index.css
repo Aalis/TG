@@ -5,70 +5,38 @@
   box-sizing: border-box;
 }
 
-/* Apply theme transitions with high specificity to override MUI */
-html[data-theme], 
-html[data-theme] body, 
-html[data-theme] #root, 
-html[data-theme] .MuiPaper-root, 
-html[data-theme] .MuiAppBar-root, 
-html[data-theme] .MuiCard-root {
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+/* Base theme colors */
+:root {
+  --bg-color-light: #f5f5f5;
+  --text-color-light: #000000;
+  --bg-color-dark: #121212;
+  --text-color-dark: #ffffff;
 }
 
-/* Theme-specific styles with high specificity */
+/* Theme-specific styles */
 html[data-theme='dark'] {
-  background-color: #121212 !important;
-  color: #ffffff !important;
+  background-color: var(--bg-color-dark);
+  color: var(--text-color-dark);
 }
 
 html[data-theme='light'] {
-  background-color: #f5f5f5 !important;
-  color: #000000 !important;
+  background-color: var(--bg-color-light);
+  color: var(--text-color-light);
 }
 
-html[data-theme='dark'] .MuiAppBar-root {
-  background-color: #272727 !important;
+/* Disable transitions by default */
+html, body, #root, * {
+  transition: none !important;
 }
 
-html[data-theme='dark'] .MuiPaper-root {
-  background-color: #1e1e1e !important;
+/* Enable transitions only when the app is ready */
+html.transitions-enabled * {
+  transition: background-color 0.3s ease, 
+              color 0.3s ease, 
+              border-color 0.3s ease !important;
 }
 
-/* Prevent content from shifting during theme change */
-html {
-  height: 100%;
-  overflow-y: scroll;
-}
-
-body {
-  min-height: 100%;
-}
-
-/* Dark scrollbar styles */
-::-webkit-scrollbar {
-  width: 10px;
-  background-color: #1e1e1e;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: #424242;
-  border-radius: 5px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: #686868;
-}
-
-::-webkit-scrollbar-track {
-  background-color: #1e1e1e;
-}
-
-/* Firefox scrollbar styles */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #424242 #1e1e1e;
-}
-
+/* Basic body styles */
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -76,23 +44,33 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  background-color: inherit;
 }
 
-/* Add theme preloading styles to handle initial render */
 #root {
-  opacity: 1;
-  transition: opacity 0.3s ease;
+  min-height: 100vh;
+  background-color: inherit;
 }
 
-.theme-initializing #root {
-  opacity: 0;
+/* Simple dark scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  background-color: transparent;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+::-webkit-scrollbar-thumb {
+  background-color: rgba(66, 66, 66, 0.5);
+  border-radius: 4px;
 }
 
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(66, 66, 66, 0.5) transparent;
+}
+
+/* Other utility classes */
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -101,7 +79,7 @@ code {
 
 .page-title {
   margin-bottom: 24px;
-  color: #333;
+  color: inherit;
 }
 
 .form-container {
@@ -137,12 +115,20 @@ code {
   align-items: center;
 }
 
-.card-hover:hover {
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-  transition: all 0.3s ease;
+.card-hover {
+  transition: none !important;
 }
 
-.card-hover {
-  transition: all 0.3s ease;
+html.transitions-enabled .card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+html.transitions-enabled .card-hover:hover {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
 } 

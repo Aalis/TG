@@ -31,6 +31,7 @@ import {
   LinearProgress,
   Divider,
   Pagination,
+  Container,
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import {
@@ -497,459 +498,463 @@ const ParsedGroups = () => {
 
   if (isLoading && groups.length === 0) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-        <CircularProgress />
-      </Box>
+      <Container maxWidth="lg">
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+          <CircularProgress />
+        </Box>
+      </Container>
     );
   }
 
   return (
-    <Box>
-      <ParseButtonHeader
-        title={t('navigation.parsedGroups')}
-        entityType="group"
-        onButtonClick={() => {
-          // Reset all parsing-related state
-          resetParsingState();
-          // Clear any previous error messages when opening the dialog
-          setParsingStatus({ loading: false, success: false, error: null });
-          // Reset form fields
-          setSelectedDialog(null);
-          setGroupLink('');
-          // Open the dialog
-          setParseDialogOpen(true);
-        }}
-      />
-      
-      {queryError && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {queryError}
-        </Alert>
-      )}
-      
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <TextField
-          fullWidth
-          placeholder={t('common.searchPlaceholder')}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
+    <Container maxWidth="lg">
+      <Box>
+        <ParseButtonHeader
+          title={t('navigation.parsedGroups')}
+          entityType="group"
+          onButtonClick={() => {
+            // Reset all parsing-related state
+            resetParsingState();
+            // Clear any previous error messages when opening the dialog
+            setParsingStatus({ loading: false, success: false, error: null });
+            // Reset form fields
+            setSelectedDialog(null);
+            setGroupLink('');
+            // Open the dialog
+            setParseDialogOpen(true);
           }}
         />
-      </Paper>
-      
-      {filteredGroups.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          {groups.length === 0 ? (
-            <>
-              <Typography variant="h6" gutterBottom>
-                {t('telegram.noParsedGroupsFound')}
-              </Typography>
-              <Typography variant="body1" color="text.secondary" paragraph>
-                {t('telegram.checkActiveSession')} <RouterLink to="/sessions" style={{ color: '#1976d2', fontWeight: 500 }}>{t('telegram.session')}</RouterLink>.
-              </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  // Clear any previous error messages when opening the dialog
-                  setParsingStatus({ loading: false, success: false, error: null });
-                  setParseDialogOpen(true);
-                }}
-              >
-                {t('telegram.parseFirstGroup')}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Typography variant="h6" gutterBottom>
-                {t('common.noResults')}
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                {t('common.noGroupsMatchSearch')}
-              </Typography>
-            </>
-          )}
+        
+        {queryError && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {queryError}
+          </Alert>
+        )}
+        
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <TextField
+            fullWidth
+            placeholder={t('common.searchPlaceholder')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
         </Paper>
-      ) : (
-        <>
-          <Grid container spacing={3}>
-            {paginatedGroups.map((group) => (
-              <Grid item xs={12} sm={6} md={4} key={group.id}>
-                <Card 
-                  className="card-hover"
-                  sx={{ 
-                    cursor: 'pointer',
-                    '&:hover': {
-                      transform: 'translateY(-4px)',
-                      transition: 'transform 0.2s ease-in-out',
-                    }
-                  }}
-                  onClick={(e) => {
-                    // Prevent navigation if clicking delete button
-                    if (e.target.closest('button[data-delete]')) return;
-                    navigate(`/groups/${group.id}`);
+        
+        {filteredGroups.length === 0 ? (
+          <Paper sx={{ p: 4, textAlign: 'center' }}>
+            {groups.length === 0 ? (
+              <>
+                <Typography variant="h6" gutterBottom>
+                  {t('telegram.noParsedGroupsFound')}
+                </Typography>
+                <Typography variant="body1" color="text.secondary" paragraph>
+                  {t('telegram.checkActiveSession')} <RouterLink to="/sessions" style={{ color: '#1976d2', fontWeight: 500 }}>{t('telegram.session')}</RouterLink>.
+                </Typography>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={() => {
+                    // Clear any previous error messages when opening the dialog
+                    setParsingStatus({ loading: false, success: false, error: null });
+                    setParseDialogOpen(true);
                   }}
                 >
-                  <CardContent>
-                    <Typography variant="h6" noWrap gutterBottom>
-                      {group.group_name}
-                    </Typography>
-                    
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {group.group_username ? `@${group.group_username}` : t('telegram.privateGroup')}
-                    </Typography>
-                    
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {t('telegram.parseFirstGroup')}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Typography variant="h6" gutterBottom>
+                  {t('common.noResults')}
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  {t('common.noGroupsMatchSearch')}
+                </Typography>
+              </>
+            )}
+          </Paper>
+        ) : (
+          <>
+            <Grid container spacing={3}>
+              {paginatedGroups.map((group) => (
+                <Grid item xs={12} sm={6} md={4} key={group.id}>
+                  <Card 
+                    className="card-hover"
+                    sx={{ 
+                      cursor: 'pointer',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        transition: 'transform 0.2s ease-in-out',
+                      }
+                    }}
+                    onClick={(e) => {
+                      // Prevent navigation if clicking delete button
+                      if (e.target.closest('button[data-delete]')) return;
+                      navigate(`/groups/${group.id}`);
+                    }}
+                  >
+                    <CardContent>
+                      <Typography variant="h6" noWrap gutterBottom>
+                        {group.group_name}
+                      </Typography>
+                      
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        {group.group_username ? `@${group.group_username}` : t('telegram.privateGroup')}
+                      </Typography>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Chip 
+                            label={`${group.member_count.toLocaleString()} ${t('common.members')}`} 
+                            size="small" 
+                            color="primary" 
+                            variant="outlined"
+                          />
+                          <Chip 
+                            label={`${(group.members?.length || 0).toLocaleString()} ${t('common.usersFound')}`} 
+                            size="small" 
+                            color="info" 
+                            variant="outlined"
+                          />
+                        </Box>
                         <Chip 
-                          label={`${group.member_count.toLocaleString()} ${t('common.members')}`} 
+                          label={group.is_public ? t('common.public') : t('common.private')} 
                           size="small" 
-                          color="primary" 
-                          variant="outlined"
-                        />
-                        <Chip 
-                          label={`${(group.members?.length || 0).toLocaleString()} ${t('common.usersFound')}`} 
-                          size="small" 
-                          color="info" 
+                          color={group.is_public ? 'success' : 'default'} 
                           variant="outlined"
                         />
                       </Box>
-                      <Chip 
-                        label={group.is_public ? t('common.public') : t('common.private')} 
-                        size="small" 
-                        color={group.is_public ? 'success' : 'default'} 
-                        variant="outlined"
-                      />
-                    </Box>
+                      
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {t('common.parsed')}: {(() => {
+                          // Parse the timestamp from the server and adjust for timezone
+                          const serverDate = new Date(group.parsed_at);
+                          
+                          // Get the timezone offset in minutes
+                          const timezoneOffset = new Date().getTimezoneOffset();
+                          
+                          // Create a new date adjusted for the local timezone
+                          const localDate = new Date(serverDate.getTime() - (timezoneOffset * 60000));
+                          
+                          // Format the date in local timezone
+                          return localDate.toLocaleDateString(undefined, {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                          }) + ' ' + localDate.toLocaleTimeString(undefined, {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: false
+                          });
+                        })()}
+                      </Typography>
+                    </CardContent>
                     
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      {t('common.parsed')}: {(() => {
-                        // Parse the timestamp from the server and adjust for timezone
-                        const serverDate = new Date(group.parsed_at);
-                        
-                        // Get the timezone offset in minutes
-                        const timezoneOffset = new Date().getTimezoneOffset();
-                        
-                        // Create a new date adjusted for the local timezone
-                        const localDate = new Date(serverDate.getTime() - (timezoneOffset * 60000));
-                        
-                        // Format the date in local timezone
-                        return localDate.toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                        }) + ' ' + localDate.toLocaleTimeString(undefined, {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                          hour12: false
-                        });
-                      })()}
-                    </Typography>
-                  </CardContent>
-                  
-                  <CardActions>
-                    <Box sx={{ flexGrow: 1 }} />
-                    
-                    <Tooltip title={t('actions.delete')}>
-                      <IconButton 
-                        color="error" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClick(group);
-                        }}
-                        data-delete="true"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </CardActions>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        </>
-      )}
-      
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-        <DialogTitle>{t('actions.confirm')}</DialogTitle>
-        <DialogContent>
-          <Typography>
-            {t('telegram.deleteGroupConfirm', { groupName: groupToDelete?.group_name })}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            {t('actions.delete')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Parse Group Dialog */}
-      <Dialog open={parseDialogOpen} onClose={() => {
-        if (!parsingStatus.loading) {
-          setParseDialogOpen(false);
-          setSelectedDialog(null);
-          setGroupLink('');
-          resetParsingState();
-        }
-      }} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('telegram.parseNewGroup')}</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            {t('telegram.selectGroup')}
-          </DialogContentText>
-
-          {dialogError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {dialogError}
-            </Alert>
-          )}
-
-          {/* Available Groups List */}
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              {t('telegram.yourTelegramGroups')}
+                    <CardActions>
+                      <Box sx={{ flexGrow: 1 }} />
+                      
+                      <Tooltip title={t('actions.delete')}>
+                        <IconButton 
+                          color="error" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClick(group);
+                          }}
+                          data-delete="true"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </CardActions>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </>
+        )}
+        
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+          <DialogTitle>{t('actions.confirm')}</DialogTitle>
+          <DialogContent>
+            <Typography>
+              {t('telegram.deleteGroupConfirm', { groupName: groupToDelete?.group_name })}
             </Typography>
-            {loadingDialogs ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-                <CircularProgress size={24} />
-              </Box>
-            ) : dialogError ? (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                {dialogError}
-                {dialogError === t('telegram.noActiveSession') && (
-                  <Button
-                    component={RouterLink}
-                    to="/sessions"
-                    color="primary"
-                    size="small"
-                    sx={{ mt: 1 }}
-                  >
-                    {t('telegram.goToSessions')}
-                  </Button>
-                )}
-              </Alert>
-            ) : availableDialogs.length > 0 ? (
-              <Box sx={{ maxHeight: '200px', overflowY: 'auto' }}>
-                {availableDialogs
-                  .filter(dialog => dialog.type === 'group')
-                  .map((dialog) => (
-                    <Box
-                      key={dialog.id}
-                      sx={{
-                        p: 1,
-                        mb: 1,
-                        border: '1px solid',
-                        borderColor: selectedDialog?.id === dialog.id ? 'primary.main' : 'divider',
-                        borderRadius: 1,
-                        cursor: 'pointer',
-                        '&:hover': {
-                          bgcolor: 'action.hover',
-                        },
-                      }}
-                      onClick={() => {
-                        setSelectedDialog(dialog);
-                        setGroupLink('');
-                        setParsingStatus({ loading: false, success: false, error: null });
-                      }}
-                    >
-                      <Typography variant="subtitle2">
-                        {dialog.title}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {dialog.username ? `@${dialog.username}` : t('telegram.privateGroup')} • {dialog.members_count} {t('common.members')}
-                      </Typography>
-                    </Box>
-                  ))}
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                {t('telegram.noGroupsFound')}
-              </Typography>
-            )}
-          </Box>
-
-          <Divider sx={{ my: 2 }} />
-
-          <Typography variant="subtitle1" gutterBottom>
-            {t('telegram.orEnterGroupLinkManually')}
-          </Typography>
-          
-          <TextField
-            margin="dense"
-            label={t('telegram.groupLink')}
-            fullWidth
-            variant="outlined"
-            value={groupLink}
-            onChange={(e) => {
-              setGroupLink(e.target.value);
-              setSelectedDialog(null);
-              setParsingStatus({ loading: false, success: false, error: null });
-            }}
-            disabled={parsingStatus.loading}
-            error={shouldShowError(parsingStatus.error)}
-            helperText={shouldShowError(parsingStatus.error) ? parsingStatus.error : ' '}
-            sx={{ mb: 2 }}
-          />
-
-          <FormControlLabel
-            control={
-              <Switch
-                checked={scanComments}
-                onChange={(e) => setScanComments(e.target.checked)}
-                disabled={parsingStatus.loading}
-              />
-            }
-            label={t('telegram.scanCommentsForAdditionalUsers')}
-            sx={{ mb: 2 }}
-          />
-
-          {scanComments && (
-            <FormControl fullWidth variant="outlined">
-              <InputLabel>{t('telegram.commentScanLimit')}</InputLabel>
-              <Select
-                value={commentLimit}
-                onChange={(e) => setCommentLimit(e.target.value)}
-                label={t('telegram.commentScanLimit')}
-                disabled={parsingStatus.loading}
-              >
-                <MenuItem value={100}>{t('telegram.last100Comments')}</MenuItem>
-                <MenuItem value={1000}>{t('telegram.last1000Comments')}</MenuItem>
-                <MenuItem value={5000}>{t('telegram.last5000Comments')}</MenuItem>
-                <MenuItem value={10000}>{t('telegram.last10000Comments')}</MenuItem>
-              </Select>
-              <FormHelperText>
-                {t('telegram.selectHowManyRecentComments')}
-              </FormHelperText>
-            </FormControl>
-          )}
-
-          {/* Subscription Expired Alert */}
-          {parsingStatus.error && parsingStatus.error.includes("subscription has expired") && (
-            <Box sx={{ mt: 2, p: 1.5, bgcolor: 'error.light', borderRadius: 1, opacity: 0.9 }}>
-              <Typography variant="subtitle2" color="error.dark" gutterBottom>
-                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <span>⚠️</span> {t('telegram.parsingSubscriptionExpired')}
-                </Box>
-              </Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  component={RouterLink} 
-                  to="/subscribe"
-                  size="small"
-                  sx={{ fontSize: '0.75rem' }}
-                >
-                  {t('common.subscribe')}
-                </Button>
-                <Button 
-                  variant="outlined" 
-                  size="small"
-                  sx={{ fontSize: '0.75rem' }}
-                  onClick={() => {
-                    setParseDialogOpen(false);
-                    setSelectedDialog(null);
-                    setGroupLink('');
-                    resetParsingState();
-                  }}
-                >
-                  {t('common.close')}
-                </Button>
-              </Box>
-            </Box>
-          )}
-
-          {/* Regular Error Alert - Don't show cancellation errors */}
-          {shouldShowError(parsingStatus.error) && 
-            !parsingStatus.error.includes("subscription has expired") && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {parsingStatus.error}
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
-          <Button 
-            onClick={() => {
-              setParseDialogOpen(false);
-              setSelectedDialog(null);
-              setGroupLink('');
-              resetParsingState();
-            }} 
-            disabled={parsingStatus.loading}
-            variant="outlined"
-            sx={{ textTransform: 'uppercase' }}
-          >
-            {t('telegram.cancel')}
-          </Button>
-          <LoadingButton
-            onClick={handleParseGroup}
-            loading={parsingStatus.loading}
-            loadingPosition="start"
-            startIcon={<SendIcon />}
-            variant="contained"
-            disabled={parsingStatus.loading || (!groupLink.trim() && !selectedDialog)}
-          >
-            {t('telegram.parseGroup')}
-          </LoadingButton>
-        </DialogActions>
-      </Dialog>
-
-      {/* Progress Dialog */}
-      <Dialog 
-        open={!!parsingProgress && parsingProgress.is_parsing} 
-        maxWidth="sm" 
-        fullWidth
-        onClose={() => {
-          // Only allow closing via the cancel button
-          if (!parsingProgress?.is_parsing) {
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteConfirmOpen(false)}>{t('common.cancel')}</Button>
+            <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+              {t('actions.delete')}
+            </Button>
+          </DialogActions>
+        </Dialog>
+        
+        {/* Parse Group Dialog */}
+        <Dialog open={parseDialogOpen} onClose={() => {
+          if (!parsingStatus.loading) {
+            setParseDialogOpen(false);
+            setSelectedDialog(null);
+            setGroupLink('');
             resetParsingState();
           }
-        }}
-      >
-        <DialogTitle>{t('telegram.parsingGroup')}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ width: '100%', mt: 2 }}>
-            <Typography variant="body1" gutterBottom>
-              {parsingProgress?.message || t('common.initializing')}
-            </Typography>
-            <LinearProgress 
-              variant="determinate" 
-              value={parsingProgress?.progress || 0}
-              sx={{ my: 2 }}
-            />
-            <Typography variant="body2" color="text.secondary">
-              {t('common.phase')}: {parsingProgress?.phase || 'initializing'}
-            </Typography>
-            {parsingProgress?.total_members > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                {t('common.members')}: {parsingProgress.current_members} / {parsingProgress.total_members}
-              </Typography>
+        }} maxWidth="sm" fullWidth>
+          <DialogTitle>{t('telegram.parseNewGroup')}</DialogTitle>
+          <DialogContent>
+            <DialogContentText sx={{ mb: 2 }}>
+              {t('telegram.selectGroup')}
+            </DialogContentText>
+
+            {dialogError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {dialogError}
+              </Alert>
             )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <LoadingButton
-            onClick={handleCancelParsing}
-            loading={isCancelling}
-            color="error"
-            variant="contained"
-          >
-            {t('common.cancelParsing')}
-          </LoadingButton>
-        </DialogActions>
-      </Dialog>
-    </Box>
+
+            {/* Available Groups List */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                {t('telegram.yourTelegramGroups')}
+              </Typography>
+              {loadingDialogs ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : dialogError ? (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  {dialogError}
+                  {dialogError === t('telegram.noActiveSession') && (
+                    <Button
+                      component={RouterLink}
+                      to="/sessions"
+                      color="primary"
+                      size="small"
+                      sx={{ mt: 1 }}
+                    >
+                      {t('telegram.goToSessions')}
+                    </Button>
+                  )}
+                </Alert>
+              ) : availableDialogs.length > 0 ? (
+                <Box sx={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {availableDialogs
+                    .filter(dialog => dialog.type === 'group')
+                    .map((dialog) => (
+                      <Box
+                        key={dialog.id}
+                        sx={{
+                          p: 1,
+                          mb: 1,
+                          border: '1px solid',
+                          borderColor: selectedDialog?.id === dialog.id ? 'primary.main' : 'divider',
+                          borderRadius: 1,
+                          cursor: 'pointer',
+                          '&:hover': {
+                            bgcolor: 'action.hover',
+                          },
+                        }}
+                        onClick={() => {
+                          setSelectedDialog(dialog);
+                          setGroupLink('');
+                          setParsingStatus({ loading: false, success: false, error: null });
+                        }}
+                      >
+                        <Typography variant="subtitle2">
+                          {dialog.title}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {dialog.username ? `@${dialog.username}` : t('telegram.privateGroup')} • {dialog.members_count} {t('common.members')}
+                        </Typography>
+                      </Box>
+                    ))}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  {t('telegram.noGroupsFound')}
+                </Typography>
+              )}
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="subtitle1" gutterBottom>
+              {t('telegram.orEnterGroupLinkManually')}
+            </Typography>
+            
+            <TextField
+              margin="dense"
+              label={t('telegram.groupLink')}
+              fullWidth
+              variant="outlined"
+              value={groupLink}
+              onChange={(e) => {
+                setGroupLink(e.target.value);
+                setSelectedDialog(null);
+                setParsingStatus({ loading: false, success: false, error: null });
+              }}
+              disabled={parsingStatus.loading}
+              error={shouldShowError(parsingStatus.error)}
+              helperText={shouldShowError(parsingStatus.error) ? parsingStatus.error : ' '}
+              sx={{ mb: 2 }}
+            />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={scanComments}
+                  onChange={(e) => setScanComments(e.target.checked)}
+                  disabled={parsingStatus.loading}
+                />
+              }
+              label={t('telegram.scanCommentsForAdditionalUsers')}
+              sx={{ mb: 2 }}
+            />
+
+            {scanComments && (
+              <FormControl fullWidth variant="outlined">
+                <InputLabel>{t('telegram.commentScanLimit')}</InputLabel>
+                <Select
+                  value={commentLimit}
+                  onChange={(e) => setCommentLimit(e.target.value)}
+                  label={t('telegram.commentScanLimit')}
+                  disabled={parsingStatus.loading}
+                >
+                  <MenuItem value={100}>{t('telegram.last100Comments')}</MenuItem>
+                  <MenuItem value={1000}>{t('telegram.last1000Comments')}</MenuItem>
+                  <MenuItem value={5000}>{t('telegram.last5000Comments')}</MenuItem>
+                  <MenuItem value={10000}>{t('telegram.last10000Comments')}</MenuItem>
+                </Select>
+                <FormHelperText>
+                  {t('telegram.selectHowManyRecentComments')}
+                </FormHelperText>
+              </FormControl>
+            )}
+
+            {/* Subscription Expired Alert */}
+            {parsingStatus.error && parsingStatus.error.includes("subscription has expired") && (
+              <Box sx={{ mt: 2, p: 1.5, bgcolor: 'error.light', borderRadius: 1, opacity: 0.9 }}>
+                <Typography variant="subtitle2" color="error.dark" gutterBottom>
+                  <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <span>⚠️</span> {t('telegram.parsingSubscriptionExpired')}
+                  </Box>
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                  <Button 
+                    variant="contained" 
+                    color="primary" 
+                    component={RouterLink} 
+                    to="/subscribe"
+                    size="small"
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    {t('common.subscribe')}
+                  </Button>
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    sx={{ fontSize: '0.75rem' }}
+                    onClick={() => {
+                      setParseDialogOpen(false);
+                      setSelectedDialog(null);
+                      setGroupLink('');
+                      resetParsingState();
+                    }}
+                  >
+                    {t('common.close')}
+                  </Button>
+                </Box>
+              </Box>
+            )}
+
+            {/* Regular Error Alert - Don't show cancellation errors */}
+            {shouldShowError(parsingStatus.error) && 
+              !parsingStatus.error.includes("subscription has expired") && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {parsingStatus.error}
+              </Alert>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+            <Button 
+              onClick={() => {
+                setParseDialogOpen(false);
+                setSelectedDialog(null);
+                setGroupLink('');
+                resetParsingState();
+              }} 
+              disabled={parsingStatus.loading}
+              variant="outlined"
+              sx={{ textTransform: 'uppercase' }}
+            >
+              {t('telegram.cancel')}
+            </Button>
+            <LoadingButton
+              onClick={handleParseGroup}
+              loading={parsingStatus.loading}
+              loadingPosition="start"
+              startIcon={<SendIcon />}
+              variant="contained"
+              disabled={parsingStatus.loading || (!groupLink.trim() && !selectedDialog)}
+            >
+              {t('telegram.parseGroup')}
+            </LoadingButton>
+          </DialogActions>
+        </Dialog>
+
+        {/* Progress Dialog */}
+        <Dialog 
+          open={!!parsingProgress && parsingProgress.is_parsing} 
+          maxWidth="sm" 
+          fullWidth
+          onClose={() => {
+            // Only allow closing via the cancel button
+            if (!parsingProgress?.is_parsing) {
+              resetParsingState();
+            }
+          }}
+        >
+          <DialogTitle>{t('telegram.parsingGroup')}</DialogTitle>
+          <DialogContent>
+            <Box sx={{ width: '100%', mt: 2 }}>
+              <Typography variant="body1" gutterBottom>
+                {parsingProgress?.message || t('common.initializing')}
+              </Typography>
+              <LinearProgress 
+                variant="determinate" 
+                value={parsingProgress?.progress || 0}
+                sx={{ my: 2 }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                {t('common.phase')}: {parsingProgress?.phase || 'initializing'}
+              </Typography>
+              {parsingProgress?.total_members > 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  {t('common.members')}: {parsingProgress.current_members} / {parsingProgress.total_members}
+                </Typography>
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <LoadingButton
+              onClick={handleCancelParsing}
+              loading={isCancelling}
+              color="error"
+              variant="contained"
+            >
+              {t('common.cancelParsing')}
+            </LoadingButton>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </Container>
   );
 };
 

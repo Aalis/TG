@@ -1,35 +1,35 @@
-import React, { Suspense } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
-import { CssBaseline, CircularProgress, Box } from '@mui/material';
-import { SnackbarProvider } from 'notistack';
 import './index.css';
-import './i18n';
 import App from './App';
-import { AuthProvider } from './context/AuthContext';
+import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider } from './context/AuthContext';
+import './i18n';
 
-// Loading component for suspense fallback
-const Loader = () => (
-  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-    <CircularProgress />
-  </Box>
+// Ensure theme is applied before first render
+const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+const savedTheme = localStorage.getItem('theme');
+const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+document.documentElement.setAttribute('data-theme', initialTheme);
+
+// Mount the app
+const rootElement = document.getElementById('root');
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  // StrictMode causes double rendering in development, removing for stability
+  <BrowserRouter>
+    <ThemeProvider>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </ThemeProvider>
+  </BrowserRouter>
 );
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <Suspense fallback={<Loader />}>
-      <BrowserRouter>
-        <ThemeProvider>
-          <SnackbarProvider maxSnack={3}>
-            <CssBaseline />
-            <AuthProvider>
-              <App />
-            </AuthProvider>
-          </SnackbarProvider>
-        </ThemeProvider>
-      </BrowserRouter>
-    </Suspense>
-  </React.StrictMode>
-); 
+// Enable transitions after load to prevent flickering
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    document.documentElement.classList.add('transitions-enabled');
+  }, 1000);
+}); 
