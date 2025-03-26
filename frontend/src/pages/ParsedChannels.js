@@ -537,7 +537,7 @@ const ParsedChannels = () => {
         });
       }
       
-      // Show info message
+      // Show info message for the primary channel
       const infoMessage = enqueueSnackbar(`Deleting channel "${channelName}"...`, { 
         variant: 'info',
         persist: true // Keep this message until we replace it
@@ -557,57 +557,49 @@ const ParsedChannels = () => {
         autoHideDuration: 3000
       });
       
-      // Handle duplicate channels
+      // Handle duplicate channels - automatically delete without confirmation
       if (duplicateChannels.length > 0) {
-        const confirmDelete = window.confirm(
-          `Found ${duplicateChannels.length} more channel(s) with the same name "${channelName}". Delete them too?`
-        );
+        console.log(`Automatically deleting ${duplicateChannels.length} duplicate channels`);
         
-        if (confirmDelete) {
-          // Delete each duplicate one by one
-          for (const dupChannel of duplicateChannels) {
-            try {
-              // Remove from UI immediately
-              removeFromUI(dupChannel.id);
-              
-              const dupInfoMsg = enqueueSnackbar(`Deleting duplicate channel "${dupChannel.group_name}"...`, { 
-                variant: 'info',
-                persist: true
+        // Show a single notification for all duplicates
+        enqueueSnackbar(`Deleting ${duplicateChannels.length} duplicate channel(s)...`, { 
+          variant: 'info',
+          autoHideDuration: 3000
+        });
+        
+        // Process all duplicates without confirmation
+        for (const dupChannel of duplicateChannels) {
+          try {
+            // Remove from UI immediately
+            removeFromUI(dupChannel.id);
+            
+            await deleteChannelAsync(dupChannel.id);
+            
+          } catch (dupErr) {
+            console.error(`Failed to delete duplicate channel ${dupChannel.id}`, dupErr);
+            
+            let errorMsg = 'Unknown error';
+            if (dupErr.response?.data?.detail) {
+              errorMsg = dupErr.response.data.detail;
+            } else if (dupErr.message) {
+              errorMsg = dupErr.message;
+            }
+            
+            // Don't show error for "not found" (already deleted)
+            if (!errorMsg.includes('not found')) {
+              enqueueSnackbar(`Failed to delete duplicate: ${errorMsg}`, { 
+                variant: 'warning',
+                autoHideDuration: 4000
               });
-              
-              await deleteChannelAsync(dupChannel.id);
-              
-              if (dupInfoMsg) {
-                closeSnackbar(dupInfoMsg);
-              }
-              
-              enqueueSnackbar(`Duplicate channel "${dupChannel.group_name}" deleted successfully`, { 
-                variant: 'success',
-                autoHideDuration: 2000
-              });
-            } catch (dupErr) {
-              console.error(`Failed to delete duplicate channel ${dupChannel.id}`, dupErr);
-              
-              let errorMsg = 'Unknown error';
-              if (dupErr.response?.data?.detail) {
-                errorMsg = dupErr.response.data.detail;
-              } else if (dupErr.message) {
-                errorMsg = dupErr.message;
-              }
-              
-              // Don't show error for "not found" (already deleted)
-              if (!errorMsg.includes('not found')) {
-                enqueueSnackbar(`Failed to delete duplicate: ${errorMsg}`, { 
-                  variant: 'warning',
-                  autoHideDuration: 4000
-                });
-              }
-            } finally {
-              // Keep channel marked as deleting
-              // We'll remove from the deletingChannels state during refetch
             }
           }
         }
+        
+        // Show a single success notification after all duplicates have been processed
+        enqueueSnackbar(`Deleted ${duplicateChannels.length} duplicate channel(s)`, { 
+          variant: 'success',
+          autoHideDuration: 3000
+        });
       }
       
       // Force a refetch after all deletions
