@@ -74,8 +74,9 @@ const ChannelDetails = () => {
     const fetchChannelDetails = async () => {
       try {
         setLoading(true);
-        const channelResponse = await channelsAPI.getAll();
-        const channel = channelResponse.data.find(c => c.id === parseInt(id));
+        // Use getById instead of getAll to ensure we get the latest data directly from the server
+        const channelResponse = await channelsAPI.getById(id);
+        const channel = channelResponse.data;
         
         if (!channel) {
           setError('Channel not found');
