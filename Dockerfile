@@ -45,7 +45,11 @@ COPY frontend/package*.json ./
 # Install dependencies
 RUN npm install --legacy-peer-deps
 
-# Copy frontend source
+# Copy frontend source with cache busting comments
+# Cache busting for DataPrefetcher: $CACHE_BUST_TIME
+# Cache busting for useChannels: $CACHE_BUST_TIME
+# Cache busting for ParsedChannels: $CACHE_BUST_TIME
+# Cache busting for api.js: $CACHE_BUST_TIME
 COPY frontend/ .
 
 # Install Material-UI dependencies explicitly
@@ -78,6 +82,7 @@ RUN mkdir -p /app/static /app/app && \
     chmod 777 /app/static
 
 # Copy the application code
+# Cache busting for telegram.py: $CACHE_BUST_TIME
 COPY backend/app /app/app/
 COPY backend/startup.py /app/
 COPY backend/init_db.py /app/
@@ -86,6 +91,10 @@ COPY backend/alembic.ini /app/
 COPY backend/alembic /app/alembic/
 COPY railway.toml /app/
 COPY railway-setup.sh /app/
+
+# Add cache-busting for backend files
+ARG CACHE_BUST_TIME
+RUN echo "Backend files copied at: $CACHE_BUST_TIME"
 
 # Copy frontend build from frontend-builder stage
 COPY --from=frontend-builder /frontend/build/ /app/static/
