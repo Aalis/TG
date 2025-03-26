@@ -5,6 +5,7 @@ import { useGroups } from '../hooks/useGroups';
 import { groupsAPI, channelsAPI } from '../services/api';
 
 // Constants
+// DEPLOYMENT TEST - THIS SHOULD BE 30 AFTER SUCCESSFUL DEPLOYMENT
 const MAX_PREFETCH_ITEMS = 30; // Limit the number of items to prefetch
 const PREFETCH_DELAY_MS = 500; // Delay between prefetch requests
 const MAX_RETRIES = 2; // Maximum number of retries for failed prefetch
@@ -72,7 +73,8 @@ const DataPrefetcher = () => {
 
       console.log('Starting data prefetching...');
       console.log(`Found ${channels.length} channels and ${groups.length} groups to prefetch`);
-
+      console.log('***DEPLOYMENT TEST - VERSION 2025-03-26 - PREFETCH_MAX_ITEMS IS SET TO: ' + MAX_PREFETCH_ITEMS + ' ***');
+      
       // Reset error counters at the start of a new prefetch cycle
       channelErrorCount.current = 0;
       
