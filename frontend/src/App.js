@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import DataPrefetcher from './components/DataPrefetcher';
+import DataPrefetcher from './components/DataPrefetcherNew';
 
 // Pages
 import Login from './pages/Login';
