@@ -352,6 +352,7 @@ async def parse_channel(
     )
     
     try:
+        # Parse the channel
         group = await parser.parse_channel(
             db=db,
             channel_link=request.channel_link,
@@ -359,13 +360,58 @@ async def parse_channel(
             post_limit=request.post_limit
         )
         
-        # Invalidate the channels cache after successful parsing
+        # Force invalidate the channels cache immediately after successful parsing
         from app.core.redis_client import invalidate_parsed_channels_cache
         await invalidate_parsed_channels_cache(current_user.id)
         
+        # Get the complete channel data to return
+        # (This ensures we're returning the full data structure even if parser.parse_channel returns a simplified version)
+        if group and hasattr(group, 'id'):
+            # Fetch the channel from the database to ensure we have all data
+            db_channel = crud.telegram.get_group_by_id(db, group_id=group.id)
+            if db_channel:
+                # Get member counts
+                users_found = db.query(GroupMember).filter(GroupMember.group_id == group.id).count()
+                
+                # Get members
+                members = db.query(GroupMember).filter(GroupMember.group_id == group.id).all()
+                members_data = [{
+                    "id": member.id,
+                    "user_id": member.user_id,
+                    "group_id": member.group_id,
+                    "username": member.username,
+                    "first_name": member.first_name,
+                    "last_name": member.last_name,
+                    "is_admin": member.is_admin,
+                    "is_premium": member.is_premium
+                } for member in members]
+                
+                # Build complete response
+                group_data = {
+                    "id": db_channel.id,
+                    "group_id": db_channel.group_id,
+                    "group_name": db_channel.group_name,
+                    "group_username": db_channel.group_username,
+                    "member_count": db_channel.member_count or users_found,
+                    "users_found": users_found,
+                    "is_public": db_channel.is_public,
+                    "is_channel": db_channel.is_channel,
+                    "parsed_at": db_channel.parsed_at,
+                    "user_id": db_channel.user_id,
+                    "members": members_data,
+                    "posts": group.posts if hasattr(group, 'posts') else []
+                }
+                
+                return {
+                    "success": True,
+                    "message": f"Successfully parsed channel with {len(group.posts if hasattr(group, 'posts') else [])} posts",
+                    "group": group_data
+                }
+        
+        # Fallback to original response if we couldn't enhance it
         return {
             "success": True,
-            "message": f"Successfully parsed channel with {len(group.posts)} posts",
+            "message": f"Successfully parsed channel with {len(group.posts) if hasattr(group, 'posts') else 0} posts",
             "group": group
         }
     except (FloodWaitError, UserDeactivatedBanError) as e:
@@ -375,6 +421,7 @@ async def parse_channel(
             "group": None
         }
     except Exception as e:
+        logging.error(f"Error parsing channel: {str(e)}")
         return {
             "success": False,
             "message": f"Failed to parse channel: {str(e)}",
@@ -430,23 +477,25 @@ async def read_channels(
     current_user: User = Depends(deps.get_current_active_user),
     page: int = 1,
     items_per_page: int = 42,  # Default to max items
-    max_items: int = 42
+    max_items: int = 42,
+    skip_cache: bool = False  # Add an option to skip cache completely
 ) -> Any:
     """Get all parsed channels for current user"""
     try:
         logging.info(f"Starting read_channels for user {current_user.id}")
         
-        # Try to get channels from cache first
+        # Try to get channels from cache first, unless skip_cache is True
         from app.core.redis_client import get_cached_parsed_channels, cache_parsed_channels
         cache_key = f"parsed_channels:{current_user.id}"
         
-        try:
-            cached_data = await get_cached_parsed_channels(current_user.id, cache_key)
-            if cached_data:
-                logging.info(f"Successfully retrieved {len(cached_data)} channels from cache")
-                return cached_data
-        except Exception as e:
-            logging.error(f"Cache retrieval failed: {str(e)}")
+        if not skip_cache:
+            try:
+                cached_data = await get_cached_parsed_channels(current_user.id, cache_key)
+                if cached_data:
+                    logging.info(f"Successfully retrieved {len(cached_data)} channels from cache")
+                    return cached_data
+            except Exception as e:
+                logging.error(f"Cache retrieval failed: {str(e)}")
         
         try:
             # Get total count first
@@ -534,11 +583,12 @@ async def read_channels(
                     "total_count": total_count
                 })
 
-            # Cache results
-            try:
-                await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
-            except Exception as e:
-                logging.error(f"Failed to cache channels: {str(e)}")
+            # Cache results for future requests
+            if not skip_cache:
+                try:
+                    await cache_parsed_channels(current_user.id, channels_data, cache_key, expiry=180)
+                except Exception as e:
+                    logging.error(f"Failed to cache channels: {str(e)}")
             
             return channels_data
             
@@ -779,3 +829,23 @@ async def _delayed_reset(cls) -> None:
                 progress._last_update = current_time
                 cls._save_progress(progress)
                 asyncio.create_task(cls._delayed_reset()) 
+
+
+@router.get("/parsed-channels/{channel_id}", response_model=ParsedGroup)
+def read_channel(
+    *,
+    db: Session = Depends(deps.get_db),
+    channel_id: int,
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Get a specific parsed channel by id.
+    """
+    channel = crud.telegram.get_group_by_id(db, group_id=channel_id)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    if channel.user_id != current_user.id:
+        raise HTTPException(status_code=400, detail="Not enough permissions")
+    if not channel.is_channel:
+        raise HTTPException(status_code=400, detail="Specified ID is not a channel")
+    return channel 

@@ -121,14 +121,15 @@ const ParsedChannels = () => {
     updateUrlWithPage(newPage);
   }, [updateUrlWithPage]);
 
-  // Use the channels hook with the page state
+  // Use the channels hook with the page state and skipCache false by default
   const { 
     channels, 
     totalCount, 
     isLoading, 
     queryError, 
-    refetch 
-  } = useChannels(page);
+    refetch,
+    refetchWithoutCache
+  } = useChannels(false);  // Default to not skipping cache for normal loading
 
   // Filter channels based on search term
   const filteredResults = useMemo(() => {
@@ -402,8 +403,8 @@ const ParsedChannels = () => {
         error: null,
       });
       
-      // Refresh the channels list
-      await refetch();
+      // Refresh the channels list with skip_cache=true to get the latest data
+      await refetchWithoutCache();
       
       // Close the dialog and reset form
       setParseDialogOpen(false);

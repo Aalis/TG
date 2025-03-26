@@ -89,8 +89,8 @@ export const groupsAPI = {
 
 // Telegram Channels API
 export const channelsAPI = {
-  getAll: (page = 1, items_per_page = 42) => 
-    api.get(`/telegram/parsed-channels/?page=${page}&items_per_page=${items_per_page}`),
+  getAll: (page = 1, items_per_page = 42, skip_cache = false) => 
+    api.get(`/telegram/parsed-channels/?page=${page}&items_per_page=${items_per_page}${skip_cache ? '&skip_cache=true' : ''}`),
   getById: (id) => api.get(`/telegram/parsed-channels/${id}`),
   deleteChannel: (id) => api.delete(`/telegram/parsed-channels/${id}`),
   parseChannel: (channelLink, postLimit = 100) => 
