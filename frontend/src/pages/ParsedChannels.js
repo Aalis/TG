@@ -409,6 +409,20 @@ const ParsedChannels = () => {
       // Close the dialog and reset form
       setParseDialogOpen(false);
       resetForm();
+      
+      // Navigate to the newly parsed channel details page
+      if (response && response.data && response.data.group && response.data.group.id) {
+        // Show success message
+        enqueueSnackbar(`Channel "${response.data.group.group_name}" parsed successfully. Opening details...`, { 
+          variant: 'success',
+          autoHideDuration: 3000
+        });
+        
+        // Navigate to the channel details page
+        setTimeout(() => {
+          navigate(`/channels/${response.data.group.id}`);
+        }, 300);
+      }
     } catch (err) {
       // Stop progress polling if there's an error
       resetParsingState();
