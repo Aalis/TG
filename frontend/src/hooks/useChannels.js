@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { channelsAPI } from '../services/api';
 
 // Query key constants
@@ -35,13 +35,53 @@ export const useChannels = (skipCache = false) => {
     });
   };
 
+  // Mutation for deleting a channel with optimistic updates
+  const deleteChannelMutation = useMutation({
+    mutationFn: (channelId) => channelsAPI.deleteChannel(channelId),
+    onMutate: async (channelId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: CHANNELS_QUERY_KEY });
+      
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(CHANNELS_QUERY_KEY);
+      
+      // Optimistically update the cache
+      if (previousData) {
+        const updatedData = {
+          ...previousData,
+          data: previousData.data.filter(channel => channel.id !== channelId)
+        };
+        queryClient.setQueryData(CHANNELS_QUERY_KEY, updatedData);
+      }
+      
+      // Return a context with the previous value
+      return { previousData };
+    },
+    onError: (err, channelId, context) => {
+      // If the mutation fails, use the context to roll back
+      if (context?.previousData) {
+        queryClient.setQueryData(CHANNELS_QUERY_KEY, context.previousData);
+      }
+      // Return the error for UI handling
+      return err;
+    },
+    onSettled: () => {
+      // Always refetch after error or success to make sure the server state is reflected
+      queryClient.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
+    }
+  });
+
   return {
     channels: data?.channels || [],
     totalCount: data?.totalCount || 0,
     isLoading,
     error,
     refetch,
-    refetchWithoutCache
+    refetchWithoutCache,
+    deleteChannel: deleteChannelMutation.mutate,
+    deleteChannelAsync: deleteChannelMutation.mutateAsync,
+    isDeletingChannel: deleteChannelMutation.isLoading,
+    deleteChannelError: deleteChannelMutation.error
   };
 };
 

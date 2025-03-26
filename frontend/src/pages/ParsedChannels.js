@@ -128,7 +128,10 @@ const ParsedChannels = () => {
     isLoading, 
     queryError, 
     refetch,
-    refetchWithoutCache
+    refetchWithoutCache,
+    deleteChannel,
+    deleteChannelAsync,
+    isDeletingChannel
   } = useChannels(false);  // Default to not skipping cache for normal loading
 
   // Filter channels based on search term
@@ -481,12 +484,36 @@ const ParsedChannels = () => {
     if (!selectedChannelId) return;
 
     try {
-      await channelsAPI.deleteChannel(selectedChannelId);
-      await refetch();
+      // Close the dialog immediately for better UX
       setDeleteConfirmOpen(false);
-      setError(null); // Clear any previous errors
+      
+      // Show info message
+      enqueueSnackbar(`Deleting channel "${selectedChannelName}"...`, { 
+        variant: 'info',
+        autoHideDuration: 1500
+      });
+      
+      // Use the async mutation from useChannels hook which handles optimistic updates
+      await deleteChannelAsync(selectedChannelId);
+      
+      // Show success notification
+      enqueueSnackbar(`Channel "${selectedChannelName}" was deleted successfully`, { 
+        variant: 'success',
+        autoHideDuration: 3000
+      });
+      
+      // Clear any previous errors
+      setError(null);
     } catch (err) {
       console.error('Failed to delete channel', err);
+      
+      // Show error notification
+      enqueueSnackbar(`Failed to delete channel: ${err.response?.data?.detail || 'Unknown error'}`, { 
+        variant: 'error',
+        autoHideDuration: 5000
+      });
+      
+      // Set error state for UI feedback
       setError('Failed to delete channel. Please try again.');
     }
   };

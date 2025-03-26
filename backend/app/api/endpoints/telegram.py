@@ -615,21 +615,45 @@ async def delete_channel(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """Delete a parsed channel."""
-    channel = crud.telegram.get_group_by_id(db, group_id=channel_id)
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
-    if channel.user_id != current_user.id:
-        raise HTTPException(status_code=400, detail="Not enough permissions")
-    if not channel.is_channel:
-        raise HTTPException(status_code=400, detail="Specified ID is not a channel")
-    
-    crud.telegram.delete_group(db, group_id=channel_id)
-    
-    # Invalidate cache after deletion
-    from app.core.redis_client import invalidate_parsed_channels_cache
-    await invalidate_parsed_channels_cache(current_user.id)
-    
-    return {"success": True}
+    try:
+        # Log the deletion attempt for debugging
+        logging.info(f"Attempting to delete channel ID {channel_id} for user {current_user.id}")
+        
+        # Get the channel first to check if it exists
+        channel = crud.telegram.get_group_by_id(db, group_id=channel_id)
+        
+        if not channel:
+            logging.warning(f"Channel with ID {channel_id} not found for user {current_user.id}")
+            raise HTTPException(status_code=404, detail="Channel not found")
+            
+        if channel.user_id != current_user.id:
+            logging.warning(f"Permission denied: User {current_user.id} attempted to delete channel {channel_id} owned by user {channel.user_id}")
+            raise HTTPException(status_code=400, detail="Not enough permissions")
+            
+        if not channel.is_channel:
+            logging.warning(f"ID {channel_id} is not a channel but a group")
+            raise HTTPException(status_code=400, detail="Specified ID is not a channel")
+        
+        # Delete the channel
+        logging.info(f"Deleting channel {channel_id} ('{channel.group_name}') for user {current_user.id}")
+        crud.telegram.delete_group(db, group_id=channel_id)
+        
+        # Invalidate cache after deletion
+        from app.core.redis_client import invalidate_parsed_channels_cache
+        await invalidate_parsed_channels_cache(current_user.id)
+        
+        logging.info(f"Successfully deleted channel {channel_id} for user {current_user.id}")
+        return {"success": True}
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions to preserve status codes
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error deleting channel {channel_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete channel: {str(e)}"
+        )
 
 
 @router.get("/parse-group/progress", response_model=ParsingProgressResponse)

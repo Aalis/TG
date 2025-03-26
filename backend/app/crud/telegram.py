@@ -104,12 +104,37 @@ def create_group(db: Session, *, obj_in: ParsedGroupCreate, user_id: int) -> Par
 
 
 def delete_group(db: Session, *, group_id: int) -> None:
-    """Delete a group and its members"""
-    # First delete all members
-    delete_group_members(db, group_id=group_id)
-    # Then delete the group
-    db.query(ParsedGroup).filter(ParsedGroup.id == group_id).delete()
-    db.commit()
+    """Delete a group and its associated data with proper error handling"""
+    import logging
+    
+    try:
+        # Start a transaction for the deletion process
+        # This ensures that if any part fails, the entire operation can be rolled back
+        
+        # First get the group to check if it exists
+        group = db.query(ParsedGroup).filter(ParsedGroup.id == group_id).first()
+        if not group:
+            logging.warning(f"Attempted to delete non-existent group with ID {group_id}")
+            return
+            
+        logging.info(f"Deleting group '{group.group_name}' (ID: {group_id}) and all associated data")
+        
+        # Delete posts and their comments (should happen automatically via cascade)
+        post_count = db.query(ChannelPost).filter(ChannelPost.group_id == group_id).count()
+        logging.info(f"There are {post_count} posts that will be deleted for group {group_id}")
+        
+        # Delete members (should happen automatically via cascade)
+        member_count = db.query(GroupMember).filter(GroupMember.group_id == group_id).count()
+        logging.info(f"There are {member_count} members that will be deleted for group {group_id}")
+        
+        # Delete the group (which should trigger cascaded deletions)
+        db.delete(group)
+        db.commit()
+        logging.info(f"Successfully deleted group ID {group_id} and all associated data")
+    except Exception as e:
+        logging.error(f"Error deleting group {group_id}: {str(e)}")
+        db.rollback()
+        raise e
 
 
 def delete_group_members(db: Session, *, group_id: int) -> None:
