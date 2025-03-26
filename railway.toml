@@ -1,5 +1,9 @@
+# Railway deployment configuration
+# FORCE REBUILD 2025-03-26: Changing MAX_PREFETCH_ITEMS from 10 to 30
+
 [build]
 builder = "dockerfile"
+dockerfile = "Dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
