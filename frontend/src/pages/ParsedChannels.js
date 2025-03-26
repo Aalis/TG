@@ -65,7 +65,7 @@ const ParsedChannels = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { enqueueSnackbar } = useSnackbar();
+  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
 
   // Initialize states
   const [searchTerm, setSearchTerm] = useState('');
@@ -98,6 +98,7 @@ const ParsedChannels = () => {
   const [paginatedChannels, setPaginatedChannels] = useState([]);
   const [filteredChannels, setFilteredChannels] = useState([]);
   const [error, setError] = useState(null);
+  const [deletingChannels, setDeletingChannels] = useState({});
 
   // Sync URL with page state when page changes
   const updateUrlWithPage = useCallback((newPage) => {
@@ -475,6 +476,15 @@ const ParsedChannels = () => {
   };
 
   const handleDeleteClick = (channel) => {
+    // Skip if already deleting this channel
+    if (deletingChannels[channel.id]) {
+      enqueueSnackbar(`Already deleting channel "${channel.group_name}"...`, { 
+        variant: 'info',
+        autoHideDuration: 2000
+      });
+      return;
+    }
+    
     setSelectedChannelId(channel.id);
     setSelectedChannelName(channel.group_name);
     setDeleteConfirmOpen(true);
@@ -482,30 +492,110 @@ const ParsedChannels = () => {
 
   const handleDeleteConfirm = async () => {
     if (!selectedChannelId) return;
+    
+    // If we're already deleting this channel, don't try again
+    if (deletingChannels[selectedChannelId]) {
+      setDeleteConfirmOpen(false);
+      return;
+    }
 
     try {
       // Close the dialog immediately for better UX
       setDeleteConfirmOpen(false);
       
+      // Track that we're deleting this channel
+      setDeletingChannels(prev => ({
+        ...prev,
+        [selectedChannelId]: true
+      }));
+      
+      // Get the channel name and id for use in UI feedback
+      const channelName = selectedChannelName;
+      const channelId = selectedChannelId;
+      
       // Show info message
-      const infoMessage = enqueueSnackbar(`Deleting channel "${selectedChannelName}"...`, { 
+      const infoMessage = enqueueSnackbar(`Deleting channel "${channelName}"...`, { 
         variant: 'info',
         persist: true // Keep this message until we replace it
       });
       
+      // Find duplicate channels with the same name but different IDs
+      const duplicateChannels = channels.filter(c => 
+        c.group_name === channelName && c.id !== channelId
+      );
+      
       // Use the async mutation from useChannels hook which handles optimistic updates
-      await deleteChannelAsync(selectedChannelId);
+      await deleteChannelAsync(channelId);
       
       // Remove the info message
       if (infoMessage) {
-        enqueueSnackbar.close(infoMessage);
+        closeSnackbar(infoMessage);
       }
       
       // Show success notification
-      enqueueSnackbar(`Channel "${selectedChannelName}" was deleted successfully`, { 
+      enqueueSnackbar(`Channel "${channelName}" was deleted successfully`, { 
         variant: 'success',
         autoHideDuration: 3000
       });
+      
+      // If we found duplicates, offer to delete them too
+      if (duplicateChannels.length > 0) {
+        const confirmDelete = window.confirm(
+          `Found ${duplicateChannels.length} more channel(s) with the same name. Delete them too?`
+        );
+        
+        if (confirmDelete) {
+          // Delete each duplicate one by one
+          for (const dupChannel of duplicateChannels) {
+            try {
+              setDeletingChannels(prev => ({
+                ...prev,
+                [dupChannel.id]: true
+              }));
+              
+              const dupInfoMsg = enqueueSnackbar(`Deleting duplicate channel "${dupChannel.group_name}"...`, { 
+                variant: 'info',
+                persist: true
+              });
+              
+              await deleteChannelAsync(dupChannel.id);
+              
+              if (dupInfoMsg) {
+                closeSnackbar(dupInfoMsg);
+              }
+              
+              enqueueSnackbar(`Duplicate channel deleted successfully`, { 
+                variant: 'success',
+                autoHideDuration: 2000
+              });
+            } catch (dupErr) {
+              console.error(`Failed to delete duplicate channel ${dupChannel.id}`, dupErr);
+              
+              let errorMsg = 'Unknown error';
+              if (dupErr.response?.data?.detail) {
+                errorMsg = dupErr.response.data.detail;
+              } else if (dupErr.message) {
+                errorMsg = dupErr.message;
+              }
+              
+              // Don't show error for "not found" (already deleted)
+              if (!errorMsg.includes('not found')) {
+                enqueueSnackbar(`Failed to delete duplicate: ${errorMsg}`, { 
+                  variant: 'warning',
+                  autoHideDuration: 4000
+                });
+              }
+            } finally {
+              // Remove from deleting state
+              setDeletingChannels(prev => {
+                const updated = {...prev};
+                delete updated[dupChannel.id];
+                return updated;
+              });
+            }
+          }
+        }
+      }
       
       // Clear any previous errors
       setError(null);
@@ -520,14 +610,23 @@ const ParsedChannels = () => {
         errorMessage = err.message;
       }
       
-      // Show error notification
-      enqueueSnackbar(`Failed to delete channel: ${errorMessage}`, { 
-        variant: 'error',
-        autoHideDuration: 5000
-      });
-      
-      // Set error state for UI feedback
-      setError(`Failed to delete channel "${selectedChannelName}": ${errorMessage}`);
+      // Don't show error for "not found" (already deleted)
+      if (!errorMessage.includes('not found')) {
+        // Show error notification
+        enqueueSnackbar(`Failed to delete channel: ${errorMessage}`, { 
+          variant: 'error',
+          autoHideDuration: 5000
+        });
+        
+        // Set error state for UI feedback
+        setError(`Failed to delete channel "${selectedChannelName}": ${errorMessage}`);
+      } else {
+        // If channel not found, it was probably already deleted
+        enqueueSnackbar(`Channel "${selectedChannelName}" was already deleted or not found`, { 
+          variant: 'info',
+          autoHideDuration: 3000
+        });
+      }
       
       // Force refetch to ensure UI matches backend state
       await refetch();
@@ -535,6 +634,13 @@ const ParsedChannels = () => {
       // Clear selected channel
       setSelectedChannelId(null);
       setSelectedChannelName('');
+      
+      // Remove from deleting state
+      setDeletingChannels(prev => {
+        const updated = {...prev};
+        delete updated[selectedChannelId];
+        return updated;
+      });
     }
   };
 
@@ -722,14 +828,34 @@ const ParsedChannels = () => {
                     '&:hover': {
                       transform: 'translateY(-4px)',
                       transition: 'transform 0.2s ease-in-out',
-                    }
+                    },
+                    opacity: deletingChannels[channel.id] ? 0.6 : 1,
+                    position: 'relative'
                   }}
                   onClick={(e) => {
-                    // Prevent navigation if clicking delete button
-                    if (e.target.closest('button[data-delete]')) return;
+                    // Prevent navigation if clicking delete button or if being deleted
+                    if (e.target.closest('button[data-delete]') || deletingChannels[channel.id]) return;
                     navigate(`/channels/${channel.id}`);
                   }}
                 >
+                  {deletingChannels[channel.id] && (
+                    <Box 
+                      sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'rgba(0,0,0,0.1)',
+                      }}
+                    >
+                      <CircularProgress size={24} />
+                    </Box>
+                  )}
                   <CardContent>
                     <Typography variant="h6" noWrap gutterBottom>
                       {channel.group_name}
@@ -799,6 +925,7 @@ const ParsedChannels = () => {
                           handleDeleteClick(channel);
                         }}
                         data-delete="true"
+                        disabled={deletingChannels[channel.id]}
                       >
                         <DeleteIcon />
                       </IconButton>
