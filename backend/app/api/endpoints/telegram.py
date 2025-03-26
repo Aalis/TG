@@ -616,97 +616,44 @@ async def delete_channel(
 ) -> Any:
     """Delete a parsed channel."""
     try:
-        # Log the deletion attempt for debugging
-        logging.info(f"[DELETE-CHANNEL][{current_user.id}][START] Attempting to delete channel ID {channel_id}")
-        
-        # First check if the channel exists in redis cache
-        from app.core.redis_client import get_cached_parsed_channels, invalidate_parsed_channels_cache
-        cache_key = f"parsed_channels:{current_user.id}"
-        cached_channels = await get_cached_parsed_channels(current_user.id, cache_key)
-        
-        # Always invalidate cache first, regardless of what happens after
-        # This ensures we don't have stale data in cache
-        logging.info(f"[DELETE-CHANNEL][{current_user.id}] Invalidating cache preemptively")
-        await invalidate_parsed_channels_cache(current_user.id)
-        
-        channel_in_cache = False
-        channel_name = None
-        if cached_channels:
-            # Check if the channel exists in the cache
-            for cached_channel in cached_channels:
-                if cached_channel.get('id') == channel_id:
-                    channel_in_cache = True
-                    channel_name = cached_channel.get('group_name', 'Unknown channel')
-                    logging.info(f"[DELETE-CHANNEL][{current_user.id}] Channel {channel_id} ({channel_name}) found in cache")
-                    break
-        
-        # Get the channel from the database
+        # Get the channel and verify permissions
         channel = crud.telegram.get_group_by_id(db, group_id=channel_id)
-        
         if not channel:
-            # Special case: The UI might show a channel that's already deleted
-            logging.warning(f"[DELETE-CHANNEL][{current_user.id}][NOT-FOUND] Channel {channel_id} not found in database" + 
-                          (f" but was in cache as '{channel_name}'" if channel_in_cache else ""))
-            
-            # Return success to allow the UI to proceed
-            return {
-                "success": True, 
-                "message": "Channel not found, cache invalidated",
-                "channel_id": channel_id,
-                "channel_name": channel_name
-            }
-            
+            raise HTTPException(status_code=404, detail="Channel not found")
         if channel.user_id != current_user.id:
-            logging.warning(f"[DELETE-CHANNEL][{current_user.id}][PERMISSION-DENIED] User attempted to delete channel {channel_id} owned by user {channel.user_id}")
             raise HTTPException(status_code=400, detail="Not enough permissions")
-            
         if not channel.is_channel:
-            logging.warning(f"[DELETE-CHANNEL][{current_user.id}][NOT-CHANNEL] ID {channel_id} is not a channel but a group")
             raise HTTPException(status_code=400, detail="Specified ID is not a channel")
         
-        # Store channel name for response
+        # Record channel info for logging
         channel_name = channel.group_name
         
-        # Delete the channel
-        logging.info(f"[DELETE-CHANNEL][{current_user.id}][DELETING] Channel '{channel_name}' (ID: {channel_id})")
-        
-        # Check for duplicate names in the database
-        duplicates = db.query(ParsedGroup).filter(
-            ParsedGroup.user_id == current_user.id,
-            ParsedGroup.is_channel == True,
-            ParsedGroup.group_name == channel_name,
-            ParsedGroup.id != channel_id
-        ).all()
-        
-        if duplicates:
-            logging.info(f"[DELETE-CHANNEL][{current_user.id}] Found {len(duplicates)} duplicate channels with name '{channel_name}'")
-            duplicate_ids = [d.id for d in duplicates]
-            logging.info(f"[DELETE-CHANNEL][{current_user.id}] Duplicate IDs: {duplicate_ids}")
-        
-        # Perform the deletion
-        crud.telegram.delete_group(db, group_id=channel_id)
-        
-        logging.info(f"[DELETE-CHANNEL][{current_user.id}][SUCCESS] Successfully deleted channel {channel_id} ({channel_name})")
-        return {
-            "success": True, 
-            "message": "Channel deleted successfully", 
-            "channel_id": channel_id,
-            "channel_name": channel_name
-        }
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions to preserve status codes
-        raise
-    except Exception as e:
-        logging.error(f"[DELETE-CHANNEL][{current_user.id}][ERROR] Unexpected error deleting channel {channel_id}: {str(e)}")
-        # Always invalidate cache on error
+        # Delete the channel and related records
         try:
+            crud.telegram.delete_group(db, group_id=channel_id)
+            
+            # Invalidate cache after deletion
             from app.core.redis_client import invalidate_parsed_channels_cache
             await invalidate_parsed_channels_cache(current_user.id)
-            logging.info(f"[DELETE-CHANNEL][{current_user.id}][ERROR-RECOVERY] Cache invalidated after error")
-        except Exception as cache_error:
-            logging.error(f"[DELETE-CHANNEL][{current_user.id}][ERROR-RECOVERY-FAILED] Failed to invalidate cache: {str(cache_error)}")
             
+            # Log successful deletion
+            logging.info(f"User {current_user.id} successfully deleted channel '{channel_name}' (ID: {channel_id})")
+            
+            return {"success": True, "message": f"Channel '{channel_name}' deleted successfully"}
+        except Exception as db_error:
+            # Log the specific database error
+            logging.error(f"Database error deleting channel {channel_id}: {str(db_error)}")
+            db.rollback()  # Ensure transaction is rolled back
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database error: {str(db_error)}"
+            )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Log and handle unexpected errors
+        logging.error(f"Unexpected error deleting channel {channel_id}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete channel: {str(e)}"

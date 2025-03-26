@@ -1,5 +1,6 @@
 from typing import List, Optional, Union, Dict, Any
 from datetime import datetime
+import logging
 
 from sqlalchemy.orm import Session
 
@@ -104,36 +105,36 @@ def create_group(db: Session, *, obj_in: ParsedGroupCreate, user_id: int) -> Par
 
 
 def delete_group(db: Session, *, group_id: int) -> None:
-    """Delete a group and its associated data with proper error handling"""
-    import logging
-    
+    """Delete a group and its members"""
     try:
-        # Start a transaction for the deletion process
-        # This ensures that if any part fails, the entire operation can be rolled back
+        # Get all posts associated with this group
+        posts = db.query(ChannelPost).filter(ChannelPost.group_id == group_id).all()
         
-        # First get the group to check if it exists
-        group = db.query(ParsedGroup).filter(ParsedGroup.id == group_id).first()
-        if not group:
-            logging.warning(f"Attempted to delete non-existent group with ID {group_id}")
-            return
+        # For each post, get and delete all associated comments (explicit cascade)
+        for post in posts:
+            # Delete all comments for this post
+            db.query(PostComment).filter(PostComment.post_id == post.id).delete()
+        
+        # Delete all posts for this group
+        db.query(ChannelPost).filter(ChannelPost.group_id == group_id).delete()
+        
+        # Delete all members for this group
+        db.query(GroupMember).filter(GroupMember.group_id == group_id).delete()
+        
+        # Finally delete the group
+        group = db.query(ParsedGroup).filter(ParsedGroup.id == group_id).one_or_none()
+        if group:
+            db.delete(group)
+        else:
+            # Log warning but don't raise exception
+            logging.warning(f"Attempted to delete non-existent group ID: {group_id}")
             
-        logging.info(f"Deleting group '{group.group_name}' (ID: {group_id}) and all associated data")
-        
-        # Delete posts and their comments (should happen automatically via cascade)
-        post_count = db.query(ChannelPost).filter(ChannelPost.group_id == group_id).count()
-        logging.info(f"There are {post_count} posts that will be deleted for group {group_id}")
-        
-        # Delete members (should happen automatically via cascade)
-        member_count = db.query(GroupMember).filter(GroupMember.group_id == group_id).count()
-        logging.info(f"There are {member_count} members that will be deleted for group {group_id}")
-        
-        # Delete the group (which should trigger cascaded deletions)
-        db.delete(group)
+        # Commit the transaction
         db.commit()
-        logging.info(f"Successfully deleted group ID {group_id} and all associated data")
     except Exception as e:
-        logging.error(f"Error deleting group {group_id}: {str(e)}")
+        # Rollback on any error
         db.rollback()
+        logging.error(f"Error in delete_group for group_id {group_id}: {str(e)}")
         raise e
 
 
