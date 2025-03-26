@@ -50,7 +50,8 @@ import { channelsAPI } from '../services/api';
 import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
 import ParseButtonHeader from '../components/ParseButtonHeader';
-import { useChannels } from '../hooks/useChannels';
+import { useChannels, CHANNELS_QUERY_KEY } from '../hooks/useChannels';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Pagination constants
 const ITEMS_PER_PAGE = 42;  // Show all items at once
@@ -66,6 +67,7 @@ const ParsedChannels = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
 
   // Initialize states
   const [searchTerm, setSearchTerm] = useState('');
@@ -483,31 +485,54 @@ const ParsedChannels = () => {
     try {
       setError(null); // Clear any previous errors before attempting deletion
       
-      // Attempt to delete the channel
-      const response = await channelsAPI.deleteChannel(selectedChannelId);
+      // Store current channels state for potential rollback
+      const currentChannels = [...channels];
       
-      // Force invalidate cache and refetch
-      await refetchWithoutCache();
+      // Optimistically update UI by filtering out the deleted channel
+      const updatedChannels = currentChannels.filter(c => c.id !== selectedChannelId);
+      // Update the React Query cache directly
+      queryClient.setQueryData(CHANNELS_QUERY_KEY, {
+        data: updatedChannels
+      });
       
-      // Close dialog and show success notification
+      // Close dialog immediately for better UX
       setDeleteConfirmOpen(false);
-      enqueueSnackbar('Channel deleted successfully', { 
+      
+      // Show optimistic success message
+      enqueueSnackbar('Channel deleted', { 
         variant: 'success',
         autoHideDuration: 3000
       });
-    } catch (err) {
-      console.error('Failed to delete channel', err);
       
-      // Extract detailed error message if available
-      const errorDetail = err.response?.data?.detail || 'Failed to delete channel. Please try again.';
-      setError(errorDetail);
-      
-      // Try refetching anyway to make sure UI is in sync with backend
+      // Actually perform the deletion in the background
       try {
-        await refetchWithoutCache();
-      } catch (refetchErr) {
-        console.error('Error refetching after failed deletion:', refetchErr);
+        await channelsAPI.deleteChannel(selectedChannelId);
+        // Only refetch if needed after successful deletion (optional)
+        // await refetchWithoutCache();
+      } catch (apiError) {
+        console.error('Failed to delete channel', apiError);
+        
+        // Rollback the optimistic update
+        queryClient.setQueryData(CHANNELS_QUERY_KEY, {
+          data: currentChannels
+        });
+        
+        // Extract detailed error message if available
+        const errorDetail = apiError.response?.data?.detail || 'Failed to delete channel. Please try again.';
+        setError(errorDetail);
+        
+        // Show error notification
+        enqueueSnackbar(errorDetail, {
+          variant: 'error',
+          autoHideDuration: 5000
+        });
+        
+        // Reopen the dialog if it failed
+        setDeleteConfirmOpen(true);
       }
+    } catch (err) {
+      console.error('Error in delete operation:', err);
+      setError('An unexpected error occurred. Please try again.');
     }
   };
 
