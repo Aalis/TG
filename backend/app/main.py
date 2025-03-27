@@ -101,14 +101,34 @@ if not index_path.exists():
 
 # Mount static files directory for all non-API routes
 try:
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    # First serve specific static files and directories
+    app.mount("/static", StaticFiles(directory=str(static_dir / "static")), name="static_assets")
+    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+    
+    # Serve individual files from the root
+    @app.get("/favicon.ico")
+    async def favicon():
+        return FileResponse(str(static_dir / "favicon.ico"))
+        
+    @app.get("/manifest.json")
+    async def manifest():
+        return FileResponse(str(static_dir / "manifest.json"))
+        
+    @app.get("/asset-manifest.json")
+    async def asset_manifest():
+        return FileResponse(str(static_dir / "asset-manifest.json"))
+        
+    @app.get("/robots.txt")
+    async def robots():
+        return FileResponse(str(static_dir / "robots.txt"))
     
     # Special route to handle all other routes by serving index.html
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        # Skip API routes
+        # Skip API routes as they're handled by the API router
         if full_path.startswith("api/"):
-            pass  # Let the API router handle these
+            return {"detail": "Not Found"}
+            
         # Return index.html for all other routes to support client-side routing
         return FileResponse(str(static_dir / "index.html"))
         

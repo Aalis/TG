@@ -464,6 +464,24 @@ def main():
             logger.warning("Attempting to start application despite migration failure...")
         
         create_superuser()
+        
+        # Check and fix static files structure
+        logger.info("Checking static files structure...")
+        try:
+            # Try to import and run the check_static_files function
+            from check_static_files import check_and_fix_static_files
+            check_and_fix_static_files()
+        except ImportError:
+            logger.warning("Could not import check_static_files module")
+            # Try to run using subprocess as fallback
+            if os.path.exists("/app/check_static_files.py"):
+                logger.info("Running check_static_files.py as subprocess")
+                subprocess.run(["python", "/app/check_static_files.py"], check=False)
+            else:
+                logger.warning("check_static_files.py not found, skipping static files check")
+        except Exception as e:
+            logger.error(f"Error checking static files: {e}")
+        
         start_application()
     except Exception as e:
         logger.error(f"Fatal error during startup: {e}")
