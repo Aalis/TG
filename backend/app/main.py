@@ -10,6 +10,7 @@ from .database import models
 from .database.database import engine
 from .core.config import settings
 from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -152,10 +153,24 @@ try:
     async def serve_spa(request: Request, full_path: str):
         print(f"Received request for path: /{full_path}")
         
-        # Check if this is an API route - pass through if it is
+        # Handle API routes specially
         if full_path.startswith("api/"):
+            # Check if this is an API route that's failing - provide detailed diagnostics
+            api_endpoint = full_path[4:]  # Remove 'api/' prefix
+            
+            # Check specifically for user verification routes
+            if api_endpoint.startswith("v1/users/verify/"):
+                token = api_endpoint.replace("v1/users/verify/", "")
+                print(f"Email verification token detected: {token}")
+                print(f"This should be handled by the API router, but it's reaching the catch-all route.")
+                print(f"Request headers: {request.headers}")
+                print(f"API router is mounted at: {settings.API_V1_STR}")
+                
+                # Try to redirect to the correct API endpoint
+                return RedirectResponse(url=f"{settings.API_V1_STR}/users/verify/{token}")
+            
             print(f"API route requested (not matched): {full_path}")
-            return {"detail": "API endpoint not found"}
+            return {"detail": f"API endpoint not found: {full_path}", "router_path": settings.API_V1_STR}
         
         # Check if the path points to a specific file
         file_path = static_dir / full_path

@@ -25,6 +25,46 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
 
+    @validator("SERVER_HOST", pre=True)
+    def validate_server_host(cls, v: str) -> str:
+        # For Railway deployment, get from environment or construct from RAILWAY_STATIC_URL
+        if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_STATIC_URL"):
+            # First check if SERVER_HOST is explicitly set in env
+            if os.environ.get("SERVER_HOST"):
+                return os.environ.get("SERVER_HOST")
+                
+            # For Railway, use their provided URL or fallback to a constructed one
+            railway_url = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+            if railway_url:
+                return f"https://{railway_url}"
+                
+            # Use RAILWAY_STATIC_URL as last resort (removing any path components)
+            static_url = os.environ.get("RAILWAY_STATIC_URL")
+            if static_url and static_url.startswith("https://"):
+                # Extract just the domain part
+                from urllib.parse import urlparse
+                parsed = urlparse(static_url)
+                return f"{parsed.scheme}://{parsed.netloc}"
+        
+        # Return the original value if no Railway environment is detected
+        return v
+        
+    @validator("FRONTEND_URL", pre=True)
+    def validate_frontend_url(cls, v: str, values: dict) -> str:
+        # For Railway deployment, match SERVER_HOST if not explicitly set
+        if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_STATIC_URL"):
+            # First check if FRONTEND_URL is explicitly set in env
+            if os.environ.get("FRONTEND_URL"):
+                return os.environ.get("FRONTEND_URL")
+                
+            # In most deployments, frontend and backend share the same host
+            server_host = values.get("SERVER_HOST")
+            if server_host and not server_host.startswith("http://localhost"):
+                return server_host
+        
+        # Return the original value if no Railway environment is detected
+        return v
+
     # Database
     DATABASE_URL: Optional[PostgresDsn] = None
     POSTGRES_USER: Optional[str] = None

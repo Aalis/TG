@@ -29,7 +29,11 @@ def generate_verification_token() -> tuple[str, datetime]:
 async def send_verification_email(email: EmailStr, token: str) -> None:
     """Send verification email to user"""
     # Use the backend API endpoint for verification
-    verification_url = f"{settings.SERVER_HOST}/api/v1/users/verify/{token}"
+    verification_url = f"{settings.SERVER_HOST}{settings.API_V1_STR}/users/verify/{token}"
+    
+    print(f"Sending verification email to: {email}")
+    print(f"SERVER_HOST: {settings.SERVER_HOST}")
+    print(f"Verification URL: {verification_url}")
     
     message = MessageSchema(
         subject="Verify your email",
@@ -48,7 +52,12 @@ async def send_verification_email(email: EmailStr, token: str) -> None:
         subtype="html"
     )
     
-    await fastmail.send_message(message)
+    try:
+        await fastmail.send_message(message)
+        print(f"Verification email sent successfully to {email}")
+    except Exception as e:
+        print(f"Error sending verification email to {email}: {str(e)}")
+        raise
 
 async def send_password_reset_email(email: EmailStr, reset_url: str) -> None:
     """Send password reset email to user"""

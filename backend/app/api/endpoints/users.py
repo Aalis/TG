@@ -180,22 +180,35 @@ async def verify_email(
     Verify user email with token and redirect to login page.
     Also grants 1-hour parsing permission upon verification.
     """
+    print(f"Email verification requested with token: {token}")
+    print(f"Current SERVER_HOST: {settings.SERVER_HOST}")
+    print(f"Current FRONTEND_URL: {settings.FRONTEND_URL}")
+    
     user = crud.user.get_by_verification_token(db, token=token)
     if not user:
+        print(f"No user found with verification token: {token}")
         raise HTTPException(
             status_code=400,
             detail="Invalid verification token",
         )
     
+    print(f"Found user: {user.email} (ID: {user.id})")
+    
     # Check if token is expired
-    if user.verification_token_expires < datetime.now(timezone.utc):
+    now = datetime.now(timezone.utc)
+    token_expires = user.verification_token_expires
+    print(f"Token expires at: {token_expires}, current time: {now}")
+    
+    if token_expires < now:
+        print(f"Token expired. Expired at: {token_expires}, current time: {now}")
         raise HTTPException(
             status_code=400,
             detail="Verification token has expired",
         )
     
     # Calculate parse permission expiry (1 hour from now)
-    parse_permission_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+    parse_permission_expires = now + timedelta(hours=1)
+    print(f"Setting parse permission expiry to: {parse_permission_expires}")
     
     # Verify user and grant parse permission
     user_update = UserUpdate(
@@ -207,10 +220,11 @@ async def verify_email(
         parse_permission_expires=parse_permission_expires
     )
     user = crud.user.update(db, db_obj=user, obj_in=user_update)
+    print(f"User updated successfully. Email verified: {user.email_verified}, can parse: {user.can_parse}")
     
     # Redirect to frontend login page with success message
     frontend_login_url = f"{settings.FRONTEND_URL}/login?verified=true"
-    print(f"Redirecting to: {frontend_login_url}")  # Debug log
+    print(f"Redirecting to: {frontend_login_url}")
     return RedirectResponse(url=frontend_login_url)
 
 
