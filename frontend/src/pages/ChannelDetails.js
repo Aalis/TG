@@ -181,15 +181,18 @@ const ChannelDetails = () => {
     if (!channel?.members) return;
 
     const csvContent = [
-      ['User ID', 'Username', 'First Name', 'Last Name', 'Is Bot', 'Is Admin', 'Is Premium'],
+      [t('common.userId', 'User ID'), t('common.username', 'Username'), 
+       t('common.firstName', 'First Name'), t('common.lastName', 'Last Name'), 
+       t('common.isBot', 'Is Bot'), t('common.isAdmin', 'Is Admin'), 
+       t('common.isPremium', 'Is Premium')],
       ...channel.members.map(member => [
         member.user_id,
         member.username || '',
         member.first_name || '',
         member.last_name || '',
-        member.is_bot ? 'Yes' : 'No',
-        member.is_admin ? 'Yes' : 'No',
-        member.is_premium ? 'Yes' : 'No'
+        member.is_bot ? t('common.yes', 'Yes') : t('common.no', 'No'),
+        member.is_admin ? t('common.yes', 'Yes') : t('common.no', 'No'),
+        member.is_premium ? t('common.yes', 'Yes') : t('common.no', 'No')
       ])
     ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
 
@@ -222,11 +225,11 @@ const ChannelDetails = () => {
           onClick={() => navigate('/channels')}
           sx={{ mb: 3 }}
         >
-          Back to Channels
+          {t('common.back')}
         </Button>
         
         <Alert severity="error">
-          {queryError.message || 'Failed to load channel details. Please try again.'}
+          {queryError.message || t('common.loadChannelError', 'Failed to load channel details. Please try again.')}
         </Alert>
       </Box>
     );
@@ -240,11 +243,11 @@ const ChannelDetails = () => {
           onClick={() => navigate('/channels')}
           sx={{ mb: 3 }}
         >
-          Back to Channels
+          {t('common.back')}
         </Button>
         
         <Alert severity="warning">
-          Channel not found.
+          {t('telegram.channelNotFound')}
         </Alert>
       </Box>
     );
@@ -288,17 +291,23 @@ const ChannelDetails = () => {
             </Typography>
             
             <Typography variant="body1" color="text.secondary" gutterBottom>
-              {channel.group_username ? `@${channel.group_username}` : 'Private Channel'}
+              {channel.group_username ? `@${channel.group_username}` : t('telegram.privateChannel')}
             </Typography>
             
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
               <Chip 
-                label={`${channel.member_count} subscribers`} 
+                label={`${channel.member_count} ${t('common.members')}`} 
                 color="primary" 
                 variant="outlined"
               />
               <Chip 
-                label={channel.is_public ? 'Public' : 'Private'} 
+                label={`${channel.members?.length || 0} ${t('common.usersFound')}`} 
+                color="info" 
+                variant="outlined"
+                sx={{ ml: 1 }}
+              />
+              <Chip 
+                label={channel.is_public ? t('common.public') : t('common.private')} 
                 color={channel.is_public ? 'success' : 'default'} 
                 variant="outlined"
                 sx={{ ml: 1 }}
@@ -312,7 +321,7 @@ const ChannelDetails = () => {
             startIcon={<DownloadIcon />}
             onClick={exportToCSV}
           >
-            Export to CSV
+            {t('telegram.exportMembers')}
           </Button>
         </Box>
         
@@ -330,7 +339,7 @@ const ChannelDetails = () => {
             label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <VerifiedIcon color="warning" sx={{ fontSize: '20px' }} />
-                Only Premium Users
+                {t('telegram.onlyPremiumUsers', 'Premium Users')}
               </Box>
             }
           />
@@ -345,7 +354,7 @@ const ChannelDetails = () => {
             label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <Typography>@</Typography>
-                Only Users with Username
+                {t('telegram.onlyUsersWithUsername', 'Users with Username')}
               </Box>
             }
           />
@@ -353,7 +362,7 @@ const ChannelDetails = () => {
 
         <TextField
           fullWidth
-          placeholder="Search members by username or name..."
+          placeholder={t('telegram.searchMembersPlaceholder', 'Search members by username or name...')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           InputProps={{

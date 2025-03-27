@@ -733,7 +733,7 @@ const ParsedChannels = () => {
                       <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                           <Chip 
-                            label={`${channel.member_count.toLocaleString()} ${t('common.subscribers')}`} 
+                            label={`${channel.member_count.toLocaleString()} ${t('common.members')}`} 
                             size="small" 
                             color="primary" 
                             variant="outlined"
@@ -868,7 +868,7 @@ const ParsedChannels = () => {
                           {dialog.title}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {dialog.username ? `@${dialog.username}` : t('telegram.privateChannel')} • {dialog.members_count} {t('common.subscribers')}
+                          {dialog.username ? `@${dialog.username}` : t('telegram.privateChannel')} • {dialog.members_count} {t('common.members')}
                         </Typography>
                       </Box>
                     ))}
