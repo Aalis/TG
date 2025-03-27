@@ -42,6 +42,7 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { prefetchSessions } from '../hooks/useSessions';
+import { SlideTransition } from '../utils/transitions';
 
 const drawerWidth = 240;
 
@@ -180,7 +181,7 @@ const MainLayout = ({ children }) => {
         position="fixed"
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
+          ml: { sm: `${drawerWidth}px` }
         }}
       >
         <Container maxWidth="xl">
@@ -289,6 +290,13 @@ const MainLayout = ({ children }) => {
       <Dialog
         open={logoutDialogOpen}
         onClose={() => setLogoutDialogOpen(false)}
+        TransitionComponent={SlideTransition}
+        sx={{
+          '& .MuiBackdrop-root': {
+            backdropFilter: 'blur(2px)',
+            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+          }
+        }}
       >
         <DialogTitle>{t('dialogs.logoutConfirmTitle', 'Confirm Logout')}</DialogTitle>
         <DialogContent>
@@ -300,7 +308,7 @@ const MainLayout = ({ children }) => {
           <Button onClick={() => setLogoutDialogOpen(false)}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button onClick={handleLogoutConfirm} color="primary" autoFocus>
+          <Button onClick={handleLogoutConfirm} color="error" variant="contained">
             {t('common.logout', 'Logout')}
           </Button>
         </DialogActions>
@@ -309,4 +317,4 @@ const MainLayout = ({ children }) => {
   );
 };
 
-export default MainLayout; 
+export default MainLayout;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Typography,
   Button,
@@ -29,6 +29,8 @@ import { sessionsAPI } from '../services/api';
 import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { useSessions } from '../hooks/useSessions';
+import { useSnackbar } from 'notistack';
+import { SlideTransition } from '../utils/transitions';
 
 const TelegramSessions = () => {
   const { t, i18n } = useTranslation();
@@ -338,6 +340,13 @@ const TelegramSessions = () => {
         onClose={handleCloseDialog}
         maxWidth="sm"
         fullWidth
+        TransitionComponent={SlideTransition}
+        sx={{
+          '& .MuiBackdrop-root': {
+            backdropFilter: 'blur(2px)',
+            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+          }
+        }}
       >
         <DialogTitle>{texts.addTelegramSession}</DialogTitle>
         <DialogContent>
@@ -450,7 +459,17 @@ const TelegramSessions = () => {
       </Dialog>
       
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={handleDeleteCancel}>
+      <Dialog 
+        open={deleteDialogOpen} 
+        onClose={handleDeleteCancel}
+        TransitionComponent={SlideTransition}
+        sx={{
+          '& .MuiBackdrop-root': {
+            backdropFilter: 'blur(2px)',
+            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+          }
+        }}
+      >
         <DialogTitle>{texts.confirm}</DialogTitle>
         <DialogContent>
           <Typography>

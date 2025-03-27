@@ -31,5 +31,5 @@ root.render(
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     document.documentElement.classList.add('transitions-enabled');
-  }, 1000);
+  }, 300);
 }); 

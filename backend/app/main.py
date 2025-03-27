@@ -101,6 +101,16 @@ if not index_path.exists():
 
 # Mount static files directory for all non-API routes
 try:
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    
+    # Special route to handle all other routes by serving index.html
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Skip API routes
+        if full_path.startswith("api/"):
+            pass  # Let the API router handle these
+        # Return index.html for all other routes to support client-side routing
+        return FileResponse(str(static_dir / "index.html"))
+        
 except Exception as e:
     print(f"Warning: Could not mount static directory: {e}") 

@@ -43,7 +43,57 @@ export const ThemeProvider = ({ children }) => {
           default: theme === 'dark' ? '#121212' : '#f5f5f5',
           paper: theme === 'dark' ? '#1e1e1e' : '#ffffff',
         },
-      }
+      },
+      transitions: {
+        easing: {
+          easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
+          easeOut: 'cubic-bezier(0.0, 0, 0.2, 1)',
+          easeIn: 'cubic-bezier(0.4, 0, 1, 1)',
+          sharp: 'cubic-bezier(0.4, 0, 0.6, 1)',
+        },
+        duration: {
+          shortest: 150,
+          shorter: 200,
+          short: 250,
+          standard: 300,
+          complex: 375,
+          enteringScreen: 225,
+          leavingScreen: 195,
+        },
+      },
+      components: {
+        MuiButtonBase: {
+          defaultProps: {
+            disableRipple: false,
+          },
+          styleOverrides: {
+            root: {
+              transition: 'background-color 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+            },
+          },
+        },
+        MuiPaper: {
+          styleOverrides: {
+            root: {
+              transition: 'box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1)',
+            },
+          },
+        },
+        MuiDialog: {
+          styleOverrides: {
+            paper: {
+              transition: 'transform 225ms cubic-bezier(0, 0, 0.2, 1) 0ms !important',
+            },
+          },
+        },
+        MuiCard: {
+          styleOverrides: {
+            root: {
+              transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            },
+          },
+        },
+      },
     }),
     [theme]
   );

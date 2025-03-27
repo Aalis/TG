@@ -53,6 +53,7 @@ import { useTranslation } from 'react-i18next';
 import ParseButtonHeader from '../components/ParseButtonHeader';
 import { useChannels, CHANNELS_QUERY_KEY } from '../hooks/useChannels';
 import { useQueryClient } from '@tanstack/react-query';
+import { SlideTransition } from '../utils/transitions';
 
 // Pagination constants
 const ITEMS_PER_PAGE = 42;  // Show all items at once
@@ -802,7 +803,19 @@ const ParsedChannels = () => {
         )}
 
         {/* Parse Channel Dialog */}
-        <Dialog open={parseDialogOpen} onClose={handleCloseParseDialog} maxWidth="sm" fullWidth>
+        <Dialog 
+          open={parseDialogOpen} 
+          onClose={handleCloseParseDialog} 
+          maxWidth="sm" 
+          fullWidth
+          TransitionComponent={SlideTransition}
+          sx={{
+            '& .MuiBackdrop-root': {
+              backdropFilter: 'blur(2px)',
+              transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+            }
+          }}
+        >
           <DialogTitle>
             {t('telegram.parseNewChannel')}
           </DialogTitle>
@@ -840,8 +853,9 @@ const ParsedChannels = () => {
                           borderColor: selectedDialog?.id === dialog.id ? 'primary.main' : 'divider',
                           borderRadius: 1,
                           cursor: 'pointer',
+                          bgcolor: selectedDialog?.id === dialog.id ? 'primary.lighter' : 'transparent',
                           '&:hover': {
-                            bgcolor: 'action.hover',
+                            bgcolor: selectedDialog?.id === dialog.id ? 'primary.lighter' : 'action.hover',
                           },
                         }}
                         onClick={() => {
@@ -990,7 +1004,17 @@ const ParsedChannels = () => {
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <Dialog 
+          open={deleteConfirmOpen} 
+          onClose={() => setDeleteConfirmOpen(false)}
+          TransitionComponent={SlideTransition}
+          sx={{
+            '& .MuiBackdrop-root': {
+              backdropFilter: 'blur(2px)',
+              transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+            }
+          }}
+        >
           <DialogTitle>{t('actions.confirm')}</DialogTitle>
           <DialogContent>
             <Typography>
@@ -1015,10 +1039,17 @@ const ParsedChannels = () => {
           open={!!parsingProgress && parsingProgress.is_parsing} 
           maxWidth="sm" 
           fullWidth
+          TransitionComponent={SlideTransition}
           onClose={() => {
             // Only allow closing via the cancel button
             if (!parsingProgress?.is_parsing) {
               resetParsingState();
+            }
+          }}
+          sx={{
+            '& .MuiBackdrop-root': {
+              backdropFilter: 'blur(2px)',
+              transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
             }
           }}
         >

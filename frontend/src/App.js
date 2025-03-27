@@ -61,7 +61,7 @@ function App() {
               {user?.is_superuser && (
                 <Route path="/admin" element={<AdminPanel />} />
               )}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </MainLayout>
         ) : (
@@ -72,7 +72,7 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </PublicLayout>
         )}

@@ -31,9 +31,12 @@ html, body, #root, * {
 
 /* Enable transitions only when the app is ready */
 html.transitions-enabled * {
-  transition: background-color 0.3s ease, 
-              color 0.3s ease, 
-              border-color 0.3s ease !important;
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 /* Basic body styles */
@@ -120,7 +123,8 @@ body {
 }
 
 html.transitions-enabled .card-hover {
-  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 html.transitions-enabled .card-hover:hover {

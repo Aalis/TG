@@ -47,6 +47,7 @@ import { useTranslation } from 'react-i18next';
 import ParseButtonHeader from '../components/ParseButtonHeader';
 import { useGroups } from '../hooks/useGroups';
 import { useQueryClient } from '@tanstack/react-query';
+import { SlideTransition } from '../utils/transitions';
 
 const ParsedGroups = () => {
   const { t } = useTranslation();
@@ -683,7 +684,17 @@ const ParsedGroups = () => {
         )}
         
         {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <Dialog 
+          open={deleteConfirmOpen} 
+          onClose={() => setDeleteConfirmOpen(false)}
+          TransitionComponent={SlideTransition}
+          sx={{
+            '& .MuiBackdrop-root': {
+              backdropFilter: 'blur(2px)',
+              transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+            }
+          }}
+        >
           <DialogTitle>{t('actions.confirm')}</DialogTitle>
           <DialogContent>
             <Typography>
@@ -699,14 +710,26 @@ const ParsedGroups = () => {
         </Dialog>
         
         {/* Parse Group Dialog */}
-        <Dialog open={parseDialogOpen} onClose={() => {
-          if (!parsingStatus.loading) {
-            setParseDialogOpen(false);
-            setSelectedDialog(null);
-            setGroupLink('');
-            resetParsingState();
-          }
-        }} maxWidth="sm" fullWidth>
+        <Dialog 
+          open={parseDialogOpen} 
+          onClose={() => {
+            if (!parsingStatus.loading) {
+              setParseDialogOpen(false);
+              setSelectedDialog(null);
+              setGroupLink('');
+              resetParsingState();
+            }
+          }} 
+          maxWidth="sm" 
+          fullWidth
+          TransitionComponent={SlideTransition}
+          sx={{
+            '& .MuiBackdrop-root': {
+              backdropFilter: 'blur(2px)',
+              transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+            }
+          }}
+        >
           <DialogTitle>{t('telegram.parseNewGroup')}</DialogTitle>
           <DialogContent>
             <DialogContentText sx={{ mb: 2 }}>
@@ -757,8 +780,9 @@ const ParsedGroups = () => {
                           borderColor: selectedDialog?.id === dialog.id ? 'primary.main' : 'divider',
                           borderRadius: 1,
                           cursor: 'pointer',
+                          bgcolor: selectedDialog?.id === dialog.id ? 'primary.lighter' : 'transparent',
                           '&:hover': {
-                            bgcolor: 'action.hover',
+                            bgcolor: selectedDialog?.id === dialog.id ? 'primary.lighter' : 'action.hover',
                           },
                         }}
                         onClick={() => {
@@ -914,10 +938,17 @@ const ParsedGroups = () => {
           open={!!parsingProgress && parsingProgress.is_parsing} 
           maxWidth="sm" 
           fullWidth
+          TransitionComponent={SlideTransition}
           onClose={() => {
             // Only allow closing via the cancel button
             if (!parsingProgress?.is_parsing) {
               resetParsingState();
+            }
+          }}
+          sx={{
+            '& .MuiBackdrop-root': {
+              backdropFilter: 'blur(2px)',
+              transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
             }
           }}
         >
