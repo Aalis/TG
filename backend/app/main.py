@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -47,7 +47,15 @@ def health_check():
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # Get static directory from environment variable or use default
-static_dir = Path(os.getenv("STATIC_FILES_DIR", "/home/appuser/static"))
+static_dir_env = os.getenv("STATIC_FILES_DIR")
+print(f"STATIC_FILES_DIR environment variable: {static_dir_env}")
+
+if static_dir_env:
+    static_dir = Path(static_dir_env)
+else:
+    static_dir = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / "static"
+
+print(f"Using static directory: {static_dir}")
 
 # Create the static directory if it doesn't exist
 try:
@@ -55,10 +63,22 @@ try:
 except Exception as e:
     print(f"Warning: Could not create static directory: {e}")
 
-# Ensure index.html exists in static directory
-index_path = static_dir / "index.html"
-if not index_path.exists():
-    try:
+# Debug: List static directory contents
+try:
+    # Get the list of files in the static directory
+    static_files = list(static_dir.glob("**/*")) if static_dir.exists() else []
+    print(f"Found {len(static_files)} files in static directory")
+    for file in static_files[:10]:  # Print first 10 files
+        print(f" - {file.relative_to(static_dir)}")
+    if len(static_files) > 10:
+        print(f" ... and {len(static_files) - 10} more files")
+    
+    # Check index.html
+    index_path = static_dir / "index.html"
+    if index_path.exists():
+        print(f"index.html exists at: {index_path}")
+    else:
+        print(f"WARNING: index.html does not exist at: {index_path}")
         # Create a temporary index.html if it doesn't exist
         index_path.write_text("""<!DOCTYPE html>
 <html>
@@ -97,95 +117,56 @@ if not index_path.exists():
     </body>
 </html>
 """)
-    except Exception as e:
-        print(f"Warning: Could not create index.html: {e}")
-
-# Mount static files directory for all non-API routes
-try:
-    # Get the list of files in the static directory
-    static_files = list(static_dir.glob("*")) if static_dir.exists() else []
-    print(f"Found {len(static_files)} files in static directory: {static_dir}")
+        print(f"Created temporary index.html at: {index_path}")
     
-    # First handle specific static files
-    for file_name in ["favicon.ico", "manifest.json", "asset-manifest.json", "robots.txt", "logo192.png", "logo512.png"]:
-        @app.get(f"/{file_name}")
-        async def serve_file(file_name=file_name):
-            file_path = static_dir / file_name
-            if file_path.exists():
+    # Define static file handlers
+    
+    # First mount the static directory for specific asset types
+    static_assets_dir = static_dir / "static"
+    if static_assets_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_assets_dir)), name="static_assets")
+        print(f"Mounted /static endpoint to: {static_assets_dir}")
+    else:
+        print(f"WARNING: Static assets directory does not exist: {static_assets_dir}")
+    
+    # Handle root path - important to define before the catch-all
+    @app.get("/")
+    async def serve_root():
+        print(f"Serving index.html for root path")
+        return FileResponse(str(static_dir / "index.html"))
+    
+    # Serve specific files from the root directory
+    for file_name in ["favicon.ico", "manifest.json", "asset-manifest.json", "robots.txt", "logo192.png", "logo512.png", "env-config.js"]:
+        file_path = static_dir / file_name
+        if file_path.exists():
+            print(f"Setting up handler for /{file_name}")
+            
+            @app.get(f"/{file_name}")
+            async def serve_file(file_path=file_path, file_name=file_name):
+                print(f"Serving {file_name}")
                 return FileResponse(str(file_path))
-            else:
-                print(f"Warning: {file_path} does not exist")
-                # Return empty response to avoid errors
-                return JSONResponse(content={})
     
-    # Handle static assets if they exist
-    if (static_dir / "static").exists():
-        print("Static subdirectory found, mounting it")
-        app.mount("/static", StaticFiles(directory=str(static_dir / "static")), name="static_assets")
-    elif (static_dir).exists():
-        # Check for direct js/css directories and mount them
-        for asset_dir in ["js", "css", "media"]:
-            if (static_dir / asset_dir).exists():
-                print(f"Mounting {asset_dir} directory directly")
-                app.mount(f"/{asset_dir}", StaticFiles(directory=str(static_dir / asset_dir)), name=f"{asset_dir}_assets")
-    
-    # Serve assets directory if it exists
-    if (static_dir / "assets").exists():
-        app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
-    
-    # Handle single-page application routing - serve index.html for non-API, non-static paths
+    # Create a catch-all route that needs to be defined AFTER the specific routes
+    # This will serve index.html for all SPA routes
     @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        # Skip API routes
+    async def serve_spa(request: Request, full_path: str):
+        print(f"Received request for path: /{full_path}")
+        
+        # Check if this is an API route - pass through if it is
         if full_path.startswith("api/"):
+            print(f"API route requested (not matched): {full_path}")
             return {"detail": "API endpoint not found"}
         
-        # Skip static files routes
-        if full_path.startswith(("static/", "assets/", "js/", "css/", "media/")):
-            return {"detail": "Static file not found"}
-            
-        # Special check for handling root path
-        if full_path == "":
-            print("Serving index.html for root path")
+        # Check if the path points to a specific file
+        file_path = static_dir / full_path
+        if file_path.exists() and file_path.is_file():
+            print(f"Serving existing file: {file_path}")
+            return FileResponse(str(file_path))
         
-        # Return index.html for all other routes to support client-side routing
-        index_file = static_dir / "index.html"
-        if index_file.exists():
-            print(f"Serving {index_file} for path: /{full_path}")
-            return FileResponse(str(index_file))
-        else:
-            # If index.html doesn't exist, try to find it
-            print(f"Index.html not found at {index_file}, searching...")
-            for file in static_dir.glob("**/index.html"):
-                print(f"Found index.html at {file}")
-                return FileResponse(str(file))
-            
-            # Last resort - return a simple HTML page
-            html_content = """
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <title>Telegram Parser</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; padding: 20px; }
-                        .error { color: red; margin: 20px 0; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Telegram Parser</h1>
-                    <div class="error">
-                        <p>Error: Could not find index.html file.</p>
-                        <p>Please ensure the frontend has been built and copied to the static directory.</p>
-                    </div>
-                    <div>
-                        <pre>Static directory: {static_dir}</pre>
-                        <pre>Files found: {[str(f.relative_to(static_dir)) for f in static_files]}</pre>
-                    </div>
-                </body>
-            </html>
-            """
-            return HTMLResponse(content=html_content, status_code=404)
-        
+        # For all front-end routes (SPA routes), return the index.html
+        print(f"SPA route detected, serving index.html for: /{full_path}")
+        return FileResponse(str(static_dir / "index.html"))
+    
 except Exception as e:
     import traceback
     print(f"Error handling static files: {e}")
