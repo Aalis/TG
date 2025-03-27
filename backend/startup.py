@@ -469,8 +469,53 @@ def main():
         logger.info("Checking static files structure...")
         try:
             # Try to import and run the check_static_files function
+            logger.info("Checking with check_static_files.py")
             from check_static_files import check_and_fix_static_files
             check_and_fix_static_files()
+            
+            # Run debug script
+            logger.info("Running debug_static.py for detailed diagnostics")
+            if os.path.exists("/app/debug_static.py"):
+                try:
+                    from debug_static import debug_static_files
+                    debug_static_files()
+                except ImportError:
+                    logger.warning("Could not import debug_static module")
+                    # Run as subprocess
+                    subprocess.run(["python", "/app/debug_static.py"], check=False)
+                
+            # Ensure STATIC_FILES_DIR is properly set
+            static_dir = os.environ.get("STATIC_FILES_DIR", "/app/static")
+            logger.info(f"Using static directory: {static_dir}")
+            
+            # Create basic index.html if not exists
+            if not os.path.exists(os.path.join(static_dir, "index.html")):
+                logger.warning(f"index.html not found in {static_dir}, creating basic version")
+                os.makedirs(static_dir, exist_ok=True)
+                with open(os.path.join(static_dir, "index.html"), "w") as f:
+                    f.write("""<!DOCTYPE html>
+<html>
+    <head>
+        <title>Telegram Parser</title>
+        <meta http-equiv="refresh" content="5;url=/api/v1/docs">
+        <style>
+            body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
+            .container { max-width: 600px; margin: 0 auto; }
+            .message { margin: 20px 0; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Telegram Parser API</h1>
+            <div class="message">
+                <p>The API server is running, but the frontend static files are missing.</p>
+                <p>You will be redirected to the API documentation in 5 seconds.</p>
+                <p><a href="/api/v1/docs">Click here if you are not redirected</a></p>
+            </div>
+        </div>
+    </body>
+</html>""")
+                
         except ImportError:
             logger.warning("Could not import check_static_files module")
             # Try to run using subprocess as fallback
