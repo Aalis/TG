@@ -755,26 +755,23 @@ const ParsedChannels = () => {
                       
                       <Typography variant="caption" color="text.secondary" display="block">
                         {t('common.parsed')}: {(() => {
-                          // Parse the timestamp from the server and adjust for timezone
-                          const serverDate = new Date(channel.parsed_at);
+                          // Parse the timestamp from the server 
+                          const timestamp = channel.parsed_at;
                           
-                          // Get the timezone offset in minutes
-                          const timezoneOffset = new Date().getTimezoneOffset();
+                          // Create a new date object using the ISO string (browser will handle timezone conversion)
+                          const date = new Date(timestamp);
                           
-                          // Create a new date adjusted for the local timezone
-                          const localDate = new Date(serverDate.getTime() - (timezoneOffset * 60000));
-                          
-                          // Format the date in local timezone
-                          return localDate.toLocaleDateString(undefined, {
+                          // Format the date according to user's locale and timezone
+                          return new Intl.DateTimeFormat(undefined, {
                             year: 'numeric',
                             month: '2-digit',
                             day: '2-digit',
-                          }) + ' ' + localDate.toLocaleTimeString(undefined, {
                             hour: '2-digit',
                             minute: '2-digit',
                             second: '2-digit',
-                            hour12: false
-                          });
+                            hour12: false,
+                            timeZoneName: 'short'
+                          }).format(date);
                         })()}
                       </Typography>
                     </CardContent>

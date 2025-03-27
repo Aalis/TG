@@ -1,8 +1,10 @@
+import os
+import pytz
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 import os
 from pathlib import Path
 from .api.api import api_router
@@ -10,7 +12,16 @@ from .database import models
 from .database.database import engine
 from .core.config import settings
 from fastapi.responses import HTMLResponse
-from fastapi.responses import RedirectResponse
+
+# Set timezone for the application
+os.environ['TZ'] = settings.TIMEZONE
+try:
+    import time
+    time.tzset()  # This makes Python use the new timezone
+    print(f"Timezone set to: {settings.TIMEZONE}")
+except AttributeError:
+    # time.tzset() is not available on Windows
+    print(f"Warning: Unable to set timezone using tzset() (Windows?). Using: {settings.TIMEZONE}")
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)

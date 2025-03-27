@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     SERVER_HOST: str = "http://localhost:8000"  # Change this in production
     FRONTEND_URL: str = "http://localhost:3000"  # Change this in production
     
+    # Timezone settings
+    TIMEZONE: str = "UTC"  # Default timezone for the server
+    
     # CORS
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
 
@@ -64,6 +67,11 @@ class Settings(BaseSettings):
         
         # Return the original value if no Railway environment is detected
         return v
+
+    @validator("TIMEZONE", pre=True)
+    def validate_timezone(cls, v: str) -> str:
+        # Allow overriding timezone through environment variable
+        return os.environ.get("TZ", v)
 
     # Database
     DATABASE_URL: Optional[PostgresDsn] = None
