@@ -138,8 +138,8 @@ const ParsedChannels = () => {
   // Filter channels based on search term
   const filteredResults = useMemo(() => {
     return channels.filter(channel => 
-      channel.group_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      channel.group_username.toLowerCase().includes(searchTerm.toLowerCase())
+      (channel.group_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (channel.group_username || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [channels, searchTerm]);
 
@@ -183,7 +183,7 @@ const ParsedChannels = () => {
       const term = searchTerm.toLowerCase();
       const filtered = channels.filter(
         (channel) =>
-          channel.group_name.toLowerCase().includes(term) ||
+          (channel.group_name || '').toLowerCase().includes(term) ||
           (channel.group_username && channel.group_username.toLowerCase().includes(term))
       );
       setFilteredChannels(filtered);
@@ -704,7 +704,7 @@ const ParsedChannels = () => {
         ) : (
           <>
             <Grid container spacing={3}>
-              {filteredChannels.map((channel) => (
+              {paginatedChannels.map((channel) => (
                 <Grid item xs={12} sm={6} md={4} key={channel.id}>
                   <Card 
                     className="card-hover"
@@ -721,7 +721,7 @@ const ParsedChannels = () => {
                       navigate(`/channels/${channel.id}`);
                     }}
                   >
-                    <CardContent>
+                    <CardContent sx={{ pb: 0 }}>
                       <Typography variant="h6" noWrap gutterBottom>
                         {channel.group_name}
                       </Typography>
@@ -730,19 +730,21 @@ const ParsedChannels = () => {
                         {channel.group_username ? `@${channel.group_username}` : t('telegram.privateChannel')}
                       </Typography>
                       
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mt: 1, mb: 2 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
                           <Chip 
-                            label={`${channel.member_count.toLocaleString()} ${t('common.members')}`} 
+                            label={`${(channel.member_count || 0).toLocaleString()} ${t('common.members')}`} 
                             size="small" 
                             color="primary" 
                             variant="outlined"
+                            sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
                           />
                           <Chip 
                             label={`${(channel.members?.length || 0).toLocaleString()} ${t('common.usersFound')}`} 
                             size="small" 
                             color="info" 
                             variant="outlined"
+                            sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
                           />
                         </Box>
                         <Chip 
@@ -750,10 +752,11 @@ const ParsedChannels = () => {
                           size="small" 
                           color={channel.is_public ? 'success' : 'default'} 
                           variant="outlined"
+                          sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
                         />
                       </Box>
                       
-                      <Typography variant="caption" color="text.secondary" display="block">
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
                         {t('common.parsed')}: {(() => {
                           // Parse the timestamp from the server 
                           const timestamp = channel.parsed_at;
@@ -796,6 +799,21 @@ const ParsedChannels = () => {
                 </Grid>
               ))}
             </Grid>
+            
+            {/* Pagination */}
+            {filteredChannels.length > ITEMS_PER_PAGE && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+                <Pagination 
+                  count={Math.ceil(filteredChannels.length / ITEMS_PER_PAGE)} 
+                  page={page} 
+                  onChange={(e, newPage) => handlePageChange(newPage)}
+                  color="primary"
+                  size="large"
+                  showFirstButton
+                  showLastButton
+                />
+              </Box>
+            )}
           </>
         )}
 

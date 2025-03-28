@@ -17,10 +17,18 @@ export const useChannels = (skipCache = false) => {
     queryFn: () => channelsAPI.getAll(1, 42, skipCache),
     staleTime: skipCache ? 0 : 5 * 60 * 1000, // If skipCache, always consider data stale
     gcTime: 10 * 60 * 1000,   // Keep unused data in cache for 10 minutes
-    select: (response) => ({
-      channels: response.data.sort((a, b) => new Date(b.parsed_at) - new Date(a.parsed_at)),
-      totalCount: response.data.length > 0 ? response.data[0].total_count : 0
-    })
+    select: (response) => {
+      console.log("API Response for Channels:", response.data);
+      // Check the first item to see what properties are available
+      if (response.data && response.data.length > 0) {
+        console.log("First channel structure:", JSON.stringify(response.data[0], null, 2));
+      }
+      
+      return {
+        channels: response.data.sort((a, b) => new Date(b.parsed_at) - new Date(a.parsed_at)),
+        totalCount: response.data.length > 0 ? response.data[0].total_count : 0
+      };
+    }
   });
 
   // Custom refetch function that can skip the cache on demand

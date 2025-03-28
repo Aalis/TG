@@ -49,6 +49,17 @@ import { useGroups } from '../hooks/useGroups';
 import { useQueryClient } from '@tanstack/react-query';
 import { SlideTransition } from '../utils/transitions';
 
+// Pagination constants
+const ITEMS_PER_PAGE = 42;  // Show 42 items at once
+const MAX_TOTAL_ITEMS = 42;
+
+// Helper function to get page from URL search params
+const getPageFromUrl = (search) => {
+  const params = new URLSearchParams(search);
+  const pageParam = params.get('page');
+  return pageParam ? parseInt(pageParam, 10) : 1;
+};
+
 const ParsedGroups = () => {
   const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,23 +82,15 @@ const ParsedGroups = () => {
     error: null,
   });
   
-  // Pagination constants
-  const ITEMS_PER_PAGE = 42;
-  const MAX_TOTAL_ITEMS = 42;
-  
   const navigate = useNavigate();
   const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
 
-  // Get page from URL query parameter or default to 1
-  const getPageFromUrl = useCallback(() => {
-    return 1;  // Always return 1 since we're showing all items
-  }, []);
-
-  // Initialize page from URL on component mount
-  const [page, setPage] = useState(getPageFromUrl());
+  // Initialize states
+  const [page, setPage] = useState(() => getPageFromUrl(location.search));
   const [paginatedGroups, setPaginatedGroups] = useState([]);
+  const [filteredGroups, setFilteredGroups] = useState([]);
   
   // Use the groups hook for caching
   const { 
@@ -112,49 +115,48 @@ const ParsedGroups = () => {
     const newPath = location.pathname + (newSearch ? `?${newSearch}` : '');
     
     navigate(newPath, { replace: false });
-  }, [location.pathname, location.search, navigate]);
+  }, [location.search, location.pathname, navigate]);
 
-  // Handle page change from pagination component
-  const handlePageChange = useCallback((event, newPage) => {
+  // Update URL when page changes
+  const handlePageChange = useCallback((newPage) => {
     setPage(newPage);
     updateUrlWithPage(newPage);
-    window.scrollTo(0, 0);
   }, [updateUrlWithPage]);
 
   // Sync page state with URL when URL changes (e.g., back button)
   useEffect(() => {
-    const urlPage = getPageFromUrl();
+    const urlPage = getPageFromUrl(location.search);
     if (page !== urlPage) {
       setPage(urlPage);
     }
-  }, [location.search, getPageFromUrl, page]);
+  }, [location.search, page]);
 
-  // Use memo for filtering groups
-  const filteredGroups = useMemo(() => {
-    if (!groups || groups.length === 0) return [];
-    
+  // Filter groups when search term changes
+  useEffect(() => {
     if (searchTerm.trim() === '') {
-      return groups;
+      setFilteredGroups(groups);
     } else {
       const term = searchTerm.toLowerCase();
-      return groups.filter(
+      const filtered = groups.filter(
         (group) =>
           group.group_name.toLowerCase().includes(term) ||
           (group.group_username && group.group_username.toLowerCase().includes(term))
       );
+      setFilteredGroups(filtered);
     }
-  }, [searchTerm, groups]);
-
-  // Update paginated groups when filtered groups changes
-  useEffect(() => {
-    setPaginatedGroups(filteredGroups);
-    
-    // Reset to first page when search changes the results
-    if (page !== 1 && searchTerm.trim() !== '') {
+    // Reset to first page when search changes
+    if (page !== 1) {
       setPage(1);
       updateUrlWithPage(1);
     }
-  }, [filteredGroups, page, searchTerm, updateUrlWithPage]);
+  }, [searchTerm, groups, page, updateUrlWithPage]);
+
+  // Update paginated groups when filtered groups or page changes
+  useEffect(() => {
+    const startIndex = (page - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    setPaginatedGroups(filteredGroups.slice(startIndex, endIndex));
+  }, [filteredGroups, page]);
 
   // Add cleanup on unmount
   useEffect(() => {
@@ -602,7 +604,7 @@ const ParsedGroups = () => {
                       navigate(`/groups/${group.id}`);
                     }}
                   >
-                    <CardContent>
+                    <CardContent sx={{ pb: 0 }}>
                       <Typography variant="h6" noWrap gutterBottom>
                         {group.group_name}
                       </Typography>
@@ -611,19 +613,21 @@ const ParsedGroups = () => {
                         {group.group_username ? `@${group.group_username}` : t('telegram.privateGroup')}
                       </Typography>
                       
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', mt: 1, mb: 1, gap: 1 }}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mt: 1, mb: 2 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
                           <Chip 
-                            label={`${group.member_count.toLocaleString()} ${t('common.members')}`} 
+                            label={`${(group.member_count || 0).toLocaleString()} ${t('common.members')}`} 
                             size="small" 
                             color="primary" 
                             variant="outlined"
+                            sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
                           />
                           <Chip 
                             label={`${(group.members?.length || 0).toLocaleString()} ${t('common.usersFound')}`} 
                             size="small" 
                             color="info" 
                             variant="outlined"
+                            sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
                           />
                         </Box>
                         <Chip 
@@ -631,10 +635,11 @@ const ParsedGroups = () => {
                           size="small" 
                           color={group.is_public ? 'success' : 'default'} 
                           variant="outlined"
+                          sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
                         />
                       </Box>
                       
-                      <Typography variant="caption" color="text.secondary" display="block">
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
                         {t('common.parsed')}: {(() => {
                           // Parse the timestamp from the server 
                           const timestamp = group.parsed_at;
@@ -677,6 +682,21 @@ const ParsedGroups = () => {
                 </Grid>
               ))}
             </Grid>
+            
+            {/* Pagination */}
+            {filteredGroups.length > ITEMS_PER_PAGE && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+                <Pagination 
+                  count={Math.ceil(filteredGroups.length / ITEMS_PER_PAGE)} 
+                  page={page} 
+                  onChange={(e, newPage) => handlePageChange(newPage)}
+                  color="primary"
+                  size="large"
+                  showFirstButton
+                  showLastButton
+                />
+              </Box>
+            )}
           </>
         )}
         
