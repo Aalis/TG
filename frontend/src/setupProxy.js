@@ -12,6 +12,16 @@ module.exports = function(app) {
     })
   );
 
+  // Serve manifest.json from public directory - handle both paths
+  app.use('/manifest.json', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/manifest.json'));
+  });
+
+  // Handle the PUBLIC_URL path
+  app.use('/PUBLIC_URL/manifest.json', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/manifest.json'));
+  });
+  
   // Handle any other route by serving the index.html
   app.use((req, res, next) => {
     if (req.method === 'GET' && !req.url.includes('.')) {
