@@ -54,6 +54,7 @@ import ParseButtonHeader from '../components/ParseButtonHeader';
 import { useChannels, CHANNELS_QUERY_KEY } from '../hooks/useChannels';
 import { useQueryClient } from '@tanstack/react-query';
 import { SlideTransition } from '../utils/transitions';
+import { useAuth } from '../context/AuthContext';
 
 // Pagination constants
 const ITEMS_PER_PAGE = 42;  // Show all items at once
@@ -70,6 +71,10 @@ const ParsedChannels = () => {
   const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  // Check if user is in demo mode (is_active but no can_parse)
+  const isInDemoMode = user?.is_active && !user?.can_parse;
 
   // Initialize states
   const [searchTerm, setSearchTerm] = useState('');
@@ -642,7 +647,15 @@ const ParsedChannels = () => {
             // Open the dialog
             setParseDialogOpen(true);
           }}
+          disabled={isInDemoMode}
+          disabledTooltip={t('telegram.demoModeChannelDisabled', 'Channel parsing is disabled in demo mode')}
         />
+        
+        {isInDemoMode && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            {t('telegram.demoModeMessage', 'You are in demo mode. Channel parsing is disabled, but you can parse groups.')}
+          </Alert>
+        )}
         
         {error && (
           <Alert severity="error" sx={{ mb: 3 }}>

@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Chip, Tooltip } from '@mui/material';
 import TimerIcon from '@mui/icons-material/Timer';
 import BlockIcon from '@mui/icons-material/Block';
+import DemoIcon from '@mui/icons-material/NewReleases';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { ru, enUS } from 'date-fns/locale';
 
-export default function ParsePermissionCountdown({ expiresAt, canParse }) {
+export default function ParsePermissionCountdown({ expiresAt, canParse, isDemoMode = false }) {
     const { t, i18n } = useTranslation();
     const [timeLeft, setTimeLeft] = useState('');
     const [isExpired, setIsExpired] = useState(false);
@@ -33,6 +34,21 @@ export default function ParsePermissionCountdown({ expiresAt, canParse }) {
 
         return () => clearInterval(interval);
     }, [expiresAt, t, i18n.language]);
+
+    // Show Demo mode chip when user is active but doesn't have can_parse
+    if (isDemoMode) {
+        return (
+            <Tooltip title={t('telegram.demoModeInfo', 'Demo mode: You can only parse groups, not channels')}>
+                <Chip
+                    icon={<DemoIcon />}
+                    label={t('common.demoMode', 'Demo')}
+                    color="warning"
+                    size="small"
+                    sx={{ ml: 2 }}
+                />
+            </Tooltip>
+        );
+    }
 
     if (!canParse) {
         return (

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.core.config import settings
 from app.database.database import SessionLocal
-from app.database.models import User
+from app.database.models import User, TelegramSession
 from app.schemas.token import TokenPayload
 
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -90,4 +90,48 @@ def get_current_user_with_parse_permission(
             detail="Your parsing subscription has expired. Please purchase a new subscription to continue parsing"
         )
         
-    return current_user 
+    return current_user
+
+
+def get_current_user_with_group_parse_permission(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """
+    Verify the user has permission to parse groups.
+    
+    In demo mode (user is active but doesn't have can_parse), 
+    they are still allowed to parse groups but not channels.
+    """
+    # Check if user is superuser (they always have parse permission)
+    if current_user.is_superuser:
+        return current_user
+        
+    # In demo mode, active users can parse groups even without can_parse permission
+    if current_user.is_active:
+        # For demo mode users (active but without can_parse), 
+        # verify they have an active Telegram session
+        if not current_user.can_parse:
+            # Only check for session if this is a group parse operation
+            active_session = db.query(TelegramSession).filter(
+                TelegramSession.user_id == current_user.id,
+                TelegramSession.is_active == True,
+                TelegramSession.session_string.isnot(None)
+            ).first()
+            
+            if not active_session:
+                raise HTTPException(
+                    status_code=400,
+                    detail="You need an active Telegram session to parse groups. Please go to the Sessions page and add a session."
+                )
+        
+        return current_user
+    
+    # For non-active users, additional checks would apply
+    # But since we already checked is_active in get_current_active_user, 
+    # we should never reach this point
+    
+    raise HTTPException(
+        status_code=403,
+        detail="You don't have permission to parse groups"
+    ) 

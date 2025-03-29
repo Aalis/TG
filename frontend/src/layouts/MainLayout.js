@@ -203,6 +203,7 @@ const MainLayout = ({ children }) => {
               <ParsePermissionCountdown 
                 expiresAt={user?.parse_permission_expires} 
                 canParse={user?.can_parse}
+                isDemoMode={user?.is_active && !user?.can_parse}
               />
               <IconButton sx={{ ml: 1 }} onClick={toggleTheme} color="inherit">
                 {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}

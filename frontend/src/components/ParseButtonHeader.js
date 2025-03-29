@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Typography, Button, Tooltip } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 
@@ -11,7 +11,9 @@ const ParseButtonHeader = ({
   title, 
   buttonText, 
   onButtonClick, 
-  entityType = 'channel' // 'channel' or 'group'
+  entityType = 'channel', // 'channel' or 'group'
+  disabled = false,
+  disabledTooltip = ''
 }) => {
   const { t } = useTranslation();
   
@@ -20,6 +22,18 @@ const ParseButtonHeader = ({
     ? t('telegram.parseNewChannel') 
     : t('telegram.parseNewGroup');
   
+  const button = (
+    <Button
+      variant="contained"
+      color="primary"
+      startIcon={<AddIcon />}
+      onClick={onButtonClick}
+      disabled={disabled}
+    >
+      {buttonText || defaultButtonText}
+    </Button>
+  );
+
   return (
     <Box 
       sx={{ 
@@ -38,14 +52,13 @@ const ParseButtonHeader = ({
         {title}
       </Typography>
       
-      <Button
-        variant="contained"
-        color="primary"
-        startIcon={<AddIcon />}
-        onClick={onButtonClick}
-      >
-        {buttonText || defaultButtonText}
-      </Button>
+      {disabled && disabledTooltip ? (
+        <Tooltip title={disabledTooltip}>
+          <span>{button}</span>
+        </Tooltip>
+      ) : (
+        button
+      )}
     </Box>
   );
 };

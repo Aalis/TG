@@ -48,11 +48,13 @@ import {
 import { channelsAPI } from '../services/api';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../context/AuthContext';
 
 const ChannelDetails = () => {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [showOnlyPremium, setShowOnlyPremium] = useState(false);
@@ -64,6 +66,9 @@ const ChannelDetails = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [showBots, setShowBots] = useState(true);
+
+  // Check if user is in demo mode (is_active but no can_parse)
+  const isInDemoMode = user?.is_active && !user?.can_parse;
 
   // Use React Query to fetch channel details
   const { 
@@ -272,16 +277,27 @@ const ChannelDetails = () => {
           {t('common.back')}
         </Button>
         
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/channels', { state: { openParseDialog: true } })}
-          size="medium"
-        >
-          {t('telegram.parseNewChannel')}
-        </Button>
+        <Tooltip title={isInDemoMode ? t('telegram.demoModeChannelDisabled', 'Парсинг каналов недоступен в демо-режиме') : ''}>
+          <span>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/channels', { state: { openParseDialog: true } })}
+              size="medium"
+              disabled={isInDemoMode}
+            >
+              {t('telegram.parseNewChannel')}
+            </Button>
+          </span>
+        </Tooltip>
       </Box>
+      
+      {isInDemoMode && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {t('telegram.demoModeMessage', 'Вы находитесь в демо-режиме. Парсинг каналов отключен, но вы можете парсить группы.')}
+        </Alert>
+      )}
       
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

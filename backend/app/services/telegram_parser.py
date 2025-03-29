@@ -176,16 +176,57 @@ class TelegramParserService:
 
     async def _extract_group_id(self, group_link: str) -> str:
         """Extract group ID or username from link"""
+        logging.info(f"Extracting group ID from: {group_link}")
+        
+        # Clean the input
+        group_link = group_link.strip()
+        
+        # Return as-is if it's a numeric ID
+        if group_link.lstrip('-').isdigit():
+            logging.info(f"Detected numeric ID: {group_link}")
+            return group_link
+        
         # Handle t.me links
         if "t.me/" in group_link:
-            username = group_link.split("t.me/")[1].split("/")[0].split("?")[0]
+            # Remove protocol and domain
+            group_link = group_link.split("t.me/")[1]
+            
+            # Remove any trailing parameters or path components
+            username = group_link.split("/")[0].split("?")[0]
+            logging.info(f"Extracted from t.me link: {username}")
             return username
         
         # Handle direct links with @
         if group_link.startswith("@"):
-            return group_link[1:]
+            username = group_link[1:]
+            logging.info(f"Extracted from @ prefix: {username}")
+            return username
         
-        # Handle direct usernames
+        # Handle Telegram app links
+        if "telegram.me/" in group_link:
+            username = group_link.split("telegram.me/")[1].split("/")[0].split("?")[0]
+            logging.info(f"Extracted from telegram.me link: {username}")
+            return username
+            
+        # Handle invitation links (public and private)
+        if "t.me/+" in group_link or "telegram.me/+" in group_link:
+            invite_code = group_link.split("/+")[1].split("/")[0].split("?")[0]
+            logging.info(f"Extracted invitation code: {invite_code}")
+            return "+" + invite_code
+            
+        # Handle joinchat links
+        if "t.me/joinchat/" in group_link or "telegram.me/joinchat/" in group_link:
+            invite_hash = group_link.split("/joinchat/")[1].split("/")[0].split("?")[0]
+            logging.info(f"Extracted joinchat hash: {invite_hash}")
+            return invite_hash
+        
+        # Handle direct usernames without @
+        if re.match(r'^[a-zA-Z][a-zA-Z0-9_]{3,}$', group_link):
+            logging.info(f"Detected username format: {group_link}")
+            return group_link
+        
+        # If we couldn't recognize the format, log it and return as-is
+        logging.warning(f"Unrecognized group link format: {group_link}")
         return group_link
 
     async def _get_group_entity(self, group_identifier: str) -> Tuple[Any, bool]:
@@ -386,14 +427,23 @@ class TelegramParserService:
             ).first()
 
             if not session:
+                logging.error(f"No active session found for user {user_id}")
                 raise ValueError("No active Telegram session found. Please add a session first.")
+            
+            # Log session details (excluding sensitive data)
+            logging.info(f"Using active session for user {user_id}, session ID: {session.id}")
 
             # Always use session for all operations
             self.session_string = session.session_string
             self.bot_token = None
 
             self.__class__._update_progress("connecting", message="Connecting to Telegram...")
-            await self._connect()
+            try:
+                await self._connect()
+                logging.info(f"Successfully connected to Telegram API")
+            except Exception as conn_error:
+                logging.error(f"Failed to connect to Telegram with session: {str(conn_error)}")
+                raise ValueError(f"Failed to connect to Telegram: {str(conn_error)}")
             
             # Check for cancellation
             progress = self.__class__.get_progress()
@@ -402,21 +452,29 @@ class TelegramParserService:
             
             # Chat validation
             self.__class__._update_progress("validation", message="Validating chat...")
+            logging.info(f"Validating group with identifier: {group_link}")
             
             try:
                 # Handle numeric IDs (from dialog list) and links differently
                 if group_link.lstrip('-').isdigit():
                     # Direct numeric ID from dialog list
+                    logging.info(f"Parsing numeric group ID: {group_link}")
                     chat_entity = await self.client.get_entity(int(group_link))
                 else:
                     # Handle links and usernames
+                    logging.info(f"Extracting group ID from link: {group_link}")
                     chat_id = await self._extract_group_id(group_link)
+                    logging.info(f"Extracted ID: {chat_id}")
                     chat_entity = await self.client.get_entity(chat_id)
                 
                 if not chat_entity:
+                    logging.error(f"Entity lookup returned None for {chat_id if 'chat_id' in locals() else group_link}")
                     raise ValueError("Could not find the chat")
                 
+                logging.info(f"Found entity: {getattr(chat_entity, 'id', 'unknown')} ({getattr(chat_entity, 'title', 'unknown')})")
+                
             except ValueError as e:
+                logging.warning(f"Direct entity lookup failed: {str(e)}, trying to find in dialogs")
                 # Try to get from dialogs if direct lookup fails
                 try:
                     result = await self.client(GetDialogsRequest(
@@ -427,6 +485,8 @@ class TelegramParserService:
                         hash=0
                     ))
                     
+                    logging.info(f"Retrieved {len(result.dialogs)} dialogs, searching for match")
+                    
                     for dialog in result.dialogs:
                         # Check for cancellation
                         progress = self.__class__.get_progress()
@@ -434,18 +494,37 @@ class TelegramParserService:
                             raise ValueError("Parsing cancelled by user")
                             
                         peer = dialog.peer
-                        if (hasattr(peer, 'user_id') and str(peer.user_id) == group_link.lstrip('-')) or \
-                           (hasattr(peer, 'channel_id') and str(peer.channel_id) == group_link.lstrip('-')) or \
-                           (hasattr(peer, 'chat_id') and str(peer.chat_id) == group_link.lstrip('-')):
+                        peer_id = None
+                        
+                        if hasattr(peer, 'user_id'):
+                            peer_id = str(peer.user_id)
+                            peer_type = "user"
+                        elif hasattr(peer, 'channel_id'):
+                            peer_id = str(peer.channel_id)
+                            peer_type = "channel"
+                        elif hasattr(peer, 'chat_id'):
+                            peer_id = str(peer.chat_id)
+                            peer_type = "chat"
+                        
+                        logging.debug(f"Checking peer: {peer_type} {peer_id}")
+                        
+                        if peer_id and peer_id == group_link.lstrip('-'):
+                            logging.info(f"Found matching dialog: {peer_type} {peer_id}")
                             # Found the chat in dialogs
                             chat_entity = await self.client.get_entity(peer)
                             if chat_entity:
+                                logging.info(f"Successfully retrieved entity from dialog")
                                 break
                     else:
+                        logging.error(f"Group not found in any of {len(result.dialogs)} dialogs: {group_link}")
                         raise ValueError("Could not find the chat. Please check the ID/link and try again.")
+                        
                 except Exception as inner_e:
+                    logging.error(f"Error accessing dialogs: {str(inner_e)}")
                     raise ValueError(f"Error accessing chat: {str(inner_e)}")
+                    
             except Exception as e:
+                logging.error(f"Unexpected error accessing chat: {str(e)}")
                 raise ValueError(f"Error accessing chat: {str(e)}")
             
             # Get chat info

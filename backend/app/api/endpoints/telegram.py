@@ -283,25 +283,62 @@ async def parse_group(
     *,
     db: Session = Depends(deps.get_db),
     request: GroupParseRequest,
-    current_user: User = Depends(deps.get_current_user_with_parse_permission),
+    current_user: User = Depends(deps.get_current_user_with_group_parse_permission),
 ) -> Any:
     """Parse a Telegram group"""
     try:
+        logging.info(f"Starting group parsing for user {current_user.id} with link {request.group_link}")
+        
         parser = TelegramParserService(
             api_id=settings.API_ID,
             api_hash=settings.API_HASH,
         )
         
-        group = await parser.parse_group(
-            db=db,
-            group_link=request.group_link,
-            user_id=current_user.id,
-            scan_comments=request.scan_comments,
-            comment_limit=request.comment_limit if request.scan_comments else 100
-        )
+        try:
+            group = await parser.parse_group(
+                db=db,
+                group_link=request.group_link,
+                user_id=current_user.id,
+                scan_comments=request.scan_comments,
+                comment_limit=request.comment_limit if request.scan_comments else 100
+            )
+        except ValueError as e:
+            error_message = str(e)
+            logging.error(f"Value error in parse_group: {error_message}")
+            
+            # Provide more user-friendly messages for common errors
+            if "No active Telegram session found" in error_message:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No active Telegram session found. Please go to the Sessions page and add a session first."
+                )
+            elif "Could not find the chat" in error_message:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Could not find the group. Please check the group link or ID and try again."
+                )
+            elif "Parsing cancelled by user" in error_message:
+                return {
+                    "success": False,
+                    "message": "Parsing was cancelled by user",
+                    "group": None
+                }
+            else:
+                # For other value errors
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Error parsing group: {error_message}"
+                )
+        except Exception as e:
+            logging.error(f"Unexpected error in parse_group: {str(e)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unexpected error parsing group: {str(e)}"
+            )
         
         # Ensure the group was created and is in the database
         if not group:
+            logging.error("Group was not created properly")
             raise HTTPException(
                 status_code=400,
                 detail="Failed to create group in database"
@@ -310,6 +347,7 @@ async def parse_group(
         # Double-check that we can retrieve the group
         saved_group = crud.telegram.get_group_by_id(db, group_id=group.id)
         if not saved_group:
+            logging.error(f"Could not retrieve saved group with ID {group.id}")
             raise HTTPException(
                 status_code=400,
                 detail="Group was not properly saved to database"
@@ -318,6 +356,8 @@ async def parse_group(
         # Invalidate the groups cache after successful parsing
         from app.core.redis_client import invalidate_parsed_groups_cache
         await invalidate_parsed_groups_cache(current_user.id)
+        
+        logging.info(f"Successfully parsed group {group.group_name} (ID: {group.id}) for user {current_user.id}")
         
         return {
             "success": True,
