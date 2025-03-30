@@ -73,8 +73,10 @@ const ParsedChannels = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  // Check if user is in demo mode (is_active but no can_parse)
-  const isInDemoMode = user?.is_active && !user?.can_parse;
+  // Consider a user in demo mode if they are active but don't have can_parse permission
+  // OR if their parse permission has expired
+  const isInDemoMode = (user?.is_active && !user?.can_parse) || 
+                       (user?.parse_permission_expires && new Date(user.parse_permission_expires) < new Date());
 
   // Initialize states
   const [searchTerm, setSearchTerm] = useState('');

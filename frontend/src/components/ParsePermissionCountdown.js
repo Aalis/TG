@@ -35,13 +35,15 @@ export default function ParsePermissionCountdown({ expiresAt, canParse, isDemoMo
         return () => clearInterval(interval);
     }, [expiresAt, t, i18n.language]);
 
-    // Show Demo mode chip when user is active but doesn't have can_parse
-    if (isDemoMode) {
+    // Show Demo mode chip when:
+    // 1. User is active but doesn't have can_parse permission, OR
+    // 2. User's parse permission has expired
+    if (isDemoMode || isExpired) {
         return (
             <Tooltip title={t('telegram.demoModeInfo', 'Demo mode: You can only parse groups, not channels')}>
                 <Chip
                     icon={<DemoIcon />}
-                    label={t('common.demoMode', 'Demo')}
+                    label={t('telegram.demoMode', 'Demo')}
                     color="warning"
                     size="small"
                     sx={{ ml: 2 }}
@@ -80,16 +82,16 @@ export default function ParsePermissionCountdown({ expiresAt, canParse, isDemoMo
 
     return (
         <Tooltip title={t(
-            isExpired ? 'telegram.parsePermissionExpired' : 'telegram.parsePermissionExpires', 
+            'telegram.parsePermissionExpires', 
             {
                 date: format(new Date(expiresAt), 'dd.MM.yyyy HH:mm')
             },
-            `Parse permission ${isExpired ? 'expired' : 'expires'} on ${format(new Date(expiresAt), 'dd.MM.yyyy HH:mm')}`
+            `Parse permission expires on ${format(new Date(expiresAt), 'dd.MM.yyyy HH:mm')}`
         )}>
             <Chip
                 icon={<TimerIcon />}
-                label={isExpired ? t('common.expired', 'Expired') : `${t('common.left', 'left')} ${timeLeft}`}
-                color={isExpired ? 'error' : 'success'}
+                label={`${t('common.left', 'left')} ${timeLeft}`}
+                color="success"
                 size="small"
                 sx={{ ml: 2 }}
             />

@@ -67,8 +67,10 @@ const ChannelDetails = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [showBots, setShowBots] = useState(true);
 
-  // Check if user is in demo mode (is_active but no can_parse)
-  const isInDemoMode = user?.is_active && !user?.can_parse;
+  // Consider a user in demo mode if they are active but don't have can_parse permission
+  // OR if their parse permission has expired
+  const isInDemoMode = (user?.is_active && !user?.can_parse) || 
+                       (user?.parse_permission_expires && new Date(user.parse_permission_expires) < new Date());
 
   // Use React Query to fetch channel details
   const { 
