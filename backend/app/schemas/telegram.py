@@ -152,8 +152,8 @@ class ChannelParseRequest(BaseModel):
     def validate_post_limit(cls, v):
         if v <= 0:
             raise ValueError('post_limit must be greater than 0')
-        if v > 200:
-            raise ValueError('post_limit cannot exceed 200')
+        if v > 500:
+            raise ValueError('post_limit cannot exceed 500')
         return v
 
 

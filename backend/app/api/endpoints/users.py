@@ -178,7 +178,7 @@ async def verify_email(
 ) -> Any:
     """
     Verify user email with token and redirect to login page.
-    Also grants 1-hour parsing permission upon verification.
+    Also sets user to demo mode (active but without channel parsing permission).
     """
     print(f"Email verification requested with token: {token}")
     print(f"Current SERVER_HOST: {settings.SERVER_HOST}")
@@ -206,21 +206,17 @@ async def verify_email(
             detail="Verification token has expired",
         )
     
-    # Calculate parse permission expiry (1 hour from now)
-    parse_permission_expires = now + timedelta(hours=1)
-    print(f"Setting parse permission expiry to: {parse_permission_expires}")
-    
-    # Verify user and grant parse permission
+    # Verify user and set to demo mode (active but without channel parsing permission)
     user_update = UserUpdate(
         is_active=True,
         email_verified=True,
         verification_token=None,
         verification_token_expires=None,
-        can_parse=True,
-        parse_permission_expires=parse_permission_expires
+        can_parse=False,  # Demo mode: no channel parsing permission
+        parse_permission_expires=None
     )
     user = crud.user.update(db, db_obj=user, obj_in=user_update)
-    print(f"User updated successfully. Email verified: {user.email_verified}, can parse: {user.can_parse}")
+    print(f"User updated successfully. Email verified: {user.email_verified}, in demo mode: {not user.can_parse}")
     
     # Redirect to frontend login page with success message
     frontend_login_url = f"{settings.FRONTEND_URL}/login?verified=true"

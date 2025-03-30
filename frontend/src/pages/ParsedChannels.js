@@ -329,7 +329,7 @@ const ParsedChannels = () => {
   // Update the onChange handler for the custom input
   const handleCustomPostLimitChange = (e) => {
     const value = parseInt(e.target.value, 10);
-    if (!isNaN(value) && value > 0 && value <= 200) {
+    if (!isNaN(value) && value > 0 && value <= 500) {
       setCustomPostLimit(value);
       setPostLimit(value);
     }
@@ -368,11 +368,11 @@ const ParsedChannels = () => {
     }
 
     // Validate post limit
-    if (typeof postLimit !== 'number' || postLimit <= 0 || postLimit > 200) {
+    if (typeof postLimit !== 'number' || postLimit <= 0 || postLimit > 500) {
       setParsingStatus({
         loading: false,
         success: false,
-        error: 'Please select a valid post limit (between 1 and 200)',
+        error: 'Please select a valid post limit (between 1 and 500)',
       });
       return;
     }
@@ -655,7 +655,18 @@ const ParsedChannels = () => {
         
         {isInDemoMode && (
           <Alert severity="info" sx={{ mb: 3 }}>
-            {t('telegram.demoModeMessage', 'You are in demo mode. Channel parsing is disabled, but you can parse groups.')}
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flex: 1 }}>{t('telegram.demoModeMessage', 'You are in demo mode. Channel parsing is disabled, but you can parse groups.')}</Typography>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                onClick={() => navigate('/subscribe')}
+                sx={{ whiteSpace: 'nowrap', ml: 2 }}
+              >
+                {t('common.subscribe', 'Subscribe')}
+              </Button>
+            </Box>
           </Alert>
         )}
         
@@ -692,18 +703,33 @@ const ParsedChannels = () => {
                 <Typography variant="body1" color="text.secondary" paragraph>
                   {t('telegram.checkActiveSession')} <Link to="/sessions" style={{ color: '#1976d2', fontWeight: 500 }}>{t('telegram.session')}</Link>.
                 </Typography>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<AddIcon />}
-                  onClick={() => {
-                    // Clear any previous error messages when opening the dialog
-                    setParsingStatus({ loading: false, success: false, error: null });
-                    setParseDialogOpen(true);
-                  }}
-                >
-                  {t('telegram.parseFirstChannel')}
-                </Button>
+                {isInDemoMode ? (
+                  <Tooltip title={t('telegram.demoModeChannelDisabled', 'Channel parsing is not available in demo mode')}>
+                    <span>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<AddIcon />}
+                        disabled={true}
+                      >
+                        {t('telegram.parseFirstChannel')}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      // Clear any previous error messages when opening the dialog
+                      setParsingStatus({ loading: false, success: false, error: null });
+                      setParseDialogOpen(true);
+                    }}
+                  >
+                    {t('telegram.parseFirstChannel')}
+                  </Button>
+                )}
               </>
             ) : (
               <>
@@ -944,7 +970,8 @@ const ParsedChannels = () => {
                 <MenuItem value={10}>{t('common.last10Posts')}</MenuItem>
                 <MenuItem value={100}>{t('common.last100Posts')}</MenuItem>
                 <MenuItem value={200}>{t('telegram.last200Posts')}</MenuItem>
-                <MenuItem value="custom">{t('common.customUpTo200')}</MenuItem>
+                <MenuItem value={500}>{t('common.last500Posts')}</MenuItem>
+                <MenuItem value="custom">{t('common.customUpTo500')}</MenuItem>
               </Select>
               <FormHelperText>
                 {t('common.selectHowManyRecentPosts')}
@@ -959,9 +986,9 @@ const ParsedChannels = () => {
                 fullWidth
                 variant="outlined"
                 value={customPostLimit}
-                InputProps={{ inputProps: { min: 1, max: 200 } }}
+                InputProps={{ inputProps: { min: 1, max: 500 } }}
                 onChange={handleCustomPostLimitChange}
-                helperText={t('common.enterNumberBetween1And200')}
+                helperText={t('common.enterNumberBetween1And500', 'Enter a number between 1 and 500')}
                 sx={{ mt: 2 }}
                 autoFocus
               />
