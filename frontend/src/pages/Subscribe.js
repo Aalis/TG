@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../context/AuthContext';
 import {
   Box,
   Typography,
@@ -31,6 +32,7 @@ import QRCode from 'qrcode';
 const Subscribe = () => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const { user } = useAuth();
   const [qrDialog, setQrDialog] = useState({ open: false, address: '', label: '', type: '' });
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   
@@ -39,6 +41,9 @@ const Subscribe = () => {
     eth: '0xDd2C0e3B2E144717eAFD97251D4939a2ee5ECa0f',
     btc: 'bc1q0r3nmn4fwxeesagnsh4sukhv9ankdpyu56zzzs'
   };
+
+  // Check if user is in demo mode (no can_parse permission)
+  const isInDemoMode = user && user.is_active && !user.can_parse;
 
   useEffect(() => {
     if (qrDialog.address && qrDialog.type) {
@@ -178,13 +183,13 @@ const Subscribe = () => {
       >
         <Box sx={{ 
           p: 2, 
-          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : theme.palette.primary.light,
+          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : isInDemoMode ? theme.palette.primary.light : theme.palette.success.light,
           borderBottom: `1px solid ${theme.palette.divider}`
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <InfoIcon sx={{ color: theme.palette.primary.main }} />
-            <Typography variant="subtitle1" sx={{ color: theme.palette.mode === 'dark' ? 'text.primary' : theme.palette.primary.contrastText }}>
-              {t('subscription.testPeriod')}
+            <InfoIcon sx={{ color: isInDemoMode ? theme.palette.primary.main : theme.palette.success.main }} />
+            <Typography variant="subtitle1" sx={{ color: theme.palette.mode === 'dark' ? 'text.primary' : isInDemoMode ? theme.palette.primary.contrastText : theme.palette.success.contrastText }}>
+              {isInDemoMode ? t('subscription.testPeriod') : t('subscription.subscribedMessage')}
             </Typography>
           </Box>
         </Box>

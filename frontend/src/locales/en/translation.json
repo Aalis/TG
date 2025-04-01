@@ -251,7 +251,8 @@
   },
   "subscription": {
     "title": "Subscription Information",
-    "testPeriod": "You have 1 hour to test the app after activation.",
+    "testPeriod": "You can try the demo mode with limited functionality. In demo mode, you can only parse groups, not channels.",
+    "subscribedMessage": "Thank you for subscribing! You have full access to all features including parsing both groups and channels.",
     "contactText": "To continue using the app, contact",
     "onTelegram": "on Telegram",
     "price1Day": "1 day - $1",

@@ -180,12 +180,30 @@ const TelegramSessions = () => {
       handleCloseDialog();
     } catch (err) {
       console.error('Error verifying code:', err);
-      const errorMessage = err.response?.data?.detail;
-      if (errorMessage === 'Two-factor authentication required') {
+      
+      // Log the complete error object to help debug
+      console.log('Full error object:', JSON.stringify(err, null, 2));
+      
+      // Check for error status code 400 as an indicator of possible 2FA requirement
+      const status = err.response?.status;
+      const errorDetail = err.response?.data?.detail || '';
+      
+      console.log('Error status:', status);
+      console.log('Error detail:', errorDetail);
+      
+      // If we get a 400 status with empty detail or 2FA message, assume 2FA is required
+      if (status === 400 && (
+          errorDetail === '' || 
+          errorDetail === 'Two-factor authentication required' ||
+          errorDetail?.includes('2FA') || 
+          errorDetail?.includes('two-factor') || 
+          errorDetail?.includes('password required'))) {
+        // Show 2FA password input
         setNeedsPassword(true);
         setError(texts.twoFactorAuthRequired);
       } else {
-        setError(errorMessage || texts.failedToVerifyCode);
+        // Other errors
+        setError(errorDetail || texts.failedToVerifyCode);
       }
     }
   };
@@ -381,7 +399,7 @@ const TelegramSessions = () => {
           {activeStep === 1 && (
             <Box>
               <Typography variant="subtitle1" gutterBottom>
-                {texts.verificationCodeSent}
+                {needsPassword ? texts.twoFactorAuthRequired : texts.verificationCodeSent}
               </Typography>
               
               <TextField
@@ -409,9 +427,16 @@ const TelegramSessions = () => {
                     value={twoFactorPassword}
                     onChange={(e) => setTwoFactorPassword(e.target.value)}
                     margin="normal"
-                    error={!!error}
-                    helperText={error}
+                    error={!!error && needsPassword}
+                    helperText={needsPassword && error !== texts.twoFactorAuthRequired ? error : ''}
                     disabled={isVerifying}
+                    autoFocus
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderColor: 'primary.main',
+                        boxShadow: '0 0 5px rgba(0, 123, 255, 0.3)'
+                      }
+                    }}
                   />
                 </Box>
               )}

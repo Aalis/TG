@@ -15,10 +15,12 @@ async def get_redis_client():
     
     # Check if Redis is available
     if os.environ.get("REDIS_AVAILABLE", "true").lower() == "false":
+        logging.debug("Redis marked as unavailable in environment")
         return None
     
     if redis_client is None:
         try:
+            logging.debug(f"Initializing Redis client to {settings.REDIS_HOST}:{settings.REDIS_PORT}")
             redis_client = redis.Redis(
                 host=settings.REDIS_HOST,
                 port=settings.REDIS_PORT,
@@ -30,11 +32,19 @@ async def get_redis_client():
                 retry_on_timeout=True
             )
             # Test connection
-            await redis_client.ping()
+            try:
+                await redis_client.ping()
+                logging.debug("Redis connection successful")
+            except Exception as ping_error:
+                logging.warning(f"Redis ping failed: {ping_error}")
+                redis_client = None
+                os.environ["REDIS_AVAILABLE"] = "false"
+                return None
         except Exception as e:
             logging.error(f"Failed to initialize Redis client: {e}")
             redis_client = None
             os.environ["REDIS_AVAILABLE"] = "false"
+            return None
     
     return redis_client
 
@@ -42,6 +52,10 @@ async def store_client_session_data(phone_number: str, session_data: Dict[str, A
     """Store client session data in Redis."""
     try:
         r = await get_redis_client()
+        if not r:
+            logging.warning("Redis client unavailable, skipping session data storage")
+            return False
+            
         key = f"telegram_client:{phone_number}"
         
         # Serialize the session data as JSON
@@ -52,13 +66,17 @@ async def store_client_session_data(phone_number: str, session_data: Dict[str, A
         await r.set(key, serialized_data, ex=expiry)
         return True
     except Exception as e:
-        print(f"Error storing client session data: {e}")
+        logging.error(f"Error storing client session data: {e}")
         return False
 
 async def get_client_session_data(phone_number: str) -> Optional[Dict[str, Any]]:
     """Retrieve client session data from Redis."""
     try:
         r = await get_redis_client()
+        if not r:
+            logging.warning("Redis client unavailable, skipping session data retrieval")
+            return None
+            
         key = f"telegram_client:{phone_number}"
         
         # Get from Redis
@@ -69,39 +87,51 @@ async def get_client_session_data(phone_number: str) -> Optional[Dict[str, Any]]
         # Deserialize the session data
         return json.loads(data.decode('utf-8'))
     except Exception as e:
-        print(f"Error retrieving client session data: {e}")
+        logging.error(f"Error retrieving client session data: {e}")
         return None
 
 async def delete_client_session(phone_number: str) -> bool:
     """Delete client session data from Redis."""
     try:
         r = await get_redis_client()
+        if not r:
+            logging.warning("Redis client unavailable, skipping session data deletion")
+            return False
+            
         key = f"telegram_client:{phone_number}"
         
         # Delete from Redis
         await r.delete(key)
         return True
     except Exception as e:
-        print(f"Error deleting client session: {e}")
+        logging.error(f"Error deleting client session: {e}")
         return False
 
 async def store_phone_code_hash(phone_number: str, phone_code_hash: str, expiry: int = 300) -> bool:
     """Store phone code hash in Redis."""
     try:
         r = await get_redis_client()
+        if not r:
+            logging.warning("Redis client unavailable, skipping phone code hash storage")
+            return False
+            
         key = f"phone_code_hash:{phone_number}"
         
         # Store in Redis with expiry (5 minutes by default)
         await r.set(key, phone_code_hash.encode('utf-8'), ex=expiry)
         return True
     except Exception as e:
-        print(f"Error storing phone code hash: {e}")
+        logging.error(f"Error storing phone code hash: {e}")
         return False
 
 async def get_phone_code_hash(phone_number: str) -> Optional[str]:
     """Retrieve phone code hash from Redis."""
     try:
         r = await get_redis_client()
+        if not r:
+            logging.warning("Redis client unavailable, skipping phone code hash retrieval")
+            return None
+            
         key = f"phone_code_hash:{phone_number}"
         
         # Get from Redis
@@ -112,7 +142,7 @@ async def get_phone_code_hash(phone_number: str) -> Optional[str]:
         # Convert bytes to string
         return data.decode('utf-8')
     except Exception as e:
-        print(f"Error retrieving phone code hash: {e}")
+        logging.error(f"Error retrieving phone code hash: {e}")
         return None
 
 # Functions for caching parsed channels data
