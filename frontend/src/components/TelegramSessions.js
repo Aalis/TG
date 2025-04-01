@@ -239,7 +239,11 @@ const TelegramSessions = () => {
 
   // Format phone number for display
   const formatPhoneNumber = (phone) => {
-    return phone || '-'; // Return dash if phone is null/undefined
+    if (!phone) return '-';
+    // Keep only the last 4 digits visible
+    const lastFourDigits = phone.slice(-4);
+    const maskedLength = phone.length - 4;
+    return '*'.repeat(maskedLength) + lastFourDigits;
   };
 
   return (
