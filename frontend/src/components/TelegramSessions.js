@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Typography,
   Button,
@@ -23,8 +23,18 @@ import {
   Step,
   StepLabel,
   Tooltip,
+  useTheme,
+  useMediaQuery,
+  Card,
+  CardContent,
+  CardActions,
+  Stack,
+  AppBar,
+  Toolbar,
+  BottomNavigation,
+  BottomNavigationAction,
 } from '@mui/material';
-import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Add as AddIcon, ArrowBack as ArrowBackIcon, Home as HomeIcon, Group as GroupIcon, Chat as ChatIcon, Person as PersonIcon } from '@mui/icons-material';
 import { sessionsAPI } from '../services/api';
 import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
@@ -33,8 +43,9 @@ import { useSnackbar } from 'notistack';
 import { SlideTransition } from '../utils/transitions';
 
 const TelegramSessions = () => {
-  const { t, i18n } = useTranslation();
-  const isRussian = i18n.language === 'ru';
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   // Use React Query hook instead of manual state and fetching
   const {
@@ -64,61 +75,19 @@ const TelegramSessions = () => {
   const [activeStep, setActiveStep] = useState(0);
   const [needsPassword, setNeedsPassword] = useState(false);
 
-  // Text content based on language
-  const texts = {
-    // Page header
-    pageTitle: isRussian ? "Сессии Telegram" : "Telegram Sessions",
-    addNewSession: isRussian ? "Добавить новую сессию" : "Add New Session",
-    
-    // Table headers
-    phoneNumber: isRussian ? "Номер телефона" : "Phone Number",
-    createdAt: isRussian ? "Создано" : "Created At",
-    lastUsed: isRussian ? "Последнее использование" : "Last Used",
-    active: isRussian ? "Активно" : "Active",
-    actions: isRussian ? "Действия" : "Actions",
-    
-    // Empty state
-    noSessionsFound: isRussian ? "Сессии не найдены" : "No Sessions Found",
-    addYourFirstSession: isRussian ? "Добавьте вашу первую сессию Telegram, чтобы начать работу с TG Parser" : "Add your first Telegram session to start working with TG Parser",
-    addSession: isRussian ? "Добавить сессию" : "Add Session",
-    
-    // Dialog
-    addTelegramSession: isRussian ? "Добавить сессию Telegram" : "Add Telegram Session",
-    enterPhoneNumber: isRussian ? "Введите номер телефона" : "Enter Phone Number",
-    verifyCode: isRussian ? "Подтвердить код" : "Verify Code",
-    complete: isRussian ? "Завершено" : "Complete",
-    enterPhoneNumberWithCountryCode: isRussian ? "Введите номер телефона с кодом страны" : "Enter your phone number with country code",
-    phoneNumberPlaceholder: "+1234567890",
-    phoneNumberHelperText: isRussian ? "Включите код страны (например, +7 для России)" : "Include country code (e.g. +1 for USA)",
-    verificationCodeSent: isRussian ? "Код верификации отправлен" : "Verification code has been sent",
-    verificationCodeLabel: isRussian ? "Код подтверждения" : "Verification Code",
-    twoFactorAuthRequired: isRussian ? "Требуется двухфакторная аутентификация" : "Two-factor authentication is required",
-    twoFactorPassword: isRussian ? "Пароль двухфакторной аутентификации" : "Two-Factor Password",
-    cancel: isRussian ? "Отмена" : "Cancel",
-    sendCode: isRussian ? "Отправить код" : "Send Code",
-    verifyAndLogin: isRussian ? "Подтвердить и войти" : "Verify and Login",
-    
-    // Delete confirmation
-    confirm: isRussian ? "Подтвердить" : "Confirm",
-    deleteConfirmation: isRussian ? "Вы уверены, что хотите удалить эту сессию? Это действие нельзя отменить." : "Are you sure you want to delete this session? This action cannot be undone.",
-    delete: isRussian ? "Удалить" : "Delete",
-    
-    // Errors and success messages
-    fetchError: isRussian ? "Не удалось загрузить сессии. Пожалуйста, попробуйте снова." : "Failed to fetch sessions. Please try again.",
-    phoneNumberRequired: isRussian ? "Требуется номер телефона" : "Phone number is required",
-    verificationCodeRequired: isRussian ? "Требуется код подтверждения" : "Verification code is required",
-    failedToSendCode: isRussian ? "Не удалось отправить код подтверждения" : "Failed to send verification code",
-    failedToVerifyCode: isRussian ? "Не удалось подтвердить код" : "Failed to verify code",
-    sessionAddedSuccess: isRussian ? "Сессия успешно добавлена" : "Session added successfully",
-    sessionDeletedSuccess: isRussian ? "Сессия успешно удалена" : "Session deleted successfully",
-    failedToDeleteSession: isRussian ? "Не удалось удалить сессию" : "Failed to delete session"
-  };
+  // Add event listener for the custom 'add-telegram-session' event
+  useEffect(() => {
+    const handleAddSessionEvent = () => {
+      handleAddSession();
+    };
 
-  const steps = [
-    texts.enterPhoneNumber,
-    texts.verifyCode,
-    texts.complete
-  ];
+    document.addEventListener('add-telegram-session', handleAddSessionEvent);
+    
+    // Clean up event listener on component unmount
+    return () => {
+      document.removeEventListener('add-telegram-session', handleAddSessionEvent);
+    };
+  }, []);
 
   const handleAddSession = () => {
     setOpenDialog(true);
@@ -144,7 +113,7 @@ const TelegramSessions = () => {
 
   const handleSendCode = async () => {
     if (!phoneNumber) {
-      setError(texts.phoneNumberRequired);
+      setError(t('telegram.phoneNumberRequired', 'Phone number is required'));
       return;
     }
 
@@ -159,13 +128,13 @@ const TelegramSessions = () => {
       }
     } catch (err) {
       console.error('Error sending code:', err);
-      setError(err.response?.data?.detail || texts.failedToSendCode);
+      setError(err.response?.data?.detail || t('telegram.failedToSendCode', 'Failed to send verification code'));
     }
   };
 
   const handleVerifyCode = async () => {
     if (!verificationCode) {
-      setError(texts.verificationCodeRequired);
+      setError(t('telegram.verificationCodeRequired', 'Verification code is required'));
       return;
     }
 
@@ -176,7 +145,7 @@ const TelegramSessions = () => {
         phoneCodeHash,
         password: needsPassword ? twoFactorPassword : undefined
       });
-      setSuccess(texts.sessionAddedSuccess);
+      setSuccess(t('telegram.sessionAddedSuccess', 'Session added successfully'));
       handleCloseDialog();
     } catch (err) {
       console.error('Error verifying code:', err);
@@ -200,10 +169,10 @@ const TelegramSessions = () => {
           errorDetail?.includes('password required'))) {
         // Show 2FA password input
         setNeedsPassword(true);
-        setError(texts.twoFactorAuthRequired);
+        setError(t('telegram.twoFactorAuthRequired', 'Two-factor authentication is required'));
       } else {
         // Other errors
-        setError(errorDetail || texts.failedToVerifyCode);
+        setError(errorDetail || t('telegram.failedToVerifyCode', 'Failed to verify code'));
       }
     }
   };
@@ -225,10 +194,10 @@ const TelegramSessions = () => {
       // UI feedback after successful deletion
       setDeleteDialogOpen(false);
       setSessionToDelete(null);
-      setSuccess(texts.sessionDeletedSuccess);
+      setSuccess(t('telegram.sessionDeletedSuccess', 'Session deleted successfully'));
     } catch (err) {
       console.error('Error deleting session:', err);
-      setError(texts.failedToDeleteSession);
+      setError(t('telegram.failedToDeleteSession', 'Failed to delete session'));
     }
   };
 
@@ -237,123 +206,139 @@ const TelegramSessions = () => {
     toggleSession(sessionId, newStatus);
   };
 
+  const renderMobileSession = (session) => (
+    <Card key={session.id} sx={{ mb: 1.5, bgcolor: 'background.paper', borderRadius: 1 }}>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight="medium" sx={{ mb: 0.5 }}>
+              {formatPhoneNumber(session.phone)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+              {session.created_at ? format(new Date(session.created_at), 'yyyy-MM-dd HH:mm') : '-'}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Switch
+              checked={session.is_active}
+              onChange={() => handleToggleStatus(session.id, session.is_active)}
+              disabled={isToggling}
+              size="small"
+            />
+            <IconButton 
+              color="error" 
+              onClick={() => handleDeleteClick(session)}
+              disabled={isDeleting}
+              size="small"
+              sx={{ ml: 0.5 }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+
   // Format phone number for display
   const formatPhoneNumber = (phone) => {
     if (!phone) return '-';
-    // Keep only the last 4 digits visible
     const lastFourDigits = phone.slice(-4);
     const maskedLength = phone.length - 4;
     return '*'.repeat(maskedLength) + lastFourDigits;
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" component="h1" sx={{ fontWeight: 500 }}>
-          {texts.pageTitle}
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleAddSession}
-          sx={{ 
-            textTransform: 'none',
-            borderRadius: 2,
-          }}
-        >
-          {texts.addNewSession}
-        </Button>
-      </Box>
-      
-      {queryError && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {typeof queryError === 'string' 
-            ? queryError 
-            : texts.fetchError}
-        </Alert>
-      )}
-      
+    <Box sx={{ p: isMobile ? 0 : 0 }}>
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
       
       {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess('')}>
+        <Alert severity="success" sx={{ mb: 2 }}>
           {success}
         </Alert>
       )}
       
       {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
         </Box>
-      ) : sessions.length === 0 ? (
-        <Paper sx={{ p: 5, textAlign: 'center' }}>
-          <Typography variant="h6" gutterBottom>
-            {texts.noSessionsFound}
+      ) : isError ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {queryError?.message || t('telegram.failedToFetchSessions', 'Failed to fetch sessions')}
+        </Alert>
+      ) : sessions?.length === 0 ? (
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="body1" color="text.secondary" mb={2}>
+            {t('telegram.noActiveSessionsFound', 'No active sessions found')}
           </Typography>
-          <Typography variant="body1" paragraph>
-            {texts.addYourFirstSession}
+          <Typography variant="body2" color="text.secondary" mb={3}>
+            {t('telegram.addYourFirstSession', 'Add your first session')}
           </Typography>
-          <Button
+          <Button 
             variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
             onClick={handleAddSession}
+            startIcon={<AddIcon />}
           >
-            {texts.addSession}
+            {t('telegram.addSession', 'Add Session')}
           </Button>
-        </Paper>
+        </Box>
       ) : (
-        <TableContainer component={Paper}>
-          <Table sx={{ minWidth: 650 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ width: '30%' }}>{texts.phoneNumber}</TableCell>
-                <TableCell sx={{ width: '20%' }}>{texts.createdAt}</TableCell>
-                <TableCell sx={{ width: '20%' }}>{texts.lastUsed}</TableCell>
-                <TableCell sx={{ width: '15%' }} align="center">{texts.active}</TableCell>
-                <TableCell sx={{ width: '15%' }} align="center">{texts.actions}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sessions.map((session) => (
-                <TableRow key={session.id}>
-                  <TableCell>
-                    {formatPhoneNumber(session.phone)}
-                  </TableCell>
-                  <TableCell>
-                    {session.created_at ? format(new Date(session.created_at), 'yyyy-MM-dd HH:mm') : '-'}
-                  </TableCell>
-                  <TableCell>
-                    {session.last_used ? format(new Date(session.last_used), 'yyyy-MM-dd HH:mm') : '-'}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Switch
-                      checked={session.is_active}
-                      onChange={() => handleToggleStatus(session.id, session.is_active)}
-                      disabled={isToggling}
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title={texts.delete}>
-                      <IconButton 
-                        color="error" 
-                        onClick={() => handleDeleteClick(session)}
-                        disabled={isDeleting}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <>
+          {isMobile ? (
+            <Box sx={{ mt: -1 }}>
+              {sessions.map(session => renderMobileSession(session))}
+            </Box>
+          ) : (
+            <TableContainer component={Paper} elevation={0}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('telegram.phone', 'Phone')}</TableCell>
+                    <TableCell>{t('telegram.createdAt', 'Created At')}</TableCell>
+                    <TableCell>{t('common.lastUsed', 'Last Used')}</TableCell>
+                    <TableCell>{t('telegram.status', 'Status')}</TableCell>
+                    <TableCell align="right">{t('common.actions', 'Actions')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sessions.map((session) => (
+                    <TableRow key={session.id}>
+                      <TableCell component="th" scope="row">
+                        {formatPhoneNumber(session.phone)}
+                      </TableCell>
+                      <TableCell>
+                        {session.created_at ? format(new Date(session.created_at), 'yyyy-MM-dd HH:mm') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {session.last_used ? format(new Date(session.last_used), 'yyyy-MM-dd HH:mm') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Switch
+                          checked={session.is_active}
+                          onChange={() => handleToggleStatus(session.id, session.is_active)}
+                          disabled={isToggling}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton 
+                          color="error" 
+                          onClick={() => handleDeleteClick(session)}
+                          disabled={isDeleting}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
       )}
       
       {/* Add Session Dialog */}
@@ -363,161 +348,307 @@ const TelegramSessions = () => {
         maxWidth="sm"
         fullWidth
         TransitionComponent={SlideTransition}
+        PaperProps={{
+          elevation: 0,
+          sx: {
+            bgcolor: isMobile ? 'rgba(33, 33, 33, 0.95)' : 'background.paper',
+            borderRadius: 2,
+            width: '90%',
+            maxWidth: '400px'
+          }
+        }}
         sx={{
           '& .MuiBackdrop-root': {
             backdropFilter: 'blur(2px)',
-            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)'
           }
         }}
       >
-        <DialogTitle>{texts.addTelegramSession}</DialogTitle>
-        <DialogContent>
-          <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4, mt: 2 }}>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
-          
+        <DialogContent sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          p: 3,
+          gap: 2
+        }}>
+          <Typography variant="h6" sx={{ color: isMobile ? '#fff' : 'text.primary', mb: 1 }}>
+            {t('telegram.addTelegramSession', 'Add Telegram Session')}
+          </Typography>
+
           {activeStep === 0 && (
-            <Box>
-              <Typography variant="subtitle1" gutterBottom>
-                {texts.enterPhoneNumberWithCountryCode}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Typography sx={{ color: isMobile ? '#fff' : 'text.primary' }}>
+                {t('telegram.enterPhoneNumberWithCountryCode', 'Enter phone number with country code')}
               </Typography>
+
               <TextField
                 fullWidth
-                label={texts.phoneNumber}
                 variant="outlined"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                margin="normal"
-                placeholder={texts.phoneNumberPlaceholder}
+                placeholder="+1234567890"
                 error={!!error}
-                helperText={error || texts.phoneNumberHelperText}
+                helperText={error || t('telegram.phoneNumberHelperText', 'Example: +1234567890')}
                 disabled={isSendingCode}
+                sx={{ 
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: isMobile ? 'rgba(255, 255, 255, 0.05)' : 'background.paper',
+                    borderRadius: 1,
+                    '& fieldset': {
+                      borderColor: isMobile ? '#2196f3' : 'primary.main'
+                    },
+                    '& input': {
+                      color: isMobile ? '#fff' : 'text.primary',
+                      fontSize: '1rem',
+                      py: 1.5
+                    },
+                    '&:hover fieldset': {
+                      borderColor: isMobile ? '#1976d2' : 'primary.dark'
+                    }
+                  },
+                  '& .MuiFormHelperText-root': {
+                    color: error ? 'error.main' : (isMobile ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'),
+                    ml: 0,
+                    mt: 1
+                  }
+                }}
               />
+              
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 2,
+                '& .MuiButton-root': {
+                  flex: 1,
+                  py: 1,
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  textTransform: 'uppercase'
+                }
+              }}>
+                <Button 
+                  onClick={handleCloseDialog}
+                  sx={{ 
+                    color: isMobile ? '#9e9e9e' : 'text.secondary',
+                    '&:hover': {
+                      bgcolor: isMobile ? 'rgba(158, 158, 158, 0.08)' : 'action.hover'
+                    }
+                  }}
+                >
+                  {t('common.cancel', 'CANCEL')}
+                </Button>
+
+                <Button 
+                  onClick={handleSendCode}
+                  variant={isMobile ? "contained" : "contained"}
+                  color="primary"
+                  disabled={!phoneNumber || isSendingCode}
+                >
+                  {isSendingCode ? (
+                    <CircularProgress size={24} color="inherit" />
+                  ) : (
+                    t('telegram.sendCode', 'SEND CODE')
+                  )}
+                </Button>
+              </Box>
             </Box>
           )}
-          
+
           {activeStep === 1 && (
-            <Box>
-              <Typography variant="subtitle1" gutterBottom>
-                {needsPassword ? texts.twoFactorAuthRequired : texts.verificationCodeSent}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Typography sx={{ color: isMobile ? '#fff' : 'text.primary' }}>
+                {t('telegram.enterVerificationCode', 'Enter verification code')}
               </Typography>
-              
+
               <TextField
                 fullWidth
-                label={texts.verificationCodeLabel}
                 variant="outlined"
                 value={verificationCode}
                 onChange={(e) => setVerificationCode(e.target.value)}
-                margin="normal"
-                error={!!error && !needsPassword}
-                helperText={!needsPassword && error}
+                placeholder={t('telegram.verificationCode', 'Verification Code')}
+                error={!!error}
+                helperText={error}
                 disabled={isVerifying}
+                sx={{ 
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: isMobile ? 'rgba(255, 255, 255, 0.05)' : 'background.paper',
+                    borderRadius: 1,
+                    '& fieldset': {
+                      borderColor: isMobile ? '#2196f3' : 'primary.main'
+                    },
+                    '& input': {
+                      color: isMobile ? '#fff' : 'text.primary',
+                      fontSize: '1rem',
+                      py: 1.5
+                    }
+                  },
+                  '& .MuiFormHelperText-root': {
+                    color: error ? 'error.main' : (isMobile ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'),
+                    ml: 0,
+                    mt: 1
+                  }
+                }}
               />
-              
+
               {needsPassword && (
-                <Box mt={2}>
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    {texts.twoFactorAuthRequired}
-                  </Alert>
-                  <TextField
-                    fullWidth
-                    label={texts.twoFactorPassword}
-                    variant="outlined"
-                    type="password"
-                    value={twoFactorPassword}
-                    onChange={(e) => setTwoFactorPassword(e.target.value)}
-                    margin="normal"
-                    error={!!error && needsPassword}
-                    helperText={needsPassword && error !== texts.twoFactorAuthRequired ? error : ''}
-                    disabled={isVerifying}
-                    autoFocus
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderColor: 'primary.main',
-                        boxShadow: '0 0 5px rgba(0, 123, 255, 0.3)'
+                <TextField
+                  fullWidth
+                  type="password"
+                  variant="outlined"
+                  value={twoFactorPassword}
+                  onChange={(e) => setTwoFactorPassword(e.target.value)}
+                  placeholder={t('telegram.twoFactorPassword', '2FA Password')}
+                  error={!!error}
+                  disabled={isVerifying}
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
+                      bgcolor: isMobile ? 'rgba(255, 255, 255, 0.05)' : 'background.paper',
+                      borderRadius: 1,
+                      '& fieldset': {
+                        borderColor: isMobile ? '#2196f3' : 'primary.main'
+                      },
+                      '& input': {
+                        color: isMobile ? '#fff' : 'text.primary',
+                        fontSize: '1rem',
+                        py: 1.5
                       }
-                    }}
-                  />
-                </Box>
+                    },
+                    '& .MuiFormHelperText-root': {
+                      color: error ? 'error.main' : (isMobile ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'),
+                      ml: 0,
+                      mt: 1
+                    }
+                  }}
+                />
               )}
+
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 2,
+                '& .MuiButton-root': {
+                  flex: 1,
+                  py: 1,
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  textTransform: 'uppercase'
+                }
+              }}>
+                <Button 
+                  onClick={handleCloseDialog}
+                  sx={{ 
+                    color: isMobile ? '#9e9e9e' : 'text.secondary',
+                    '&:hover': {
+                      bgcolor: isMobile ? 'rgba(158, 158, 158, 0.08)' : 'action.hover'
+                    }
+                  }}
+                >
+                  {t('common.cancel', 'CANCEL')}
+                </Button>
+
+                <Button 
+                  onClick={handleVerifyCode}
+                  variant={isMobile ? "contained" : "contained"}
+                  color="primary"
+                  disabled={!verificationCode || (needsPassword && !twoFactorPassword) || isVerifying}
+                >
+                  {isVerifying ? (
+                    <CircularProgress size={24} color="inherit" />
+                  ) : (
+                    t('telegram.verifyCode', 'VERIFY')
+                  )}
+                </Button>
+              </Box>
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button 
-            onClick={handleCloseDialog} 
-            disabled={isSendingCode || isVerifying}
-          >
-            {texts.cancel}
-          </Button>
-          
-          {activeStep === 0 && (
-            <Button 
-              onClick={handleSendCode} 
-              variant="contained" 
-              color="primary"
-              disabled={!phoneNumber || isSendingCode}
-            >
-              {isSendingCode ? (
-                <CircularProgress size={24} />
-              ) : (
-                texts.sendCode
-              )}
-            </Button>
-          )}
-          
-          {activeStep === 1 && (
-            <Button 
-              onClick={handleVerifyCode} 
-              variant="contained" 
-              color="primary"
-              disabled={!verificationCode || (needsPassword && !twoFactorPassword) || isVerifying}
-            >
-              {isVerifying ? (
-                <CircularProgress size={24} />
-              ) : (
-                texts.verifyAndLogin
-              )}
-            </Button>
-          )}
-        </DialogActions>
       </Dialog>
       
       {/* Delete Confirmation Dialog */}
       <Dialog 
         open={deleteDialogOpen} 
         onClose={handleDeleteCancel}
-        TransitionComponent={SlideTransition}
+        PaperProps={{
+          elevation: 0,
+          sx: {
+            bgcolor: 'rgba(33, 33, 33, 0.95)',
+            borderRadius: 2,
+            width: '90%',
+            maxWidth: '400px'
+          }
+        }}
         sx={{
           '& .MuiBackdrop-root': {
             backdropFilter: 'blur(2px)',
-            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)'
           }
         }}
       >
-        <DialogTitle>{texts.confirm}</DialogTitle>
-        <DialogContent>
-          <Typography>
-            {texts.deleteConfirmation}
+        <DialogContent sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          p: 3,
+          gap: 2
+        }}>
+          <Typography variant="h6" sx={{ color: '#fff', mb: 1 }}>
+            {t('actions.confirm', 'Подтвердить')}
           </Typography>
+
+          <Typography sx={{ color: '#fff', mb: 2 }}>
+            {sessionToDelete ? (
+              t('telegram.deleteSessionConfirmWithName', 'Вы уверены, что хотите удалить "{{name}}"? Это действие нельзя отменить.', {
+                name: formatPhoneNumber(sessionToDelete.phone)
+              })
+            ) : (
+              t('telegram.deleteSessionConfirm', 'Вы уверены, что хотите удалить этот сеанс? Это действие нельзя отменить.')
+            )}
+          </Typography>
+
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2,
+            '& .MuiButton-root': {
+              flex: 1,
+              py: 1,
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              textTransform: 'uppercase'
+            }
+          }}>
+            <Button 
+              onClick={handleDeleteCancel}
+              sx={{ 
+                color: '#2196f3',
+                '&:hover': {
+                  bgcolor: 'rgba(33, 150, 243, 0.08)'
+                }
+              }}
+            >
+              {t('common.cancel', 'ОТМЕНА')}
+            </Button>
+
+            <Button 
+              onClick={handleDeleteSession}
+              disabled={isDeleting}
+              sx={{ 
+                bgcolor: '#f44336',
+                color: '#fff',
+                '&:hover': {
+                  bgcolor: '#d32f2f'
+                },
+                '&:disabled': {
+                  bgcolor: 'rgba(244, 67, 54, 0.5)',
+                  color: 'rgba(255, 255, 255, 0.5)'
+                }
+              }}
+            >
+              {isDeleting ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                t('actions.delete', 'УДАЛИТЬ')
+              )}
+            </Button>
+          </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDeleteCancel} disabled={isDeleting}>
-            {texts.cancel}
-          </Button>
-          <Button 
-            onClick={handleDeleteSession} 
-            color="error" 
-            variant="contained" 
-            disabled={isDeleting}
-          >
-            {isDeleting ? <CircularProgress size={24} /> : texts.delete}
-          </Button>
-        </DialogActions>
       </Dialog>
     </Box>
   );
