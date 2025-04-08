@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Button, Tooltip } from '@mui/material';
+import { Box, Typography, Button, Tooltip, useMediaQuery, useTheme } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 
@@ -16,19 +16,55 @@ const ParseButtonHeader = ({
   disabledTooltip = ''
 }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   // If no specific button text is provided, use the default based on entity type
   const defaultButtonText = entityType === 'channel' 
     ? t('telegram.parseNewChannel') 
     : t('telegram.parseNewGroup');
-  
-  const button = (
+
+  // For mobile, show a more compact version
+  const buttonContent = isMobile ? (
+    <Button
+      variant="contained"
+      color="primary"
+      onClick={onButtonClick}
+      disabled={disabled}
+      size="small"
+      sx={{
+        minWidth: 'auto',
+        px: 2,
+        py: 1,
+        fontSize: '0.875rem',
+        whiteSpace: 'nowrap',
+        '& .MuiButton-startIcon': {
+          mr: 0.5,
+        },
+      }}
+    >
+      <AddIcon fontSize="small" />
+      {entityType === 'channel' ? t('common.newChannel', 'New') : t('common.newGroup', 'New')}
+    </Button>
+  ) : (
     <Button
       variant="contained"
       color="primary"
       startIcon={<AddIcon />}
       onClick={onButtonClick}
       disabled={disabled}
+      sx={{
+        textTransform: 'uppercase',
+        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+        py: 0.75,
+        px: 2,
+        height: '32px',
+        minHeight: '32px',
+        whiteSpace: 'nowrap',
+        '& .MuiButton-startIcon': {
+          marginRight: 0.5
+        }
+      }}
     >
       {buttonText || defaultButtonText}
     </Button>
@@ -48,16 +84,22 @@ const ParseButtonHeader = ({
         py: 1
       }}
     >
-      <Typography variant="h4" component="h1">
+      <Typography 
+        variant={isMobile ? "h5" : "h4"} 
+        component="h1"
+        sx={{
+          fontSize: isMobile ? '1.5rem' : undefined,
+        }}
+      >
         {title}
       </Typography>
       
       {disabled && disabledTooltip ? (
         <Tooltip title={disabledTooltip}>
-          <span>{button}</span>
+          <span>{buttonContent}</span>
         </Tooltip>
       ) : (
-        button
+        buttonContent
       )}
     </Box>
   );

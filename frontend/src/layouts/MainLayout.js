@@ -22,6 +22,11 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  BottomNavigation,
+  BottomNavigationAction,
+  useMediaQuery,
+  useTheme as useMuiTheme,
+  Chip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -34,6 +39,8 @@ import {
   AdminPanelSettings as AdminIcon,
   ShoppingCart as ShoppingCartIcon,
   History as SessionsIcon,
+  Home as HomeIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -53,10 +60,13 @@ const MainLayout = ({ children }) => {
   const location = useLocation();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const muiTheme = useMuiTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down('sm'));
   
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorElUser, setAnchorElUser] = useState(null);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [value, setValue] = useState(location.pathname);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -88,6 +98,11 @@ const MainLayout = ({ children }) => {
 
   const handlePrefetchSessions = () => {
     prefetchSessions(queryClient);
+  };
+
+  const handleBottomNavChange = (event, newValue) => {
+    setValue(newValue);
+    navigate(newValue);
   };
 
   const drawer = (
@@ -175,95 +190,147 @@ const MainLayout = ({ children }) => {
     </div>
   );
 
+  const bottomNav = (
+    <BottomNavigation
+      value={location.pathname}
+      onChange={handleBottomNavChange}
+      showLabels
+      sx={{
+        width: '100%',
+        position: 'fixed',
+        bottom: 0,
+        borderTop: 1,
+        borderColor: 'divider',
+        zIndex: (theme) => theme.zIndex.appBar,
+        bgcolor: 'background.paper',
+      }}
+    >
+      <BottomNavigationAction
+        label={t('navigation.sessions', 'Sessions')}
+        value="/"
+        icon={<HomeIcon />}
+      />
+      <BottomNavigationAction
+        label={t('navigation.parsedGroups', 'Groups')}
+        value="/groups"
+        icon={<GroupsIcon />}
+      />
+      <BottomNavigationAction
+        label={t('navigation.parsedChannels', 'Channels')}
+        value="/channels"
+        icon={<ChannelsIcon />}
+      />
+      <BottomNavigationAction
+        label={t('common.subscribe', 'Subscribe')}
+        value="/subscribe"
+        icon={<ShoppingCartIcon />}
+      />
+    </BottomNavigation>
+  );
+
   return (
-    <Box sx={{ display: 'flex' }}>
-      <AppBar
-        position="fixed"
-        sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` }
-        }}
-      >
-        <Container maxWidth="xl">
-          <Toolbar disableGutters>
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              edge="start"
-              onClick={handleDrawerToggle}
-              sx={{ mr: 2, display: { sm: 'none' } }}
-            >
-              <MenuIcon />
-            </IconButton>
-            <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-              {t('common.welcome', 'Welcome to Telegram Group Parser')}
-            </Typography>
-            
-            <Box sx={{ flexGrow: 0, display: 'flex', alignItems: 'center' }}>
-              <ParsePermissionCountdown 
-                expiresAt={user?.parse_permission_expires} 
-                canParse={user?.can_parse}
-                isDemoMode={
-                  (user?.is_active && !user?.can_parse) || 
-                  (user?.parse_permission_expires && new Date(user.parse_permission_expires) < new Date())
-                }
-              />
-              <IconButton sx={{ ml: 1 }} onClick={toggleTheme} color="inherit">
-                {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-              </IconButton>
-              <Tooltip title={user?.email || ''}>
-                <IconButton onClick={handleOpenUserMenu} sx={{ p: 0, ml: 1 }}>
-                  <Avatar alt={user?.username} src="/static/images/avatar/2.jpg" />
-                </IconButton>
-              </Tooltip>
-              <LanguageSwitcher />
-              <Menu
-                sx={{ mt: '45px' }}
-                id="menu-appbar"
-                anchorEl={anchorElUser}
-                anchorOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
-                }}
-                keepMounted
-                transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
-                }}
-                open={Boolean(anchorElUser)}
-                onClose={handleCloseUserMenu}
-              >
-                <MenuItem onClick={() => { handleCloseUserMenu(); navigate('/profile'); }}>
-                  <Typography textAlign="center">{t('navigation.profile', 'Profile')}</Typography>
-                </MenuItem>
-                <MenuItem onClick={handleLogoutClick}>
-                  <Typography textAlign="center">{t('common.logout', 'Logout')}</Typography>
-                </MenuItem>
-              </Menu>
+    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+        <Toolbar>
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div"
+            sx={{ 
+              display: { xs: 'block', sm: 'block' },
+              flexGrow: { xs: 0, sm: 1 },
+              mr: { sm: 2 }
+            }}
+          >
+            TG Parser
+          </Typography>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            flexGrow: { xs: 1, sm: 0 },
+            justifyContent: 'center',
+            minHeight: { xs: '40px', sm: '48px' }
+          }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 1,
+              justifyContent: 'center'
+            }}>
+              {user?.is_active && !user?.can_parse ? (
+                <Chip
+                  label={t('telegram.demoMode')}
+                  color="warning"
+                  size="small"
+                  sx={{ 
+                    height: '24px',
+                    '& .MuiChip-label': { 
+                      px: 1,
+                      fontSize: { xs: '0.75rem', sm: '0.8125rem' }
+                    }
+                  }}
+                />
+              ) : user?.parse_permission_expires ? (
+                <ParsePermissionCountdown 
+                  expiresAt={user.parse_permission_expires} 
+                  canParse={user?.can_parse}
+                  isDemoMode={false}
+                />
+              ) : (
+                <Chip
+                  label={t('telegram.parseDisabled')}
+                  color="error"
+                  size="small"
+                  sx={{ 
+                    height: '24px',
+                    '& .MuiChip-label': { 
+                      px: 1,
+                      fontSize: { xs: '0.75rem', sm: '0.8125rem' }
+                    }
+                  }}
+                />
+              )}
             </Box>
-          </Toolbar>
-        </Container>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 0.5,
+              flexShrink: 0
+            }}>
+              <LanguageSwitcher />
+              {isMobile ? (
+                <IconButton
+                  color="inherit"
+                  onClick={handleOpenUserMenu}
+                  size="small"
+                  sx={{ p: { xs: 0.5, sm: 1 } }}
+                >
+                  <ProfileIcon />
+                </IconButton>
+              ) : (
+                <>
+                  <IconButton
+                    color="inherit"
+                    onClick={toggleTheme}
+                    size="small"
+                    sx={{ p: { xs: 0.5, sm: 1 } }}
+                  >
+                    {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                  </IconButton>
+                  <Tooltip title={t('common.openSettings', 'Open settings')}>
+                    <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
+                      <Avatar>{user?.email?.[0]?.toUpperCase()}</Avatar>
+                    </IconButton>
+                  </Tooltip>
+                </>
+              )}
+            </Box>
+          </Box>
+        </Toolbar>
       </AppBar>
-      
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-        aria-label="mailbox folders"
-      >
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true, // Better open performance on mobile.
-          }}
-          sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-        >
-          {drawer}
-        </Drawer>
+
+      {!isMobile && (
         <Drawer
           variant="permanent"
           sx={{
@@ -274,48 +341,118 @@ const MainLayout = ({ children }) => {
         >
           {drawer}
         </Drawer>
-      </Box>
-      
+      )}
+
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: '64px'
+          width: '100%',
+          ...(isMobile ? {
+            pb: 8, // Add padding for bottom navigation
+          } : {
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            ml: { sm: `${drawerWidth}px` },
+          }),
         }}
       >
-        <Container maxWidth="lg">
-          {children}
-        </Container>
+        <Toolbar />
+        {children}
       </Box>
 
-      {/* Logout confirmation dialog */}
+      {isMobile && bottomNav}
+
+      <Menu
+        sx={{ mt: '45px' }}
+        id="menu-appbar"
+        anchorEl={anchorElUser}
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+        keepMounted
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+        open={Boolean(anchorElUser)}
+        onClose={handleCloseUserMenu}
+      >
+        <MenuItem onClick={() => { handleCloseUserMenu(); navigate('/profile'); }}>
+          <Typography textAlign="center">{t('navigation.profile', 'Profile')}</Typography>
+        </MenuItem>
+        <MenuItem onClick={handleLogoutClick}>
+          <Typography textAlign="center">{t('common.logout', 'Logout')}</Typography>
+        </MenuItem>
+      </Menu>
+
       <Dialog
         open={logoutDialogOpen}
         onClose={() => setLogoutDialogOpen(false)}
         TransitionComponent={SlideTransition}
+        PaperProps={{
+          elevation: 0,
+          sx: {
+            bgcolor: isMobile ? 'rgba(33, 33, 33, 0.95)' : 'background.paper',
+            borderRadius: 2,
+            width: '90%',
+            maxWidth: '400px'
+          }
+        }}
         sx={{
           '& .MuiBackdrop-root': {
             backdropFilter: 'blur(2px)',
-            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)'
           }
         }}
       >
-        <DialogTitle>{t('dialogs.logoutConfirmTitle', 'Confirm Logout')}</DialogTitle>
-        <DialogContent>
-          <Typography>
-            {t('dialogs.logoutConfirmMessage', 'Are you sure you want to log out?')}
+        <DialogContent sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          p: 3,
+          gap: 2
+        }}>
+          <Typography variant="h6" sx={{ color: isMobile ? '#fff' : 'text.primary', mb: 1 }}>
+            {t('common.confirmLogout', 'Confirm Logout')}
           </Typography>
+          
+          <Typography sx={{ color: isMobile ? '#fff' : 'text.primary', mb: 2 }}>
+            {t('common.logoutMessage', 'Are you sure you want to logout?')}
+          </Typography>
+          
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2,
+            '& .MuiButton-root': {
+              flex: 1,
+              py: 1,
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              textTransform: 'uppercase'
+            }
+          }}>
+            <Button 
+              onClick={() => setLogoutDialogOpen(false)}
+              sx={{ 
+                color: isMobile ? '#9e9e9e' : 'text.secondary',
+                '&:hover': {
+                  bgcolor: isMobile ? 'rgba(158, 158, 158, 0.08)' : 'action.hover'
+                }
+              }}
+            >
+              {t('common.cancel', 'ОТМЕНА')}
+            </Button>
+            <Button 
+              onClick={handleLogoutConfirm}
+              variant={isMobile ? "contained" : "contained"}
+              color="primary"
+            >
+              {t('common.confirm', 'ПОДТВЕРДИТЬ')}
+            </Button>
+          </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLogoutDialogOpen(false)}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button onClick={handleLogoutConfirm} color="error" variant="contained">
-            {t('common.logout', 'Logout')}
-          </Button>
-        </DialogActions>
       </Dialog>
     </Box>
   );

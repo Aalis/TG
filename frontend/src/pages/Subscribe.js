@@ -18,6 +18,8 @@ import {
   Dialog,
   DialogContent,
   useTheme,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import {
   Telegram as TelegramIcon,
@@ -35,6 +37,7 @@ const Subscribe = () => {
   const { user } = useAuth();
   const [qrDialog, setQrDialog] = useState({ open: false, address: '', label: '', type: '' });
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
   
   const addresses = {
     usdt: 'TQihkZKkPdRjGX1QN7GxmoQTtsiPQtbehQ',
@@ -71,8 +74,42 @@ const Subscribe = () => {
     }
   }, [qrDialog.address, qrDialog.type]);
 
-  const handleCopyAddress = (address) => {
-    navigator.clipboard.writeText(address);
+  const handleCopyAddress = async (address) => {
+    try {
+      // Try the modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(address);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+        return;
+      }
+
+      // Fallback method using execCommand
+      const textArea = document.createElement('textarea');
+      textArea.value = address;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          setCopySuccess(true);
+          setTimeout(() => setCopySuccess(false), 2000);
+        } else {
+          console.error('Fallback: Unable to copy');
+        }
+      } catch (err) {
+        console.error('Fallback: Unable to copy', err);
+      }
+
+      document.body.removeChild(textArea);
+    } catch (err) {
+      console.error('Failed to copy address:', err);
+    }
   };
 
   const handleOpenQR = (address, label, type) => {
@@ -302,15 +339,46 @@ const Subscribe = () => {
         </Box>
       </Paper>
 
+      <Snackbar
+        open={copySuccess}
+        autoHideDuration={2000}
+        onClose={() => setCopySuccess(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        sx={{ top: { xs: '24px !important', sm: '24px !important' } }}
+      >
+        <Alert 
+          onClose={() => setCopySuccess(false)} 
+          severity="success"
+          sx={{ 
+            width: '100%',
+            bgcolor: theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.9)' : 'rgba(46, 125, 50, 0.9)',
+            color: '#fff',
+            '& .MuiAlert-icon': {
+              color: '#fff'
+            }
+          }}
+        >
+          {t('subscription.addressCopied', 'Address copied to clipboard!')}
+        </Alert>
+      </Snackbar>
+
       <Dialog 
         open={qrDialog.open} 
         onClose={handleCloseQR}
         PaperProps={{
+          elevation: 0,
           sx: {
-            bgcolor: 'background.paper',
-            color: 'text.primary',
+            bgcolor: 'rgba(33, 33, 33, 0.95)',
+            borderRadius: 2,
             maxWidth: '90vw',
             width: 'auto'
+          }
+        }}
+        sx={{
+          '& .MuiBackdrop-root': {
+            backdropFilter: 'blur(2px)',
+            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)'
           }
         }}
       >
@@ -321,12 +389,12 @@ const Subscribe = () => {
           p: 2,
           borderBottom: `1px solid ${theme.palette.divider}`
         }}>
-          <Typography variant="h6">
+          <Typography variant="h6" sx={{ color: '#fff' }}>
             {qrDialog.label}
           </Typography>
           <IconButton 
             onClick={handleCloseQR}
-            sx={{ color: 'text.secondary' }}
+            sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
           >
             <CloseIcon />
           </IconButton>
@@ -336,8 +404,7 @@ const Subscribe = () => {
           flexDirection: 'column', 
           alignItems: 'center',
           gap: 2,
-          p: 3,
-          bgcolor: 'background.paper'
+          p: 3
         }}>
           <Box sx={{ 
             bgcolor: '#fff', 

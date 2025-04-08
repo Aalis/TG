@@ -43,10 +43,13 @@ export default function ParsePermissionCountdown({ expiresAt, canParse, isDemoMo
             <Tooltip title={t('telegram.demoModeInfo', 'Demo mode: You can only parse groups, not channels')}>
                 <Chip
                     icon={<DemoIcon />}
-                    label={t('telegram.demoMode', 'Demo')}
+                    label={t('telegram.demoMode', 'Demo Mode')}
                     color="warning"
                     size="small"
-                    sx={{ ml: 2 }}
+                    sx={{ 
+                        height: '24px',
+                        '& .MuiChip-label': { px: 1 }
+                    }}
                 />
             </Tooltip>
         );
@@ -60,7 +63,10 @@ export default function ParsePermissionCountdown({ expiresAt, canParse, isDemoMo
                     label={t('telegram.parseDisabled', 'Parse Disabled')}
                     color="default"
                     size="small"
-                    sx={{ ml: 2 }}
+                    sx={{ 
+                        height: '24px',
+                        '& .MuiChip-label': { px: 1 }
+                    }}
                 />
             </Tooltip>
         );
@@ -74,7 +80,10 @@ export default function ParsePermissionCountdown({ expiresAt, canParse, isDemoMo
                     label={t('telegram.parseEnabled', 'Parse Enabled')}
                     color="success"
                     size="small"
-                    sx={{ ml: 2 }}
+                    sx={{ 
+                        height: '24px',
+                        '& .MuiChip-label': { px: 1 }
+                    }}
                 />
             </Tooltip>
         );
@@ -90,10 +99,13 @@ export default function ParsePermissionCountdown({ expiresAt, canParse, isDemoMo
         )}>
             <Chip
                 icon={<TimerIcon />}
-                label={`${t('common.left', 'left')} ${timeLeft}`}
+                label={`${t('common.left', 'Left')}: ${timeLeft}`}
                 color="success"
                 size="small"
-                sx={{ ml: 2 }}
+                sx={{ 
+                    height: '24px',
+                    '& .MuiChip-label': { px: 1 }
+                }}
             />
         </Tooltip>
     );

@@ -1,70 +1,62 @@
 import React, { useState, useEffect } from 'react';
-import { Formik, Form, Field } from 'formik';
-import * as Yup from 'yup';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Typography,
   Box,
   Paper,
   Button,
   TextField,
-  Grid,
-  Avatar,
+  IconButton,
   CircularProgress,
   Alert,
-  Divider,
+  Snackbar,
+  Container,
+  useTheme,
+  useMediaQuery,
+  InputAdornment,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogContentText,
   DialogActions,
-  InputAdornment,
-  IconButton,
-  Snackbar,
+  BottomNavigation,
+  BottomNavigationAction,
 } from '@mui/material';
-import { 
-  Person as PersonIcon,
+import {
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
-  Save as SaveIcon,
+  Logout as LogoutIcon,
+  Home as HomeIcon,
+  Group as GroupsIcon,
+  Forum as ChannelsIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-
-// Validation schema
-const getValidationSchema = (t) => Yup.object().shape({
-  email: Yup.string()
-    .email(t('validation.invalidEmail', 'Invalid email address'))
-    .required(t('validation.emailRequired', 'Email is required')),
-  username: Yup.string()
-    .min(3, t('validation.usernameMinLength', 'Username must be at least 3 characters'))
-    .max(20, t('validation.usernameMaxLength', 'Username must be at most 20 characters'))
-    .required(t('validation.usernameRequired', 'Username is required')),
-  password: Yup.string()
-    .min(6, t('validation.passwordMinLength', 'Password must be at least 6 characters')),
-  confirmPassword: Yup.string()
-    .oneOf([Yup.ref('password'), null], t('validation.passwordsMustMatch', 'Passwords must match')),
-});
+import { SlideTransition } from '../utils/transitions';
 
 const Profile = () => {
-  const { user, updateProfile, error, setError, isLoading } = useAuth();
+  const { user, updateProfile, error, setError, isLoading, logout } = useAuth();
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   const [success, setSuccess] = useState(false);
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [formValues, setFormValues] = useState(null);
-  const [formActions, setFormActions] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [initialValues, setInitialValues] = useState({
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
     email: '',
     username: '',
     password: '',
     confirmPassword: '',
   });
 
-  // Update initial values when user data is available
   useEffect(() => {
     if (user) {
-      setInitialValues({
+      setFormData({
         email: user.email || '',
         username: user.username || '',
         password: '',
@@ -72,6 +64,13 @@ const Profile = () => {
       });
     }
   }, [user]);
+
+  const handleChange = (field) => (event) => {
+    setFormData({
+      ...formData,
+      [field]: event.target.value,
+    });
+  };
 
   const handleTogglePasswordVisibility = () => {
     setShowPassword(!showPassword);
@@ -81,83 +80,90 @@ const Profile = () => {
     setShowConfirmPassword(!showConfirmPassword);
   };
 
-  const handleSubmit = (values, actions) => {
-    // Store form values and actions for use after confirmation
-    setFormValues(values);
-    setFormActions(actions);
-    setConfirmDialogOpen(true);
-  };
-
-  const handleConfirmSubmit = async () => {
-    // Close the dialog
-    setConfirmDialogOpen(false);
-    
-    if (!formValues || !formActions) return;
-    
-    // Only include password if it's provided
-    const updateData = {
-      email: formValues.email,
-      username: formValues.username,
-    };
-    
-    if (formValues.password) {
-      updateData.password = formValues.password;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (formData.password !== formData.confirmPassword) {
+      setError(t('validation.passwordsMustMatch'));
+      return;
     }
-    
+
+    const updateData = {
+      email: formData.email,
+      username: formData.username,
+    };
+
+    if (formData.password) {
+      updateData.password = formData.password;
+    }
+
     try {
       const result = await updateProfile(updateData);
-      
       if (result) {
         setSuccess(true);
-        
-        // Reset password fields
-        formActions.setFieldValue('password', '');
-        formActions.setFieldValue('confirmPassword', '');
-        
-        // Update initial values with new data (except password)
-        setInitialValues(prev => ({
-          ...prev,
-          email: formValues.email,
-          username: formValues.username,
+        setFormData({
+          ...formData,
           password: '',
           confirmPassword: '',
-        }));
-        
-        // Hide success message after 3 seconds
+        });
         setTimeout(() => {
           setSuccess(false);
         }, 3000);
       }
     } catch (err) {
       console.error("Error updating profile:", err);
-    } finally {
-      formActions.setSubmitting(false);
-      
-      // Clear form state
-      setFormValues(null);
-      setFormActions(null);
     }
   };
 
-  const handleCancelSubmit = () => {
-    setConfirmDialogOpen(false);
-    
-    if (formActions) {
-      formActions.setSubmitting(false);
-    }
-    
-    // Clear form state
-    setFormValues(null);
-    setFormActions(null);
+  const handleLogout = () => {
+    setLogoutDialogOpen(true);
   };
 
-  const handleCloseSuccessAlert = () => {
-    setSuccess(false);
+  const handleLogoutConfirm = () => {
+    logout();
+    navigate('/login');
   };
 
-  const handleCloseErrorAlert = () => {
-    setError(null);
+  const handleBottomNavChange = (event, newValue) => {
+    navigate(newValue);
   };
+
+  const bottomNav = (
+    <BottomNavigation
+      value={location.pathname}
+      onChange={handleBottomNavChange}
+      showLabels
+      sx={{
+        width: '100%',
+        position: 'fixed',
+        bottom: 0,
+        borderTop: 1,
+        borderColor: 'divider',
+        zIndex: (theme) => theme.zIndex.appBar,
+        bgcolor: 'background.paper',
+      }}
+    >
+      <BottomNavigationAction
+        label={t('navigation.sessions', 'Sessions')}
+        value="/"
+        icon={<HomeIcon />}
+      />
+      <BottomNavigationAction
+        label={t('navigation.parsedGroups', 'Groups')}
+        value="/groups"
+        icon={<GroupsIcon />}
+      />
+      <BottomNavigationAction
+        label={t('navigation.parsedChannels', 'Channels')}
+        value="/channels"
+        icon={<ChannelsIcon />}
+      />
+      <BottomNavigationAction
+        label={t('navigation.profile', 'Profile')}
+        value="/profile"
+        icon={<PersonIcon />}
+      />
+    </BottomNavigation>
+  );
 
   if (!user) {
     return (
@@ -168,199 +174,250 @@ const Profile = () => {
   }
 
   return (
-    <Box>
-      <Typography variant="h4" component="h1" gutterBottom>
-        {t('profile.title')}
-      </Typography>
-      
-      <Paper sx={{ p: 3, mt: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <Avatar sx={{ width: 80, height: 80, mr: 3, bgcolor: 'primary.main' }}>
-            <PersonIcon sx={{ fontSize: 40 }} />
-          </Avatar>
-          
-          <Box>
-            <Typography variant="h5">
-              {user.username}
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              {user.email}
-            </Typography>
-          </Box>
+    <Container maxWidth="lg" sx={{ pb: isMobile ? 8 : 3 }}>
+      <Box>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 3,
+          backgroundColor: 'background.default',
+          py: 1
+        }}>
+          <Typography 
+            variant={isMobile ? "h5" : "h4"} 
+            component="h1"
+            sx={{ 
+              fontWeight: 500
+            }}
+          >
+            {t('profile.title', 'Profile')}
+          </Typography>
+
+          {isMobile && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<LogoutIcon />}
+              onClick={handleLogout}
+              size="small"
+              sx={{
+                minWidth: 'auto',
+                px: 2,
+                fontSize: '0.875rem',
+                '& .MuiButton-startIcon': {
+                  mr: 0.5,
+                },
+              }}
+            >
+              {t('common.logout', 'Logout')}
+            </Button>
+          )}
         </Box>
         
-        <Divider sx={{ mb: 3 }} />
-        
-        <Snackbar 
-          open={error !== null} 
-          autoHideDuration={6000} 
-          onClose={handleCloseErrorAlert}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <Alert onClose={handleCloseErrorAlert} severity="error" sx={{ width: '100%' }}>
-            {error}
-          </Alert>
-        </Snackbar>
-        
-        <Snackbar 
-          open={success} 
-          autoHideDuration={3000} 
-          onClose={handleCloseSuccessAlert}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <Alert onClose={handleCloseSuccessAlert} severity="success" sx={{ width: '100%' }}>
-            {t('profile.updateSuccess')}
-          </Alert>
-        </Snackbar>
-        
-        <Formik
-          enableReinitialize
-          initialValues={initialValues}
-          validationSchema={getValidationSchema(t)}
-          onSubmit={handleSubmit}
-        >
-          {({ errors, touched, isSubmitting, dirty, resetForm }) => (
-            <Form>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <Field
-                    as={TextField}
-                    name="email"
-                    label={t('common.email')}
-                    fullWidth
-                    margin="normal"
-                    error={touched.email && Boolean(errors.email)}
-                    helperText={touched.email && errors.email}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sm={6}>
-                  <Field
-                    as={TextField}
-                    name="username"
-                    label={t('common.username')}
-                    fullWidth
-                    margin="normal"
-                    error={touched.username && Boolean(errors.username)}
-                    helperText={touched.username && errors.username}
-                  />
-                </Grid>
-                
-                <Grid item xs={12}>
-                  <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
-                    {t('profile.changePassword')}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {t('profile.leaveBlankIfNoChange', 'Leave blank if you don\'t want to change your password.')}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={12} sm={6}>
-                  <Field
-                    as={TextField}
-                    name="password"
-                    label={t('profile.newPassword')}
-                    type={showPassword ? "text" : "password"}
-                    fullWidth
-                    margin="normal"
-                    error={touched.password && Boolean(errors.password)}
-                    helperText={touched.password && errors.password}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            aria-label="toggle password visibility"
-                            onClick={handleTogglePasswordVisibility}
-                            edge="end"
-                          >
-                            {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sm={6}>
-                  <Field
-                    as={TextField}
-                    name="confirmPassword"
-                    label={t('profile.confirmNewPassword')}
-                    type={showConfirmPassword ? "text" : "password"}
-                    fullWidth
-                    margin="normal"
-                    error={touched.confirmPassword && Boolean(errors.confirmPassword)}
-                    helperText={touched.confirmPassword && errors.confirmPassword}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            aria-label="toggle confirm password visibility"
-                            onClick={handleToggleConfirmPasswordVisibility}
-                            edge="end"
-                          >
-                            {showConfirmPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-              </Grid>
-              
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
-                <Button
-                  type="button"
-                  variant="outlined"
-                  color="secondary"
-                  onClick={() => resetForm()}
-                  disabled={!dirty || isSubmitting}
-                >
-                  {t('common.reset', 'Reset')}
-                </Button>
-                
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  disabled={isSubmitting || isLoading || !dirty}
-                  startIcon={isSubmitting || isLoading ? <CircularProgress size={20} /> : <SaveIcon />}
-                >
-                  {t('profile.saveChanges', 'Save Changes')}
-                </Button>
-              </Box>
-            </Form>
-          )}
-        </Formik>
-      </Paper>
+        <Paper sx={{ p: isMobile ? 2 : 3, mb: 3 }}>
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+              {t('common.email')}
+            </Typography>
+            <TextField
+              fullWidth
+              variant="outlined"
+              value={formData.email}
+              onChange={handleChange('email')}
+              sx={{ mb: 3 }}
+            />
 
-      {/* Confirmation Dialog */}
-      <Dialog
-        open={confirmDialogOpen}
-        onClose={handleCancelSubmit}
-        aria-labelledby="confirm-profile-update-dialog"
+            <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+              {t('common.username')}
+            </Typography>
+            <TextField
+              fullWidth
+              variant="outlined"
+              value={formData.username}
+              onChange={handleChange('username')}
+              sx={{ mb: 3 }}
+            />
+
+            <Typography variant="h6" gutterBottom>
+              {t('profile.changePassword')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {t('profile.leaveBlankIfNoChange')}
+            </Typography>
+
+            <TextField
+              fullWidth
+              variant="outlined"
+              type={showPassword ? "text" : "password"}
+              label={t('profile.newPassword')}
+              value={formData.password}
+              onChange={handleChange('password')}
+              sx={{ mb: 2 }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={handleTogglePasswordVisibility}
+                      edge="end"
+                    >
+                      {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            <TextField
+              fullWidth
+              variant="outlined"
+              type={showConfirmPassword ? "text" : "password"}
+              label={t('profile.confirmNewPassword')}
+              value={formData.confirmPassword}
+              onChange={handleChange('confirmPassword')}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={handleToggleConfirmPasswordVisibility}
+                      edge="end"
+                    >
+                      {showConfirmPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2,
+            justifyContent: 'flex-end'
+          }}>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => setFormData({
+                ...formData,
+                password: '',
+                confirmPassword: '',
+              })}
+            >
+              {t('common.reset')}
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleSubmit}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <CircularProgress size={24} />
+              ) : (
+                t('profile.saveChanges')
+              )}
+            </Button>
+          </Box>
+        </Paper>
+      </Box>
+
+      <Snackbar
+        open={error !== null}
+        autoHideDuration={6000}
+        onClose={() => setError(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        <DialogTitle id="confirm-profile-update-dialog">
-          {t('profile.confirmUpdate', 'Confirm Profile Update')}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {t('profile.confirmUpdateMessage', 'Are you sure you want to save these changes to your profile?')}
-            {formValues?.password && (
-              <strong> {t('profile.confirmPasswordChange', 'This will also change your password.')}</strong>
-            )}
-          </DialogContentText>
+        <Alert onClose={() => setError(null)} severity="error">
+          {error}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={success}
+        autoHideDuration={3000}
+        onClose={() => setSuccess(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSuccess(false)} severity="success">
+          {t('profile.updateSuccess')}
+        </Alert>
+      </Snackbar>
+
+      <Dialog
+        open={logoutDialogOpen}
+        onClose={() => setLogoutDialogOpen(false)}
+        TransitionComponent={SlideTransition}
+        PaperProps={{
+          elevation: 0,
+          sx: {
+            bgcolor: 'rgba(33, 33, 33, 0.95)',
+            borderRadius: 2,
+            width: '90%',
+            maxWidth: '400px'
+          }
+        }}
+        sx={{
+          '& .MuiBackdrop-root': {
+            backdropFilter: 'blur(2px)',
+            transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)'
+          }
+        }}
+      >
+        <DialogContent sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          p: 3,
+          gap: 2
+        }}>
+          <Typography variant="h6" sx={{ color: '#fff', mb: 1 }}>
+            {t('common.confirmLogout', 'Confirm Logout')}
+          </Typography>
+          
+          <Typography sx={{ color: '#fff', mb: 2 }}>
+            {t('common.logoutMessage', 'Are you sure you want to logout?')}
+          </Typography>
+          
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2,
+            '& .MuiButton-root': {
+              flex: 1,
+              py: 1,
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              textTransform: 'uppercase'
+            }
+          }}>
+            <Button 
+              onClick={() => setLogoutDialogOpen(false)}
+              sx={{ 
+                color: '#9e9e9e',
+                '&:hover': {
+                  bgcolor: 'rgba(158, 158, 158, 0.08)'
+                }
+              }}
+            >
+              {t('common.cancel', 'ОТМЕНА')}
+            </Button>
+            <Button 
+              onClick={handleLogoutConfirm}
+              sx={{ 
+                bgcolor: '#2196f3',
+                color: '#fff',
+                '&:hover': {
+                  bgcolor: '#1976d2'
+                }
+              }}
+            >
+              {t('common.confirm', 'ПОДТВЕРДИТЬ')}
+            </Button>
+          </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelSubmit} color="primary">
-            {t('common.cancel')}
-          </Button>
-          <Button onClick={handleConfirmSubmit} color="primary" variant="contained">
-            {t('common.confirm')}
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+      {isMobile && bottomNav}
+    </Container>
   );
 };
 

@@ -654,18 +654,44 @@ const ParsedChannels = () => {
         />
         
         {isInDemoMode && (
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-              <Typography sx={{ flex: 1 }}>{t('telegram.demoModeMessage', 'You are in demo mode. Channel parsing is disabled, but you can parse groups.')}</Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                size="small"
-                onClick={() => navigate('/subscribe')}
-                sx={{ whiteSpace: 'nowrap', ml: 2 }}
-              >
-                {t('common.subscribe', 'Subscribe')}
-              </Button>
+          <Alert 
+            severity="info" 
+            sx={{ 
+              mb: 3, 
+              '& .MuiAlert-message': { display: 'flex', alignItems: 'center' },
+              '& .MuiAlert-icon': { display: 'flex', alignItems: 'center', mt: 0 }
+            }}
+          >
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: { xs: 'column', sm: 'row' }, 
+              gap: 2,
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              justifyContent: 'space-between'
+            }}>
+              <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                {t('telegram.demoModeMessage')}
+              </Typography>
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: { xs: 'center', sm: 'flex-end' },
+                width: { xs: '100%', sm: 'auto' }
+              }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  onClick={() => navigate('/subscribe')}
+                  sx={{ 
+                    whiteSpace: 'nowrap',
+                    fontSize: '0.875rem',
+                    py: 0.5,
+                    px: 2
+                  }}
+                >
+                  {t('common.subscribe')}
+                </Button>
+              </Box>
             </Box>
           </Alert>
         )}
@@ -1043,7 +1069,11 @@ const ParsedChannels = () => {
               onClick={handleCloseParseDialog} 
               disabled={parsingStatus.loading}
               variant="outlined"
-              sx={{ textTransform: 'uppercase' }}
+              sx={{ 
+                textTransform: 'uppercase',
+                fontSize: '0.875rem',
+                py: 1
+              }}
             >
               {t('telegram.cancel')}
             </Button>
@@ -1054,6 +1084,17 @@ const ParsedChannels = () => {
               startIcon={<SendIcon />}
               variant="contained"
               disabled={parsingStatus.loading || (!channelLink.trim() && !selectedDialog)}
+              sx={{
+                textTransform: 'uppercase',
+                fontSize: '0.75rem',
+                py: 0.5,
+                px: 2,
+                height: '32px',
+                minHeight: '32px',
+                '& .MuiButton-startIcon': {
+                  marginRight: 0.5
+                }
+              }}
             >
               {t('telegram.parseChannel')}
             </LoadingButton>
@@ -1065,30 +1106,76 @@ const ParsedChannels = () => {
           open={deleteConfirmOpen} 
           onClose={() => setDeleteConfirmOpen(false)}
           TransitionComponent={SlideTransition}
+          PaperProps={{
+            elevation: 0,
+            sx: {
+              bgcolor: 'rgba(33, 33, 33, 0.95)',
+              borderRadius: 2,
+              width: '90%',
+              maxWidth: '400px'
+            }
+          }}
           sx={{
             '& .MuiBackdrop-root': {
               backdropFilter: 'blur(2px)',
-              transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)'
+              transition: 'backdrop-filter 225ms cubic-bezier(0.4, 0, 0.2, 1)',
+              backgroundColor: 'rgba(0, 0, 0, 0.5)'
             }
           }}
         >
-          <DialogTitle>{t('actions.confirm')}</DialogTitle>
-          <DialogContent>
-            <Typography>
+          <DialogContent sx={{ 
+            display: 'flex', 
+            flexDirection: 'column',
+            p: 3,
+            gap: 2
+          }}>
+            <Typography variant="h6" sx={{ color: '#fff', mb: 1 }}>
+              {t('actions.confirm')}
+            </Typography>
+
+            <Typography sx={{ color: '#fff', mb: 2 }}>
               {t('telegram.deleteChannelConfirm', {
                 channelName: selectedChannelName,
                 defaultValue: `Are you sure you want to delete "${selectedChannelName}"? This action cannot be undone.`
               })}
             </Typography>
+
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 2,
+              '& .MuiButton-root': {
+                flex: 1,
+                py: 1,
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                textTransform: 'uppercase'
+              }
+            }}>
+              <Button 
+                onClick={() => setDeleteConfirmOpen(false)}
+                sx={{ 
+                  color: '#2196f3',
+                  '&:hover': {
+                    bgcolor: 'rgba(33, 150, 243, 0.08)'
+                  }
+                }}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button 
+                onClick={handleDeleteConfirm}
+                sx={{ 
+                  bgcolor: '#f44336',
+                  color: '#fff',
+                  '&:hover': {
+                    bgcolor: '#d32f2f'
+                  }
+                }}
+              >
+                {t('actions.delete')}
+              </Button>
+            </Box>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteConfirmOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-              {t('actions.delete')}
-            </Button>
-          </DialogActions>
         </Dialog>
 
         {/* Progress Dialog */}

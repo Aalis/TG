@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -23,6 +23,11 @@ import {
   IconButton,
   FormControlLabel,
   Switch,
+  Container,
+  useTheme,
+  useMediaQuery,
+  BottomNavigation,
+  BottomNavigationAction,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -35,16 +40,21 @@ import {
   Verified as VerifiedIcon,
   Add as AddIcon,
   Telegram as TelegramIcon,
+  Home as HomeIcon,
+  Group as GroupsIcon,
+  Forum as ChannelsIcon,
 } from '@mui/icons-material';
 import { groupsAPI } from '../services/api';
 import { useTranslation } from 'react-i18next';
-import ParseButtonHeader from '../components/ParseButtonHeader';
 import { useGroupDetails } from '../hooks/useGroupDetails';
 
 const GroupDetails = () => {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   // Use React Query hook instead of manual fetching
   const { 
@@ -62,7 +72,7 @@ const GroupDetails = () => {
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [showBots, setShowBots] = useState(true);
+  const [value, setValue] = useState(location.pathname);
 
   // Set initial filtered members when group data changes
   useEffect(() => {
@@ -170,6 +180,7 @@ const GroupDetails = () => {
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/groups')}
           sx={{ mb: 3 }}
+          size={isMobile ? "small" : "medium"}
         >
           {t('common.back')}
         </Button>
@@ -188,6 +199,7 @@ const GroupDetails = () => {
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/groups')}
           sx={{ mb: 3 }}
+          size={isMobile ? "small" : "medium"}
         >
           {t('common.back')}
         </Button>
@@ -199,256 +211,349 @@ const GroupDetails = () => {
     );
   }
 
+  const handleBottomNavChange = (event, newValue) => {
+    setValue(newValue);
+    navigate(newValue);
+  };
+
+  const bottomNav = (
+    <BottomNavigation
+      value={location.pathname}
+      onChange={handleBottomNavChange}
+      showLabels
+      sx={{
+        width: '100%',
+        position: 'fixed',
+        bottom: 0,
+        borderTop: 1,
+        borderColor: 'divider',
+        zIndex: (theme) => theme.zIndex.appBar,
+        bgcolor: 'background.paper',
+      }}
+    >
+      <BottomNavigationAction
+        label={t('navigation.sessions', 'Sessions')}
+        value="/"
+        icon={<HomeIcon />}
+      />
+      <BottomNavigationAction
+        label={t('navigation.parsedGroups', 'Groups')}
+        value="/groups"
+        icon={<GroupsIcon />}
+      />
+      <BottomNavigationAction
+        label={t('navigation.parsedChannels', 'Channels')}
+        value="/channels"
+        icon={<ChannelsIcon />}
+      />
+      <BottomNavigationAction
+        label={t('navigation.profile', 'Profile')}
+        value="/profile"
+        icon={<PersonIcon />}
+      />
+    </BottomNavigation>
+  );
+
   return (
-    <Box>
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 3,
-        backgroundColor: 'background.default',
-        py: 1
-      }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/groups')}
-          variant="outlined"
-          size="medium"
-        >
-          {t('common.back')}
-        </Button>
-        
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/groups', { state: { openParseDialog: true } })}
-          size="medium"
-        >
-          {t('telegram.parseNewGroup')}
-        </Button>
-      </Box>
-      
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Box>
-            <Typography variant="h4" component="h1" gutterBottom>
-              {group.group_name}
-            </Typography>
-            
-            <Typography variant="body1" color="text.secondary" gutterBottom>
-              {group.group_username ? `@${group.group_username}` : t('telegram.privateGroup')}
-            </Typography>
-            
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-              <Chip 
-                label={`${group.member_count} ${t('common.members')}`} 
-                color="primary" 
-                variant="outlined"
-              />
-              <Chip 
-                label={`${group.members?.length || 0} ${t('common.usersFound')}`} 
-                color="info" 
-                variant="outlined"
-                sx={{ ml: 1 }}
-              />
-              <Chip 
-                label={group.is_public ? t('common.public') : t('common.private')} 
-                color={group.is_public ? 'success' : 'default'} 
-                variant="outlined"
-                sx={{ ml: 1 }}
-              />
-            </Box>
-          </Box>
+    <Container maxWidth="lg" sx={{ pb: isMobile ? 8 : 3 }}>
+      <Box>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 3,
+          backgroundColor: 'background.default',
+          py: 1
+        }}>
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/groups')}
+            variant="outlined"
+            size={isMobile ? "small" : "medium"}
+            sx={isMobile ? {
+              minWidth: 'auto',
+              px: 2,
+            } : {}}
+          >
+            {t('common.back')}
+          </Button>
           
           <Button
-            variant="outlined"
+            variant="contained"
             color="primary"
-            startIcon={<DownloadIcon />}
-            onClick={exportToCSV}
+            startIcon={<AddIcon />}
+            onClick={() => navigate('/groups', { state: { openParseDialog: true } })}
+            size={isMobile ? "small" : "medium"}
+            sx={isMobile ? {
+              minWidth: 'auto',
+              px: 2,
+              fontSize: '0.875rem',
+              '& .MuiButton-startIcon': {
+                mr: 0.5,
+              },
+            } : {}}
           >
-            {t('telegram.exportMembers')}
+            {isMobile ? t('common.newGroup', 'New') : t('telegram.parseNewGroup')}
           </Button>
         </Box>
         
-        <Divider sx={{ my: 3 }} />
-        
-        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={showOnlyPremium}
-                onChange={(e) => setShowOnlyPremium(e.target.checked)}
-                color="warning"
-              />
-            }
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <VerifiedIcon color="warning" sx={{ fontSize: '20px' }} />
-                {t('telegram.onlyPremiumUsers', 'Premium Users')}
-              </Box>
-            }
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={showOnlyWithUsername}
-                onChange={(e) => setShowOnlyWithUsername(e.target.checked)}
-                color="primary"
-              />
-            }
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography>@</Typography>
-                {t('telegram.onlyUsersWithUsername', 'Users with Username')}
-              </Box>
-            }
-          />
-        </Box>
-
-        <TextField
-          fullWidth
-          placeholder={t('telegram.searchMembersPlaceholder', 'Search members by username or name...')}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-          sx={{ mb: 2 }}
-        />
-        
-        <Typography variant="h6" gutterBottom>
-          {t('navigation.members')}
-        </Typography>
-        
-        <TableContainer>
-          <Table sx={{ tableLayout: 'fixed', width: '100%' }}>
-            <TableHead>
-              <TableRow>
-                <TableCell width="60px" sx={{ minWidth: '60px', height: '56px', padding: '12px' }}>#</TableCell>
-                <TableCell width="120px" sx={{ minWidth: '120px', height: '56px', padding: '12px' }}>User ID</TableCell>
-                <TableCell width="150px" sx={{ minWidth: '150px', height: '56px', padding: '12px' }}>Username</TableCell>
-                <TableCell width="200px" sx={{ minWidth: '200px', height: '56px', padding: '12px' }}>Name</TableCell>
-                <TableCell width="120px" sx={{ minWidth: '120px', height: '56px', padding: '12px' }}>Status</TableCell>
-                <TableCell width="120px" sx={{ minWidth: '120px', height: '56px', padding: '12px' }} align="center">Premium</TableCell>
-                <TableCell width="100px" sx={{ minWidth: '100px', height: '56px', padding: '12px' }} align="center">Message</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredMembers
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((member, index) => (
-                  <TableRow 
-                    key={member.user_id}
-                    sx={{ height: '56px' }}
-                  >
-                    <TableCell sx={{ width: '60px', height: '56px', padding: '12px' }}>
-                      {page * rowsPerPage + index + 1}
-                    </TableCell>
-                    <TableCell sx={{ width: '120px', height: '56px', padding: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {member.user_id}
-                    </TableCell>
-                    <TableCell sx={{ width: '150px', height: '56px', padding: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {member.username ? (
-                        <Tooltip title="Open in Telegram" placement="top">
-                          <a
-                            href={`https://t.me/${member.username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ textDecoration: 'none', color: 'inherit', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                          >
-                            @{member.username}
-                          </a>
-                        </Tooltip>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ width: '200px', height: '56px', padding: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {[member.first_name, member.last_name].filter(Boolean).join(' ') || '-'}
-                    </TableCell>
-                    <TableCell sx={{ width: '120px', height: '56px', padding: '12px' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {member.is_admin && (
-                          <Tooltip title="Admin">
-                            <AdminIcon color="primary" />
-                          </Tooltip>
-                        )}
-                        {member.is_bot ? (
-                          <Tooltip title="Bot">
-                            <BotIcon color="secondary" />
-                          </Tooltip>
-                        ) : !member.is_admin && (
-                          <Tooltip title="User">
-                            <PersonIcon color="action" />
-                          </Tooltip>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ width: '120px', height: '56px', padding: '12px' }} align="center">
-                      {member.is_premium ? (
-                        <Tooltip title="Premium User" placement="top">
-                          <Chip
-                            icon={<VerifiedIcon />}
-                            label="Premium"
-                            size="small"
-                            color="warning"
-                            variant="outlined"
-                            sx={{ maxWidth: '100px', height: '24px' }}
-                          />
-                        </Tooltip>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ width: '100px', height: '56px', padding: '12px' }} align="center">
-                      <Tooltip title="Send Message" placement="top">
-                        <IconButton
-                          color="primary"
-                          size="small"
-                          component="a"
-                          href={member.username ? 
-                            `https://t.me/${member.username}` : 
-                            `https://web.telegram.org/a/#/profile/${member.user_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          sx={{ width: '32px', height: '32px' }}
-                        >
-                          <TelegramIcon sx={{ fontSize: '20px' }} />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
+        <Paper sx={{ p: isMobile ? 2 : 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+            <Box sx={{ flex: 1, minWidth: isMobile ? '100%' : 'auto' }}>
+              <Typography variant={isMobile ? "h5" : "h4"} component="h1" gutterBottom>
+                {group.group_name}
+              </Typography>
               
-              {filteredMembers.length === 0 && (
-                <TableRow sx={{ height: '56px' }}>
-                  <TableCell colSpan={6} align="center" sx={{ height: '56px', padding: '12px' }}>
-                    <Typography variant="body1">
-                      No members found matching your search.
-                    </Typography>
-                  </TableCell>
+              <Typography variant="body1" color="text.secondary" gutterBottom>
+                {group.group_username ? `@${group.group_username}` : t('telegram.privateGroup')}
+              </Typography>
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', mt: 2, flexWrap: 'wrap', gap: 1 }}>
+                <Chip 
+                  label={`${group.member_count} ${t('common.members')}`} 
+                  color="primary" 
+                  variant="outlined"
+                  size={isMobile ? "small" : "medium"}
+                />
+                <Chip 
+                  label={`${group.members?.length || 0} ${t('common.usersFound')}`} 
+                  color="info" 
+                  variant="outlined"
+                  size={isMobile ? "small" : "medium"}
+                />
+                <Chip 
+                  label={group.is_public ? t('common.public') : t('common.private')} 
+                  color={group.is_public ? 'success' : 'default'} 
+                  variant="outlined"
+                  size={isMobile ? "small" : "medium"}
+                />
+              </Box>
+            </Box>
+            
+            <Button
+              variant="outlined"
+              color="primary"
+              size={isMobile ? "small" : "medium"}
+              startIcon={<DownloadIcon />}
+              onClick={exportToCSV}
+              sx={isMobile ? {
+                height: 32,
+                minWidth: 32,
+                '& .MuiButton-startIcon': {
+                  margin: 0
+                }
+              } : {}}
+            >
+              {isMobile ? "CSV" : t('telegram.exportMembers')}
+            </Button>
+          </Box>
+          
+          <Divider sx={{ my: 3 }} />
+          
+          <Box sx={{ mb: 3 }}>
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder={t('telegram.searchMembersPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size={isMobile ? "small" : "medium"}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+          
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showOnlyPremium}
+                  onChange={(e) => setShowOnlyPremium(e.target.checked)}
+                  size={isMobile ? "small" : "medium"}
+                />
+              }
+              label={t('telegram.onlyPremiumUsers')}
+            />
+            
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showOnlyWithUsername}
+                  onChange={(e) => setShowOnlyWithUsername(e.target.checked)}
+                  size={isMobile ? "small" : "medium"}
+                />
+              }
+              label={t('telegram.onlyUsersWithUsername')}
+            />
+          </Box>
+          
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size={isMobile ? "small" : "medium"} sx={{ tableLayout: 'fixed', minWidth: isMobile ? 400 : '100%' }}>
+              <TableHead>
+                <TableRow>
+                  {isMobile ? (
+                    <>
+                      <TableCell width="8%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>#</TableCell>
+                      <TableCell width="30%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Username</TableCell>
+                      <TableCell width="30%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Name</TableCell>
+                      <TableCell width="16%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Premium</TableCell>
+                      <TableCell width="16%" align="right" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Actions</TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell width="5%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>#</TableCell>
+                      <TableCell width="15%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('common.userId')}</TableCell>
+                      <TableCell width="15%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Username</TableCell>
+                      <TableCell width="20%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Name</TableCell>
+                      <TableCell width="15%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Status</TableCell>
+                      <TableCell width="20%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Premium</TableCell>
+                      <TableCell width="10%" align="right" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {t('common.actions')}
+                      </TableCell>
+                    </>
+                  )}
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        
-        <TablePagination
-          rowsPerPageOptions={[10, 25, 50, 100]}
-          component="div"
-          count={filteredMembers.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-      </Paper>
-    </Box>
+              </TableHead>
+              <TableBody>
+                {filteredMembers
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map((member, index) => (
+                    <TableRow key={member.user_id}>
+                      {isMobile ? (
+                        <>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>
+                            {page * rowsPerPage + index + 1}
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>
+                            {member.username ? (
+                              <Box
+                                component="a"
+                                href={`https://t.me/${member.username}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{
+                                  color: '#2AABEE',
+                                  textDecoration: 'none',
+                                  '&:hover': {
+                                    textDecoration: 'underline'
+                                  }
+                                }}
+                              >
+                                @{member.username}
+                              </Box>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>
+                            {[member.first_name, member.last_name].filter(Boolean).join(' ') || '-'}
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>
+                            {member.is_premium ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <VerifiedIcon sx={{ fontSize: 16, color: '#f57c00' }} />
+                              </Box>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell align="right" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px' }}>
+                            <IconButton
+                              size="small"
+                              href={`https://t.me/${member.username || member.user_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              sx={{ color: '#2AABEE' }}
+                            >
+                              <TelegramIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{page * rowsPerPage + index + 1}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.user_id}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {member.username ? `@${member.username}` : '-'}
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {[member.first_name, member.last_name].filter(Boolean).join(' ') || '-'}
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {member.is_admin && (
+                                <Tooltip title={t('common.isAdmin')}>
+                                  <AdminIcon color="primary" />
+                                </Tooltip>
+                              )}
+                              {member.is_bot ? (
+                                <Tooltip title={t('common.isBot')}>
+                                  <BotIcon color="secondary" />
+                                </Tooltip>
+                              ) : !member.is_admin && (
+                                <Tooltip title={t('common.user')}>
+                                  <PersonIcon color="action" />
+                                </Tooltip>
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {member.is_premium ? (
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  bgcolor: 'transparent',
+                                  color: '#f57c00',
+                                  border: '1px solid #f57c00',
+                                  borderRadius: '16px',
+                                  padding: '3px 8px',
+                                  fontSize: '0.8125rem',
+                                  fontWeight: 500,
+                                  width: 'fit-content'
+                                }}
+                              >
+                                <VerifiedIcon sx={{ fontSize: 16, mr: 0.5, color: '#f57c00' }} />
+                                Premium
+                              </Box>
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            <IconButton
+                              size="small"
+                              href={`https://t.me/${member.username || member.user_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              sx={{ color: '#2AABEE' }}
+                            >
+                              <TelegramIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </>
+                      )}
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          <TablePagination
+            component="div"
+            count={filteredMembers.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[10, 25, 50]}
+            labelRowsPerPage={isMobile ? '' : t('common.rowsPerPage')}
+          />
+        </Paper>
+      </Box>
+      {isMobile && bottomNav}
+    </Container>
   );
 };
 

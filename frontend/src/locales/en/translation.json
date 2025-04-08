@@ -70,7 +70,8 @@
     "yes": "Yes",
     "no": "No",
     "loadGroupError": "Failed to load group details. Please try again.",
-    "loadChannelError": "Failed to load channel details. Please try again."
+    "loadChannelError": "Failed to load channel details. Please try again.",
+    "rowsPerPage": "Rows per page:"
   },
   "navigation": {
     "sessions": "Sessions",
@@ -159,7 +160,7 @@
     "deleteChannelConfirm": "Are you sure you want to delete \"{{channelName}}\"? This action cannot be undone.",
     "deleteGroupConfirm": "Are you sure you want to delete \"{{groupName}}\"? This action cannot be undone.",
     "parsePermissionDisabled": "Parse permission is disabled",
-    "parseDisabled": "Parsing is disabled",
+    "parseDisabled": "No Parse Access",
     "parsePermissionEnabled": "Parse permission is enabled (without time limit)",
     "parseEnabled": "Parsing is enabled",
     "parsePermissionExpired": "Parse permission expired on {{date}}",
@@ -197,7 +198,16 @@
     "yes": "Yes",
     "no": "No",
     "loadGroupError": "Failed to load group details. Please try again.",
-    "loadChannelError": "Failed to load channel details. Please try again."
+    "loadChannelError": "Failed to load channel details. Please try again.",
+    "addNewSession": "Add New Session",
+    "onlyPremiumUsers": "Only Premium Users",
+    "onlyUsersWithUsername": "Only Users with Username",
+    "searchMembers": "Search Members",
+    "searchMembersPlaceholder": "Search members by username or name...",
+    "demoMode": "Demo Mode",
+    "demoModeInfo": "Demo mode: You can only parse groups, not channels",
+    "demoModeMessage": "You are in demo mode. Channel parsing is disabled, but you can parse groups.",
+    "demoModeChannelDisabled": "Channel parsing is disabled in demo mode"
   },
   "settings": {
     "title": "Settings",
@@ -264,5 +274,8 @@
     "showQRCode": "Show QR Code",
     "qrCodeAlt": "QR Code",
     "copyAddress": "Copy address"
+  },
+  "greetings": {
+    "welcome": "Hello"
   }
 } 

@@ -41,7 +41,7 @@ const PublicLayout = ({ children }) => {
               onClick={() => navigate('/')}
               style={{ cursor: 'pointer' }}
             >
-              {t('common.welcome', 'Добро пожаловать в Telegram Group Parser')}
+              {t('common.welcome')}
             </Typography>
             
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -49,7 +49,7 @@ const PublicLayout = ({ children }) => {
                 color="inherit"
                 onClick={() => navigate('/register')}
               >
-                {t('common.register', 'РЕГИСТРАЦИЯ')}
+                {t('common.register')}
               </Button>
               <Button
                 color="inherit"
@@ -62,7 +62,7 @@ const PublicLayout = ({ children }) => {
                   }
                 }}
               >
-                {t('common.login', 'ВХОД')}
+                {t('common.login')}
               </Button>
               <IconButton 
                 sx={{ ml: 1 }} 

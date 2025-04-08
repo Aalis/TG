@@ -38,6 +38,8 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
+import { Slide } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 const PARSE_DURATIONS = [
     { value: '1_hour', label: '1 Hour', icon: <AccessTimeIcon /> },
@@ -57,6 +59,7 @@ export default function AdminPanel() {
     const [selectedUserId, setSelectedUserId] = useState(null);
     const rowsPerPage = 10;
     const { enqueueSnackbar } = useSnackbar();
+    const { t } = useTranslation();
 
     const fetchUsers = async (search = searchQuery, currentPage = page) => {
         try {
@@ -228,6 +231,10 @@ export default function AdminPanel() {
         );
     };
 
+    const SlideTransition = (props) => {
+        return <Slide direction="up" {...props} />;
+    };
+
     return (
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -336,17 +343,76 @@ export default function AdminPanel() {
             <Dialog
                 open={deleteDialog.open}
                 onClose={handleDeleteCancel}
+                TransitionComponent={SlideTransition}
+                PaperProps={{
+                    elevation: 0,
+                    sx: {
+                        bgcolor: 'rgba(33, 33, 33, 0.95)',
+                        borderRadius: 2,
+                        width: '90%',
+                        maxWidth: '400px'
+                    }
+                }}
+                sx={{
+                    '& .MuiBackdrop-root': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        backdropFilter: 'blur(10px)'
+                    }
+                }}
             >
-                <DialogTitle>Confirm Delete</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Are you sure you want to delete user "{deleteDialog.username}"? This action cannot be undone.
-                    </DialogContentText>
+                <DialogContent sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    p: 3,
+                    gap: 2
+                }}>
+                    <Typography variant="h6" sx={{ color: '#fff', mb: 1 }}>
+                        {t('actions.confirm')}
+                    </Typography>
+
+                    <Typography sx={{ color: '#fff', mb: 2 }}>
+                        {t('admin.deleteUserConfirm', {
+                            username: deleteDialog.username,
+                            defaultValue: `Are you sure you want to delete user "${deleteDialog.username}"? This action cannot be undone.`
+                        })}
+                    </Typography>
+
+                    <Box sx={{ 
+                        display: 'flex', 
+                        gap: 2,
+                        '& .MuiButton-root': {
+                            flex: 1,
+                            py: 1,
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                            textTransform: 'uppercase'
+                        }
+                    }}>
+                        <Button 
+                            onClick={handleDeleteCancel}
+                            sx={{ 
+                                color: '#2196f3',
+                                '&:hover': {
+                                    bgcolor: 'rgba(33, 150, 243, 0.08)'
+                                }
+                            }}
+                        >
+                            {t('common.cancel')}
+                        </Button>
+                        <Button 
+                            onClick={handleDeleteConfirm}
+                            sx={{ 
+                                bgcolor: '#f44336',
+                                color: '#fff',
+                                '&:hover': {
+                                    bgcolor: '#d32f2f'
+                                }
+                            }}
+                        >
+                            {t('actions.delete')}
+                        </Button>
+                    </Box>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleDeleteCancel}>Cancel</Button>
-                    <Button onClick={handleDeleteConfirm} color="error">Delete</Button>
-                </DialogActions>
             </Dialog>
 
             <Dialog
