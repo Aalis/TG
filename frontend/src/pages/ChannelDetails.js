@@ -407,17 +407,17 @@ const ChannelDetails = () => {
                 <TableRow>
                   {isMobile ? (
                     <>
-                      <TableCell width="8%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>#</TableCell>
-                      <TableCell width="30%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Username</TableCell>
-                      <TableCell width="30%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Name</TableCell>
+                      <TableCell width="12%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff', minWidth: '48px' }}>#</TableCell>
+                      <TableCell width="28%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Username</TableCell>
+                      <TableCell width="28%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Name</TableCell>
                       <TableCell width="16%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Premium</TableCell>
                       <TableCell width="16%" align="right" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.75rem', padding: '6px 2px', color: '#fff' }}>Actions</TableCell>
                     </>
                   ) : (
                     <>
-                      <TableCell width="5%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>#</TableCell>
-                      <TableCell width="15%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('common.userId')}</TableCell>
-                      <TableCell width="15%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Username</TableCell>
+                      <TableCell width="8%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: '64px' }}>#</TableCell>
+                      <TableCell width="14%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('common.userId')}</TableCell>
+                      <TableCell width="13%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Username</TableCell>
                       <TableCell width="20%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Name</TableCell>
                       <TableCell width="15%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Status</TableCell>
                       <TableCell width="20%" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Premium</TableCell>

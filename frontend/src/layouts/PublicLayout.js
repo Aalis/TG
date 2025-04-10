@@ -7,6 +7,8 @@ import {
   Typography,
   Container,
   Button,
+  useTheme as useMuiTheme,
+  useMediaQuery
 } from '@mui/material';
 import {
   Brightness4 as DarkModeIcon,
@@ -21,6 +23,8 @@ const PublicLayout = ({ children }) => {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const muiTheme = useMuiTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down('sm'));
 
   return (
     <Box 
@@ -33,46 +37,60 @@ const PublicLayout = ({ children }) => {
       <AppBar position="fixed">
         <Container maxWidth="xl">
           <Toolbar disableGutters>
-            <Typography
-              variant="h6"
-              noWrap
-              component="div"
-              sx={{ flexGrow: 1 }}
-              onClick={() => navigate('/')}
-              style={{ cursor: 'pointer' }}
-            >
-              {t('common.welcome')}
-            </Typography>
-            
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Button
-                color="inherit"
-                onClick={() => navigate('/register')}
-              >
-                {t('common.register')}
-              </Button>
-              <Button
-                color="inherit"
-                variant="outlined"
-                onClick={() => navigate('/login')}
-                sx={{ 
-                  borderColor: 'rgba(255, 255, 255, 0.5)',
-                  '&:hover': {
-                    borderColor: 'white'
-                  }
-                }}
-              >
-                {t('common.login')}
-              </Button>
-              <IconButton 
-                sx={{ ml: 1 }} 
-                onClick={toggleTheme} 
-                color="inherit"
-              >
-                {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-              </IconButton>
-              <LanguageSwitcher />
-            </Box>
+            {isMobile ? (
+              <>
+                <Typography
+                  variant="h6"
+                  noWrap
+                  component="div"
+                  sx={{ flexGrow: 1 }}
+                  onClick={() => navigate('/')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  TG Parser
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <IconButton 
+                    sx={{ ml: 1 }} 
+                    onClick={toggleTheme} 
+                    color="inherit"
+                  >
+                    {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                  </IconButton>
+                  <LanguageSwitcher />
+                </Box>
+              </>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: 'auto' }}>
+                <Button
+                  color="inherit"
+                  onClick={() => navigate('/register')}
+                >
+                  {t('common.register')}
+                </Button>
+                <Button
+                  color="inherit"
+                  variant="outlined"
+                  onClick={() => navigate('/login')}
+                  sx={{ 
+                    borderColor: 'rgba(255, 255, 255, 0.5)',
+                    '&:hover': {
+                      borderColor: 'white'
+                    }
+                  }}
+                >
+                  {t('common.login')}
+                </Button>
+                <IconButton 
+                  sx={{ ml: 1 }} 
+                  onClick={toggleTheme} 
+                  color="inherit"
+                >
+                  {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                </IconButton>
+                <LanguageSwitcher />
+              </Box>
+            )}
           </Toolbar>
         </Container>
       </AppBar>
@@ -86,7 +104,15 @@ const PublicLayout = ({ children }) => {
           flexDirection: 'column',
         }}
       >
-        <Container maxWidth="lg" sx={{ flexGrow: 1, py: 3 }}>
+        <Container 
+          maxWidth={isMobile ? "xs" : "lg"} 
+          sx={{ 
+            flexGrow: 1, 
+            py: isMobile ? 1.5 : 3,
+            px: isMobile ? 2 : 3
+          }}
+          disableGutters={isMobile}
+        >
           {children}
         </Container>
       </Box>

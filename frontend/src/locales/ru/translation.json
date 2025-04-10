@@ -1,8 +1,8 @@
 {
   "common": {
-    "welcome": "Добро пожаловать в Telegram Group Parser",
-    "login": "Вход",
-    "logout": "Выход",
+    "welcome": "Добро пожаловать в Telegram Group/Channel Parser",
+    "login": "Войти",
+    "logout": "Выйти",
     "register": "Регистрация",
     "email": "Электронная почта",
     "password": "Пароль",
@@ -72,7 +72,8 @@
     "loadChannelError": "Не удалось загрузить информацию о канале. Пожалуйста, попробуйте снова.",
     "newChannel": "Новый",
     "newGroup": "Новая",
-    "rowsPerPage": "Строк на странице:"
+    "rowsPerPage": "Строк на странице:",
+    "addNewSession": "Добавить"
   },
   "navigation": {
     "sessions": "Сессии",
@@ -80,7 +81,8 @@
     "members": "Участники",
     "settings": "Настройки",
     "profile": "Профиль",
-    "admin": "Панель администратора",
+    "admin": "Админ",
+    "adminPanel": "Админ панель",
     "parsedGroups": "Группы",
     "parsedChannels": "Каналы",
     "controlPanel": "Панель управления"
@@ -124,6 +126,7 @@
     "channelLink": "Ссылка на канал",
     "parseGroup": "Парсить группу",
     "parseChannel": "Парсить канал",
+    "parse": "ПАРСИТЬ",
     "parseNewChannel": "ПАРСИТЬ НОВЫЙ КАНАЛ",
     "parseNewGroup": "ПАРСИТЬ НОВУЮ ГРУППУ",
     "parsing": "Парсинг...",
@@ -323,5 +326,8 @@
   },
   "greetings": {
     "welcome": "Привет"
+  },
+  "landing": {
+    "description": "Специализированный инструмент для поиска пользователей в группах и каналах Telegram. Находите участников, определяйте комментаторов и экспортируйте ценные данные пользователей для ваших кампаний информирования."
   }
 } 

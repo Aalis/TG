@@ -96,7 +96,14 @@ const Sessions = () => {
   );
 
   return (
-    <Container maxWidth="lg" sx={{ pb: isMobile ? 8 : 3 }}>
+    <Container 
+      maxWidth={isMobile ? "xs" : "lg"} 
+      sx={{ 
+        pb: isMobile ? 8 : 3, 
+        px: isMobile ? 0 : 3 
+      }}
+      disableGutters={isMobile}
+    >
       <Box>
         <Box sx={{ 
           display: 'flex', 
@@ -104,10 +111,11 @@ const Sessions = () => {
           alignItems: 'center', 
           mb: 3,
           backgroundColor: 'background.default',
-          py: 1
+          py: 1,
+          px: isMobile ? 2 : 0
         }}>
           <Typography 
-            variant={isMobile ? "h5" : "h4"} 
+            variant={isMobile ? "h4" : "h4"} 
             component="h1"
             sx={{ 
               fontWeight: 500
@@ -121,21 +129,23 @@ const Sessions = () => {
             color="primary"
             startIcon={<AddIcon />}
             onClick={() => document.dispatchEvent(new CustomEvent('add-telegram-session'))}
-            size={isMobile ? "small" : "medium"}
-            sx={isMobile ? {
-              minWidth: 'auto',
-              px: 2,
-              fontSize: '0.875rem',
-              '& .MuiButton-startIcon': {
-                mr: 0.5,
-              },
-            } : {}}
+            sx={{
+              textTransform: 'uppercase',
+              mb: 0
+            }}
           >
-            {isMobile ? t('common.addNewSession', 'Add') : t('telegram.addNewSession', 'Add New Session')}
+            {t('common.add', 'ADD')}
           </Button>
         </Box>
         
-        <Paper sx={{ p: isMobile ? 2 : 3, mb: 3 }}>
+        <Paper sx={{ 
+          p: isMobile ? 2 : 3, 
+          mb: 3,
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          mx: 0
+        }}>
           <TelegramSessions />
         </Paper>
       </Box>

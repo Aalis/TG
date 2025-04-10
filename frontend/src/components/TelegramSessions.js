@@ -33,6 +33,7 @@ import {
   Toolbar,
   BottomNavigation,
   BottomNavigationAction,
+  Grid,
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon, ArrowBack as ArrowBackIcon, Home as HomeIcon, Group as GroupIcon, Chat as ChatIcon, Person as PersonIcon } from '@mui/icons-material';
 import { sessionsAPI } from '../services/api';
@@ -206,40 +207,6 @@ const TelegramSessions = () => {
     toggleSession(sessionId, newStatus);
   };
 
-  const renderMobileSession = (session) => (
-    <Card key={session.id} sx={{ mb: 1.5, bgcolor: 'background.paper', borderRadius: 1 }}>
-      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="subtitle1" fontWeight="medium" sx={{ mb: 0.5 }}>
-              {formatPhoneNumber(session.phone)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-              {session.created_at ? format(new Date(session.created_at), 'yyyy-MM-dd HH:mm') : '-'}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Switch
-              checked={session.is_active}
-              onChange={() => handleToggleStatus(session.id, session.is_active)}
-              disabled={isToggling}
-              size="small"
-            />
-            <IconButton 
-              color="error" 
-              onClick={() => handleDeleteClick(session)}
-              disabled={isDeleting}
-              size="small"
-              sx={{ ml: 0.5 }}
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-
   // Format phone number for display
   const formatPhoneNumber = (phone) => {
     if (!phone) return '-';
@@ -289,8 +256,78 @@ const TelegramSessions = () => {
       ) : (
         <>
           {isMobile ? (
-            <Box sx={{ mt: -1 }}>
-              {sessions.map(session => renderMobileSession(session))}
+            <Box sx={{ width: '100%' }}>
+              <Grid 
+                container 
+                spacing={0}
+                sx={{ 
+                  width: '100%',
+                  mx: 0,
+                  px: 0
+                }}
+              >
+                {sessions.map((session) => (
+                  <Grid 
+                    item 
+                    xs={12} 
+                    key={session.id} 
+                    sx={{ 
+                      width: '100%',
+                      mb: 1.5
+                    }}
+                  >
+                    <Card sx={{ 
+                      borderRadius: 1,
+                      width: '100%',
+                      maxWidth: '100%', 
+                      bgcolor: 'background.paper',
+                      boxSizing: 'border-box',
+                      '&:hover': {
+                        boxShadow: (theme) => `0px 2px 8px ${theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.1)'}`
+                      }
+                    }}>
+                      <CardContent sx={{ 
+                        p: 0, 
+                        pb: '0 !important',
+                        '&:last-child': { pb: '0 !important' } 
+                      }}>
+                        <Box sx={{ 
+                          p: 2,
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center' 
+                        }}>
+                          <Box>
+                            <Typography variant="subtitle1" fontWeight="medium" sx={{ mb: 0.5 }}>
+                              {formatPhoneNumber(session.phone)}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                              {session.created_at ? format(new Date(session.created_at), 'yyyy-MM-dd HH:mm') : '-'}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Switch
+                              checked={session.is_active}
+                              onChange={() => handleToggleStatus(session.id, session.is_active)}
+                              disabled={isToggling}
+                              size="small"
+                            />
+                            <IconButton 
+                              color="error" 
+                              onClick={() => handleDeleteClick(session)}
+                              disabled={isDeleting}
+                              size="small"
+                              sx={{ ml: 0.5 }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
             </Box>
           ) : (
             <TableContainer component={Paper} elevation={0}>

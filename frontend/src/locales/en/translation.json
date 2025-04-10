@@ -1,6 +1,6 @@
 {
   "common": {
-    "welcome": "Welcome to Telegram Group Parser",
+    "welcome": "Welcome to Telegram Group/Channel Parser",
     "login": "Login",
     "logout": "Logout",
     "register": "Register",
@@ -79,9 +79,9 @@
     "members": "Members",
     "settings": "Settings",
     "profile": "Profile",
-    "admin": "Admin Panel",
-    "parsedGroups": "Parsed Groups",
-    "parsedChannels": "Parsed Channels",
+    "admin": "Admin",
+    "parsedGroups": "Groups",
+    "parsedChannels": "Channels",
     "controlPanel": "Control Panel"
   },
   "auth": {
@@ -123,8 +123,9 @@
     "channelLink": "Channel Link",
     "parseGroup": "Parse Group",
     "parseChannel": "Parse Channel",
-    "parseNewChannel": "PARSE NEW CHANNEL",
-    "parseNewGroup": "PARSE NEW GROUP",
+    "parse": "PARSE",
+    "parseNewChannel": "NEW CHANNEL",
+    "parseNewGroup": "NEW GROUP",
     "parsing": "Parsing...",
     "parseSuccess": "Group successfully parsed",
     "parseError": "Failed to parse group",
@@ -277,5 +278,8 @@
   },
   "greetings": {
     "welcome": "Hello"
+  },
+  "landing": {
+    "description": "A specialized tool for discovering users across Telegram groups and channels. Find members, identify commenters, and export valuable user data for your outreach campaigns."
   }
 } 

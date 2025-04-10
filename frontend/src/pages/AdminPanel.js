@@ -82,6 +82,37 @@ export default function AdminPanel() {
         return () => clearInterval(interval);
     }, [page]);
 
+    // Check for and disable expired parse permissions
+    useEffect(() => {
+        const disableExpiredPermissions = async () => {
+            for (const user of users) {
+                // Skip users who aren't able to parse or don't have an expiration date
+                if (!user.can_parse || !user.parse_permission_expires || user.is_superuser) {
+                    continue;
+                }
+                
+                const expiryDate = new Date(user.parse_permission_expires);
+                // If permission has expired, disable it
+                if (isPast(expiryDate)) {
+                    try {
+                        const updatedUser = await adminService.toggleParsePermission(user.id, false);
+                        setUsers(prevUsers => prevUsers.map(u => 
+                            u.id === user.id ? updatedUser : u
+                        ));
+                        enqueueSnackbar(`Parse permission automatically disabled for ${user.username}`, {
+                            variant: 'info',
+                            autoHideDuration: 3000
+                        });
+                    } catch (err) {
+                        console.error('Error auto-disabling parse permission:', err);
+                    }
+                }
+            }
+        };
+        
+        disableExpiredPermissions();
+    }, [users]);
+
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             setPage(0);
@@ -214,7 +245,18 @@ export default function AdminPanel() {
                     label="Expired"
                     color="error"
                     size="small"
-                    icon={<TimerIcon />}
+                    icon={<TimerIcon sx={{ fontSize: '1rem' }} />}
+                    sx={{
+                        height: '24px',
+                        '& .MuiChip-label': {
+                            px: 1,
+                            fontSize: '0.75rem'
+                        },
+                        '& .MuiChip-icon': {
+                            fontSize: '1rem',
+                            ml: 0.5
+                        }
+                    }}
                 />
             );
         }
@@ -225,7 +267,18 @@ export default function AdminPanel() {
                     label={`${formatDistanceToNow(expiryDate)} left`}
                     color="success"
                     size="small"
-                    icon={<TimerIcon />}
+                    icon={<TimerIcon sx={{ fontSize: '1rem' }} />}
+                    sx={{
+                        height: '24px',
+                        '& .MuiChip-label': {
+                            px: 1,
+                            fontSize: '0.75rem'
+                        },
+                        '& .MuiChip-icon': {
+                            fontSize: '1rem',
+                            ml: 0.5
+                        }
+                    }}
                 />
             </Tooltip>
         );
@@ -237,93 +290,158 @@ export default function AdminPanel() {
 
     return (
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h4" component="h1">
-                    User Management
+            <Box sx={{ 
+                display: 'flex', 
+                flexDirection: { xs: 'column', sm: 'row' },
+                gap: { xs: 2, sm: 3 },
+                justifyContent: 'space-between', 
+                alignItems: { xs: 'stretch', sm: 'center' }, 
+                mb: 3 
+            }}>
+                <Typography variant="h4" component="h1" gutterBottom sx={{ 
+                    fontSize: { xs: '1.75rem', sm: '2.125rem' },
+                    mb: { xs: 0, sm: 1 }
+                }}>
+                    {t('navigation.adminPanel', 'Admin Panel')}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Box sx={{ 
+                    display: 'flex',
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    gap: { xs: 1, sm: 2 },
+                    alignItems: 'stretch'
+                }}>
                     <Button
                         variant="contained"
                         startIcon={<PersonAddIcon />}
                         onClick={handleCreateClient}
-                    >
-                        Create Client Account
-                    </Button>
-                    <TextField
                         size="small"
-                        placeholder="Search users..."
-                        value={searchQuery}
-                        onChange={handleSearchChange}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon />
-                                </InputAdornment>
-                            ),
+                        sx={{
+                            whiteSpace: 'nowrap',
+                            fontSize: { xs: '0.8125rem', sm: '0.875rem' },
+                            py: { xs: 1, sm: 'auto' }
                         }}
-                    />
-                    <Tooltip title="Refresh users list">
-                        <IconButton onClick={() => fetchUsers()}>
-                            <RefreshIcon />
-                        </IconButton>
-                    </Tooltip>
+                    >
+                        {t('admin.createClient', 'Create Client Account')}
+                    </Button>
+                    <Box sx={{ 
+                        display: 'flex', 
+                        gap: 1,
+                        alignItems: 'center'
+                    }}>
+                        <TextField
+                            size="small"
+                            placeholder={t('common.search', 'Search users...')}
+                            value={searchQuery}
+                            onChange={handleSearchChange}
+                            sx={{
+                                flexGrow: 1,
+                                '& .MuiInputBase-root': {
+                                    height: { xs: 36, sm: 40 }
+                                }
+                            }}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }} />
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+                        <Tooltip title={t('common.refresh', 'Refresh users list')}>
+                            <IconButton 
+                                onClick={() => fetchUsers()}
+                                size="small"
+                                sx={{ p: { xs: 0.5, sm: 1 } }}
+                            >
+                                <RefreshIcon sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
             </Box>
 
-            <TableContainer component={Paper}>
+            <TableContainer component={Paper} sx={{
+                '& .MuiTableCell-root': {
+                    px: { xs: 1, sm: 2 },
+                    py: { xs: 1.5, sm: 2 },
+                    '&:first-of-type': { pl: { xs: 2, sm: 3 } },
+                    '&:last-of-type': { pr: { xs: 2, sm: 3 } }
+                }
+            }}>
                 <Table>
                     <TableHead>
                         <TableRow>
-                            <TableCell width="50">#</TableCell>
+                            <TableCell width="40">#</TableCell>
                             <TableCell>Username</TableCell>
                             <TableCell>Email</TableCell>
-                            <TableCell align="center">Active</TableCell>
-                            <TableCell align="center">Can Parse</TableCell>
+                            <TableCell align="center" sx={{ px: { xs: 1, sm: 2 } }}>Active</TableCell>
+                            <TableCell align="center" sx={{ px: { xs: 1, sm: 2 } }}>Can Parse</TableCell>
                             <TableCell align="center">Parse Status</TableCell>
-                            <TableCell align="center">Superuser</TableCell>
+                            <TableCell align="center" sx={{ px: { xs: 1, sm: 2 } }}>Superuser</TableCell>
                             <TableCell align="right">Last Visit</TableCell>
-                            <TableCell align="center">Actions</TableCell>
+                            <TableCell align="center" sx={{ px: { xs: 1, sm: 2 } }}>Actions</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {users.map((user, index) => (
                             <TableRow key={user.id}>
                                 <TableCell>{page * rowsPerPage + index + 1}</TableCell>
-                                <TableCell>{user.username}</TableCell>
-                                <TableCell>{user.email}</TableCell>
-                                <TableCell align="center">
+                                <TableCell sx={{ 
+                                    maxWidth: { xs: 100, sm: 150 },
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                }}>
+                                    {user.username}
+                                </TableCell>
+                                <TableCell sx={{ 
+                                    maxWidth: { xs: 120, sm: 200 },
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                }}>
+                                    {user.email}
+                                </TableCell>
+                                <TableCell align="center" sx={{ px: { xs: 1, sm: 2 } }}>
                                     <Switch
                                         checked={user.is_active}
                                         onChange={() => handleToggleActive(user.id, user.is_active)}
                                         disabled={user.is_superuser}
+                                        size="small"
                                     />
                                 </TableCell>
-                                <TableCell align="center">
+                                <TableCell align="center" sx={{ px: { xs: 1, sm: 2 } }}>
                                     <Switch
                                         checked={user.can_parse}
                                         onChange={(e) => handleToggleParsePermission(user.id, user.can_parse, e)}
                                         disabled={user.is_superuser}
+                                        size="small"
                                     />
                                 </TableCell>
                                 <TableCell align="center">
                                     {formatParsePermission(user)}
                                 </TableCell>
-                                <TableCell align="center">
+                                <TableCell align="center" sx={{ px: { xs: 1, sm: 2 } }}>
                                     <Switch
                                         checked={user.is_superuser}
                                         disabled={true}
+                                        size="small"
                                     />
                                 </TableCell>
-                                <TableCell align="right">
+                                <TableCell align="right" sx={{
+                                    fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                                }}>
                                     {formatDate(user.last_visit)}
                                 </TableCell>
-                                <TableCell align="center">
+                                <TableCell align="center" sx={{ px: { xs: 1, sm: 2 } }}>
                                     <IconButton
                                         color="error"
                                         onClick={() => handleDeleteClick(user.id, user.username)}
                                         disabled={user.is_superuser}
+                                        size="small"
+                                        sx={{ p: { xs: 0.5, sm: 1 } }}
                                     >
-                                        <DeleteIcon />
+                                        <DeleteIcon sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }} />
                                     </IconButton>
                                 </TableCell>
                             </TableRow>

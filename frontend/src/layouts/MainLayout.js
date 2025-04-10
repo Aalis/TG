@@ -50,6 +50,7 @@ import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { prefetchSessions } from '../hooks/useSessions';
 import { SlideTransition } from '../utils/transitions';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 
 const drawerWidth = 240;
 
@@ -167,7 +168,7 @@ const MainLayout = ({ children }) => {
             <ListItemIcon>
               <AdminIcon />
             </ListItemIcon>
-            <ListItemText primary={t('navigation.admin', 'Admin')} />
+            <ListItemText primary={t('navigation.adminPanel', 'Admin Panel')} />
           </ListItem>
         )}
         <ListItem 
@@ -190,44 +191,6 @@ const MainLayout = ({ children }) => {
     </div>
   );
 
-  const bottomNav = (
-    <BottomNavigation
-      value={location.pathname}
-      onChange={handleBottomNavChange}
-      showLabels
-      sx={{
-        width: '100%',
-        position: 'fixed',
-        bottom: 0,
-        borderTop: 1,
-        borderColor: 'divider',
-        zIndex: (theme) => theme.zIndex.appBar,
-        bgcolor: 'background.paper',
-      }}
-    >
-      <BottomNavigationAction
-        label={t('navigation.sessions', 'Sessions')}
-        value="/"
-        icon={<HomeIcon />}
-      />
-      <BottomNavigationAction
-        label={t('navigation.parsedGroups', 'Groups')}
-        value="/groups"
-        icon={<GroupsIcon />}
-      />
-      <BottomNavigationAction
-        label={t('navigation.parsedChannels', 'Channels')}
-        value="/channels"
-        icon={<ChannelsIcon />}
-      />
-      <BottomNavigationAction
-        label={t('common.subscribe', 'Subscribe')}
-        value="/subscribe"
-        icon={<ShoppingCartIcon />}
-      />
-    </BottomNavigation>
-  );
-
   return (
     <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
@@ -247,85 +210,88 @@ const MainLayout = ({ children }) => {
           <Box sx={{ 
             display: 'flex', 
             alignItems: 'center', 
-            gap: 1,
-            flexGrow: { xs: 1, sm: 0 },
-            justifyContent: 'center',
-            minHeight: { xs: '40px', sm: '48px' }
+            justifyContent: 'flex-end',
+            flexGrow: 1,
+            gap: 1
           }}>
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 1,
-              justifyContent: 'center'
-            }}>
-              {user?.is_active && !user?.can_parse ? (
-                <Chip
-                  label={t('telegram.demoMode')}
-                  color="warning"
-                  size="small"
-                  sx={{ 
-                    height: '24px',
-                    '& .MuiChip-label': { 
-                      px: 1,
-                      fontSize: { xs: '0.75rem', sm: '0.8125rem' }
-                    }
-                  }}
-                />
-              ) : user?.parse_permission_expires ? (
-                <ParsePermissionCountdown 
-                  expiresAt={user.parse_permission_expires} 
-                  canParse={user?.can_parse}
-                  isDemoMode={false}
-                />
-              ) : (
-                <Chip
-                  label={t('telegram.parseDisabled')}
-                  color="error"
-                  size="small"
-                  sx={{ 
-                    height: '24px',
-                    '& .MuiChip-label': { 
-                      px: 1,
-                      fontSize: { xs: '0.75rem', sm: '0.8125rem' }
-                    }
-                  }}
-                />
-              )}
-            </Box>
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 0.5,
-              flexShrink: 0
-            }}>
-              <LanguageSwitcher />
-              {isMobile ? (
+            {/* Status Chip */}
+            {user?.is_superuser ? (
+              <Chip
+                label={t('navigation.admin', 'Admin')}
+                color="primary"
+                size="small"
+                sx={{ 
+                  height: '24px',
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                  '& .MuiChip-label': { 
+                    px: 1,
+                    fontSize: { xs: '0.75rem', sm: '0.8125rem' }
+                  }
+                }}
+              />
+            ) : user?.is_active && !user?.can_parse ? (
+              <Chip
+                label={t('telegram.demoMode')}
+                color="warning"
+                size="small"
+                sx={{ 
+                  height: '24px',
+                  '& .MuiChip-label': { 
+                    px: 1,
+                    fontSize: { xs: '0.75rem', sm: '0.8125rem' }
+                  }
+                }}
+              />
+            ) : user?.parse_permission_expires ? (
+              <ParsePermissionCountdown 
+                expiresAt={user.parse_permission_expires} 
+                canParse={user?.can_parse}
+                isDemoMode={false}
+              />
+            ) : (
+              <Chip
+                label={t('telegram.parseDisabled')}
+                color="error"
+                size="small"
+                sx={{ 
+                  height: '24px',
+                  '& .MuiChip-label': { 
+                    px: 1,
+                    fontSize: { xs: '0.75rem', sm: '0.8125rem' }
+                  }
+                }}
+              />
+            )}
+
+            {/* Language and User Controls */}
+            <LanguageSwitcher />
+            {isMobile ? (
+              <IconButton
+                color="inherit"
+                onClick={handleOpenUserMenu}
+                size="small"
+                sx={{ p: { xs: 0.5, sm: 1 } }}
+              >
+                <ProfileIcon />
+              </IconButton>
+            ) : (
+              <>
                 <IconButton
                   color="inherit"
-                  onClick={handleOpenUserMenu}
+                  onClick={toggleTheme}
                   size="small"
                   sx={{ p: { xs: 0.5, sm: 1 } }}
                 >
-                  <ProfileIcon />
+                  {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
                 </IconButton>
-              ) : (
-                <>
-                  <IconButton
-                    color="inherit"
-                    onClick={toggleTheme}
-                    size="small"
-                    sx={{ p: { xs: 0.5, sm: 1 } }}
-                  >
-                    {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                <Tooltip title={t('common.openSettings', 'Open settings')}>
+                  <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
+                    <Avatar>{user?.email?.[0]?.toUpperCase()}</Avatar>
                   </IconButton>
-                  <Tooltip title={t('common.openSettings', 'Open settings')}>
-                    <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
-                      <Avatar>{user?.email?.[0]?.toUpperCase()}</Avatar>
-                    </IconButton>
-                  </Tooltip>
-                </>
-              )}
-            </Box>
+                </Tooltip>
+              </>
+            )}
           </Box>
         </Toolbar>
       </AppBar>
@@ -347,10 +313,11 @@ const MainLayout = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: isMobile ? 0 : 3,
           width: '100%',
           ...(isMobile ? {
-            pb: 8, // Add padding for bottom navigation
+            pb: 7,
+            mb: 7
           } : {
             width: { sm: `calc(100% - ${drawerWidth}px)` },
             ml: { sm: `${drawerWidth}px` },
@@ -358,10 +325,96 @@ const MainLayout = ({ children }) => {
         }}
       >
         <Toolbar />
-        {children}
+        {isMobile ? (
+          <Container
+            maxWidth="xs"
+            disableGutters
+            sx={{ 
+              px: 0,
+              py: 1,
+              width: '100%',
+              maxWidth: '100% !important',
+              '& .MuiCard-root': {
+                width: '100%',
+                maxWidth: '100%',
+                mx: 0
+              },
+              '& .MuiGrid-container': {
+                width: '100%',
+                margin: 0,
+                padding: 0
+              },
+              '& .MuiGrid-item': {
+                paddingLeft: 0,
+                paddingRight: 0,
+                paddingTop: 1,
+                paddingBottom: 1
+              }
+            }}
+          >
+            {children}
+          </Container>
+        ) : (
+          children
+        )}
       </Box>
 
-      {isMobile && bottomNav}
+      {isMobile && (
+        <BottomNavigation
+          value={location.pathname}
+          onChange={handleBottomNavChange}
+          showLabels
+          sx={{
+            width: '100%',
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            borderTop: 1,
+            borderColor: 'divider',
+            zIndex: (theme) => theme.zIndex.appBar,
+            bgcolor: 'background.paper',
+            height: 56,
+            '& .MuiBottomNavigationAction-root': {
+              fontSize: '0.75rem',
+              minWidth: 'auto',
+              padding: '6px 0',
+              '& .MuiBottomNavigationAction-label': {
+                fontSize: '0.75rem',
+              }
+            }
+          }}
+        >
+          <BottomNavigationAction
+            label={t('navigation.sessions', 'Sessions')}
+            value="/"
+            icon={<HomeIcon />}
+          />
+          <BottomNavigationAction
+            label={t('navigation.parsedGroups', 'Groups')}
+            value="/groups"
+            icon={<GroupsIcon />}
+          />
+          <BottomNavigationAction
+            label={t('navigation.parsedChannels', 'Channels')}
+            value="/channels"
+            icon={<ChannelsIcon />}
+          />
+          {user?.is_superuser ? (
+            <BottomNavigationAction
+              label={t('navigation.admin', 'Admin')}
+              value="/admin"
+              icon={<AdminPanelSettingsIcon />}
+            />
+          ) : (
+            <BottomNavigationAction
+              label={t('common.subscribe', 'Subscribe')}
+              value="/subscribe"
+              icon={<ShoppingCartIcon />}
+            />
+          )}
+        </BottomNavigation>
+      )}
 
       <Menu
         sx={{ mt: '45px' }}

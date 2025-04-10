@@ -32,6 +32,8 @@ import {
   Divider,
   Pagination,
   Container,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import {
@@ -48,6 +50,7 @@ import ParseButtonHeader from '../components/ParseButtonHeader';
 import { useGroups } from '../hooks/useGroups';
 import { useQueryClient } from '@tanstack/react-query';
 import { SlideTransition } from '../utils/transitions';
+import { useAuth } from '../context/AuthContext';
 
 // Pagination constants
 const ITEMS_PER_PAGE = 42;  // Show 42 items at once
@@ -62,6 +65,8 @@ const getPageFromUrl = (search) => {
 
 const ParsedGroups = () => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [groupToDelete, setGroupToDelete] = useState(null);
@@ -86,6 +91,7 @@ const ParsedGroups = () => {
   const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   // Initialize states
   const [page, setPage] = useState(() => getPageFromUrl(location.search));
@@ -499,6 +505,13 @@ const ParsedGroups = () => {
     }
   }, [location, navigate, resetParsingState]);
 
+  // Consider a user in demo mode if they are active but don't have can_parse permission
+  // OR if their parse permission has expired, UNLESS they are a superuser
+  const isInDemoMode = !user?.is_superuser && (
+    (user?.is_active && !user?.can_parse) || 
+    (user?.parse_permission_expires && new Date(user.parse_permission_expires) < new Date())
+  );
+
   if (isLoading && groups.length === 0) {
     return (
       <Container maxWidth="lg">
@@ -512,21 +525,47 @@ const ParsedGroups = () => {
   return (
     <Container maxWidth="lg">
       <Box>
-        <ParseButtonHeader
-          title={t('navigation.parsedGroups')}
-          entityType="group"
-          onButtonClick={() => {
-            // Reset all parsing-related state
-            resetParsingState();
-            // Clear any previous error messages when opening the dialog
-            setParsingStatus({ loading: false, success: false, error: null });
-            // Reset form fields
-            setSelectedDialog(null);
-            setGroupLink('');
-            // Open the dialog
-            setParseDialogOpen(true);
-          }}
-        />
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 3,
+          backgroundColor: 'background.default',
+          py: 1
+        }}>
+          <Typography 
+            variant={isMobile ? "h4" : "h4"} 
+            component="h1"
+            sx={{ 
+              fontWeight: 500
+            }}
+          >
+            {t('navigation.parsedGroups')}
+          </Typography>
+          
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => {
+              // Reset all parsing-related state
+              resetParsingState();
+              // Clear any previous error messages when opening the dialog
+              setParsingStatus({ loading: false, success: false, error: null });
+              // Reset form fields
+              setSelectedDialog(null);
+              setGroupLink('');
+              // Open the dialog
+              setParseDialogOpen(true);
+            }}
+            startIcon={<AddIcon />}
+            sx={{ 
+              textTransform: 'uppercase',
+              mb: 0
+            }}
+          >
+            {t('common.newGroup', 'NEW GROUP')}
+          </Button>
+        </Box>
         
         {queryError && (
           <Alert severity="error" sx={{ mb: 3 }}>
@@ -534,7 +573,7 @@ const ParsedGroups = () => {
           </Alert>
         )}
         
-        <Paper sx={{ p: 2, mb: 3 }}>
+        <Paper sx={{ p: isMobile ? 2 : 3, mb: 3, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
           <TextField
             fullWidth
             placeholder={t('common.searchPlaceholder')}
@@ -551,7 +590,7 @@ const ParsedGroups = () => {
         </Paper>
         
         {filteredGroups.length === 0 ? (
-          <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Paper sx={{ p: 4, textAlign: 'center', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
             {groups.length === 0 ? (
               <>
                 <Typography variant="h6" gutterBottom>
@@ -563,7 +602,6 @@ const ParsedGroups = () => {
                 <Button
                   variant="contained"
                   color="primary"
-                  startIcon={<AddIcon />}
                   onClick={() => {
                     // Clear any previous error messages when opening the dialog
                     setParsingStatus({ loading: false, success: false, error: null });
@@ -586,13 +624,37 @@ const ParsedGroups = () => {
           </Paper>
         ) : (
           <>
-            <Grid container spacing={3}>
+            <Grid 
+              container 
+              spacing={0}
+              sx={{ 
+                width: '100%',
+                mx: 0,
+                px: 0
+              }}
+            >
               {paginatedGroups.map((group) => (
-                <Grid item xs={12} sm={6} md={4} key={group.id}>
+                <Grid 
+                  item 
+                  xs={12} 
+                  sm={6} 
+                  md={4} 
+                  key={group.id} 
+                  sx={{ 
+                    width: '100%',
+                    p: isMobile ? 0 : 1.5,
+                    mb: isMobile ? 1 : 0
+                  }}
+                >
                   <Card 
                     className="card-hover"
                     sx={{ 
                       cursor: 'pointer',
+                      width: '100%',
+                      maxWidth: '100%',
+                      marginLeft: 0,
+                      marginRight: 0,
+                      borderRadius: isMobile ? 1 : 2,
                       '&:hover': {
                         transform: 'translateY(-4px)',
                         transition: 'transform 0.2s ease-in-out',
@@ -604,30 +666,66 @@ const ParsedGroups = () => {
                       navigate(`/groups/${group.id}`);
                     }}
                   >
-                    <CardContent sx={{ pb: 0 }}>
-                      <Typography variant="h6" noWrap gutterBottom>
+                    <CardContent sx={{ 
+                        pb: 0, 
+                        pt: isMobile ? 1.5 : 2, 
+                        px: isMobile ? 1.5 : 2 
+                      }}>
+                      <Typography 
+                        variant="h6" 
+                        noWrap 
+                        gutterBottom={!isMobile}
+                        sx={{ mb: isMobile ? 0.5 : undefined }}
+                      >
                         {group.group_name}
                       </Typography>
                       
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        gutterBottom={!isMobile}
+                        sx={{ mb: isMobile ? 0.5 : undefined }}
+                      >
                         {group.group_username ? `@${group.group_username}` : t('telegram.privateGroup')}
                       </Typography>
                       
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mt: 1, mb: 2 }}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'flex-start', 
+                        mt: isMobile ? 0.5 : 1, 
+                        mb: isMobile ? 1 : 2 
+                      }}>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: isMobile ? 0.5 : 0.75 
+                        }}>
                           <Chip 
                             label={`${(group.member_count || 0).toLocaleString()} ${t('common.members')}`} 
                             size="small" 
                             color="primary" 
                             variant="outlined"
-                            sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
+                            sx={{ 
+                              height: '24px', 
+                              '& .MuiChip-label': { 
+                                px: 1,
+                                fontSize: isMobile ? '0.7rem' : '0.75rem' 
+                              } 
+                            }}
                           />
                           <Chip 
                             label={`${(group.members?.length || 0).toLocaleString()} ${t('common.usersFound')}`} 
                             size="small" 
                             color="info" 
                             variant="outlined"
-                            sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
+                            sx={{ 
+                              height: '24px', 
+                              '& .MuiChip-label': { 
+                                px: 1,
+                                fontSize: isMobile ? '0.7rem' : '0.75rem'
+                              } 
+                            }}
                           />
                         </Box>
                         <Chip 
@@ -635,11 +733,17 @@ const ParsedGroups = () => {
                           size="small" 
                           color={group.is_public ? 'success' : 'default'} 
                           variant="outlined"
-                          sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
+                          sx={{ 
+                            height: '24px', 
+                            '& .MuiChip-label': { 
+                              px: 1,
+                              fontSize: isMobile ? '0.7rem' : '0.75rem'
+                            } 
+                          }}
                         />
                       </Box>
                       
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: isMobile ? 0.5 : 1 }}>
                         {t('common.parsed')}: {(() => {
                           // Parse the timestamp from the server 
                           const timestamp = group.parsed_at;
@@ -662,7 +766,7 @@ const ParsedGroups = () => {
                       </Typography>
                     </CardContent>
                     
-                    <CardActions>
+                    <CardActions sx={{ p: isMobile ? '4px 8px' : '8px 16px' }}>
                       <Box sx={{ flexGrow: 1 }} />
                       
                       <Tooltip title={t('actions.delete')}>
@@ -673,8 +777,9 @@ const ParsedGroups = () => {
                             handleDeleteClick(group);
                           }}
                           data-delete="true"
+                          size={isMobile ? "small" : "medium"}
                         >
-                          <DeleteIcon />
+                          <DeleteIcon fontSize={isMobile ? "small" : "medium"} />
                         </IconButton>
                       </Tooltip>
                     </CardActions>
@@ -982,19 +1087,40 @@ const ParsedGroups = () => {
               }} 
               disabled={parsingStatus.loading}
               variant="outlined"
-              sx={{ textTransform: 'uppercase' }}
+              sx={{ 
+                textTransform: 'uppercase',
+                fontSize: '0.875rem',
+                py: 1,
+                flex: 1,
+                height: { xs: '36px', sm: 'auto' },
+                width: { sm: '160px' }
+              }}
             >
               {t('telegram.cancel')}
             </Button>
             <LoadingButton
-              onClick={handleParseGroup}
               loading={parsingStatus.loading}
               loadingPosition="start"
               startIcon={<SendIcon />}
               variant="contained"
+              color="primary"
+              onClick={handleParseGroup}
               disabled={parsingStatus.loading || (!groupLink.trim() && !selectedDialog)}
+              sx={{
+                textTransform: 'uppercase',
+                fontSize: '0.875rem',
+                py: 0.5,
+                px: 2,
+                height: { xs: '36px', sm: '40px' },
+                minHeight: { xs: '36px', sm: '40px' },
+                flex: 1,
+                width: { sm: '160px' },
+                '& .MuiButton-startIcon': {
+                  marginRight: { xs: 0.5, sm: 1 }
+                }
+              }}
             >
-              {t('telegram.parseGroup')}
+              {t(isMobile ? 'common.parse' : 'common.newGroup', isMobile ? 'PARSE' : 'NEW GROUP')}
             </LoadingButton>
           </DialogActions>
         </Dialog>

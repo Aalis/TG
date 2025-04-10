@@ -35,6 +35,8 @@ import {
   MenuItem,
   FormHelperText,
   Container,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import {
@@ -67,6 +69,8 @@ const getPageFromUrl = (search) => {
 
 const ParsedChannels = () => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const location = useLocation();
   const { enqueueSnackbar } = useSnackbar();
@@ -74,9 +78,11 @@ const ParsedChannels = () => {
   const { user } = useAuth();
 
   // Consider a user in demo mode if they are active but don't have can_parse permission
-  // OR if their parse permission has expired
-  const isInDemoMode = (user?.is_active && !user?.can_parse) || 
-                       (user?.parse_permission_expires && new Date(user.parse_permission_expires) < new Date());
+  // OR if their parse permission has expired, UNLESS they are a superuser
+  const isInDemoMode = !user?.is_superuser && (
+    (user?.is_active && !user?.can_parse) || 
+    (user?.parse_permission_expires && new Date(user.parse_permission_expires) < new Date())
+  );
 
   // Initialize states
   const [searchTerm, setSearchTerm] = useState('');
@@ -635,23 +641,52 @@ const ParsedChannels = () => {
   return (
     <Container maxWidth="lg">
       <Box>
-        <ParseButtonHeader
-          title={t('navigation.parsedChannels')}
-          entityType="channel"
-          onButtonClick={() => {
-            // Reset all parsing-related state
-            resetParsingState();
-            // Clear any previous error messages when opening the dialog
-            setParsingStatus({ loading: false, success: false, error: null });
-            // Reset form fields
-            setSelectedDialog(null);
-            setChannelLink('');
-            // Open the dialog
-            setParseDialogOpen(true);
-          }}
-          disabled={isInDemoMode}
-          disabledTooltip={t('telegram.demoModeChannelDisabled', 'Channel parsing is disabled in demo mode')}
-        />
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 3,
+          backgroundColor: 'background.default',
+          py: 1
+        }}>
+          <Typography 
+            variant={isMobile ? "h4" : "h4"} 
+            component="h1"
+            sx={{ 
+              fontWeight: 500
+            }}
+          >
+            {t('navigation.parsedChannels')}
+          </Typography>
+          
+          <Tooltip title={isInDemoMode ? t('telegram.demoModeChannelDisabled', 'Channel parsing is disabled in demo mode') : ''}>
+            <span>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  // Reset all parsing-related state
+                  resetParsingState();
+                  // Clear any previous error messages when opening the dialog
+                  setParsingStatus({ loading: false, success: false, error: null });
+                  // Reset form fields
+                  setSelectedDialog(null);
+                  setChannelLink('');
+                  // Open the dialog
+                  setParseDialogOpen(true);
+                }}
+                disabled={isInDemoMode}
+                sx={{
+                  textTransform: 'uppercase',
+                  mb: 0
+                }}
+              >
+                {t('common.newChannel', 'NEW CHANNEL')}
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
         
         {isInDemoMode && (
           <Alert 
@@ -702,10 +737,9 @@ const ParsedChannels = () => {
           </Alert>
         )}
         
-        <Paper sx={{ p: 2, mb: 3 }}>
+        <Paper sx={{ p: isMobile ? 2 : 3, mb: 3, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
           <TextField
             fullWidth
-            variant="outlined"
             placeholder={t('common.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -720,7 +754,7 @@ const ParsedChannels = () => {
         </Paper>
         
         {filteredChannels.length === 0 ? (
-          <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Paper sx={{ p: 4, textAlign: 'center', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
             {channels.length === 0 ? (
               <>
                 <Typography variant="h6" gutterBottom>
@@ -770,13 +804,37 @@ const ParsedChannels = () => {
           </Paper>
         ) : (
           <>
-            <Grid container spacing={3}>
+            <Grid 
+              container 
+              spacing={0}
+              sx={{ 
+                width: '100%',
+                mx: 0,
+                px: 0
+              }}
+            >
               {paginatedChannels.map((channel) => (
-                <Grid item xs={12} sm={6} md={4} key={channel.id}>
+                <Grid 
+                  item 
+                  xs={12} 
+                  sm={6} 
+                  md={4} 
+                  key={channel.id} 
+                  sx={{ 
+                    width: '100%',
+                    p: isMobile ? 0 : 1.5,
+                    mb: isMobile ? 1 : 0
+                  }}
+                >
                   <Card 
                     className="card-hover"
                     sx={{ 
                       cursor: 'pointer',
+                      width: '100%',
+                      maxWidth: '100%',
+                      marginLeft: 0,
+                      marginRight: 0,
+                      borderRadius: isMobile ? 1 : 2,
                       '&:hover': {
                         transform: 'translateY(-4px)',
                         transition: 'transform 0.2s ease-in-out',
@@ -788,30 +846,66 @@ const ParsedChannels = () => {
                       navigate(`/channels/${channel.id}`);
                     }}
                   >
-                    <CardContent sx={{ pb: 0 }}>
-                      <Typography variant="h6" noWrap gutterBottom>
+                    <CardContent sx={{ 
+                        pb: 0, 
+                        pt: isMobile ? 1.5 : 2, 
+                        px: isMobile ? 1.5 : 2 
+                      }}>
+                      <Typography 
+                        variant="h6" 
+                        noWrap 
+                        gutterBottom={!isMobile}
+                        sx={{ mb: isMobile ? 0.5 : undefined }}
+                      >
                         {channel.group_name}
                       </Typography>
                       
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        gutterBottom={!isMobile}
+                        sx={{ mb: isMobile ? 0.5 : undefined }}
+                      >
                         {channel.group_username ? `@${channel.group_username}` : t('telegram.privateChannel')}
                       </Typography>
                       
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mt: 1, mb: 2 }}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'flex-start', 
+                        mt: isMobile ? 0.5 : 1, 
+                        mb: isMobile ? 1 : 2 
+                      }}>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: isMobile ? 0.5 : 0.75 
+                        }}>
                           <Chip 
                             label={`${(channel.member_count || 0).toLocaleString()} ${t('common.members')}`} 
                             size="small" 
                             color="primary" 
                             variant="outlined"
-                            sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
+                            sx={{ 
+                              height: '24px', 
+                              '& .MuiChip-label': { 
+                                px: 1,
+                                fontSize: isMobile ? '0.7rem' : '0.75rem' 
+                              } 
+                            }}
                           />
                           <Chip 
                             label={`${(channel.members?.length || 0).toLocaleString()} ${t('common.usersFound')}`} 
                             size="small" 
                             color="info" 
                             variant="outlined"
-                            sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
+                            sx={{ 
+                              height: '24px', 
+                              '& .MuiChip-label': { 
+                                px: 1,
+                                fontSize: isMobile ? '0.7rem' : '0.75rem'
+                              } 
+                            }}
                           />
                         </Box>
                         <Chip 
@@ -819,11 +913,22 @@ const ParsedChannels = () => {
                           size="small" 
                           color={channel.is_public ? 'success' : 'default'} 
                           variant="outlined"
-                          sx={{ height: '24px', '& .MuiChip-label': { px: 1 } }}
+                          sx={{ 
+                            height: '24px', 
+                            '& .MuiChip-label': { 
+                              px: 1,
+                              fontSize: isMobile ? '0.7rem' : '0.75rem'
+                            } 
+                          }}
                         />
                       </Box>
                       
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                      <Typography 
+                        variant="caption" 
+                        color="text.secondary" 
+                        display="block" 
+                        sx={{ mt: isMobile ? 0.5 : 1 }}
+                      >
                         {t('common.parsed')}: {(() => {
                           // Parse the timestamp from the server 
                           const timestamp = channel.parsed_at;
@@ -846,7 +951,7 @@ const ParsedChannels = () => {
                       </Typography>
                     </CardContent>
                     
-                    <CardActions>
+                    <CardActions sx={{ p: isMobile ? '4px 8px' : '8px 16px' }}>
                       <Box sx={{ flexGrow: 1 }} />
                       
                       <Tooltip title={t('actions.delete')}>
@@ -857,8 +962,9 @@ const ParsedChannels = () => {
                             handleDeleteClick(channel);
                           }}
                           data-delete="true"
+                          size={isMobile ? "small" : "medium"}
                         >
-                          <DeleteIcon />
+                          <DeleteIcon fontSize={isMobile ? "small" : "medium"} />
                         </IconButton>
                       </Tooltip>
                     </CardActions>
@@ -1072,7 +1178,10 @@ const ParsedChannels = () => {
               sx={{ 
                 textTransform: 'uppercase',
                 fontSize: '0.875rem',
-                py: 1
+                py: 1,
+                flex: 1,
+                height: { xs: '36px', sm: 'auto' },
+                width: { sm: '160px' }
               }}
             >
               {t('telegram.cancel')}
@@ -1086,17 +1195,19 @@ const ParsedChannels = () => {
               disabled={parsingStatus.loading || (!channelLink.trim() && !selectedDialog)}
               sx={{
                 textTransform: 'uppercase',
-                fontSize: '0.75rem',
+                fontSize: '0.875rem',
                 py: 0.5,
                 px: 2,
-                height: '32px',
-                minHeight: '32px',
+                height: { xs: '36px', sm: '40px' },
+                minHeight: { xs: '36px', sm: '40px' },
+                flex: 1,
+                width: { sm: '160px' },
                 '& .MuiButton-startIcon': {
-                  marginRight: 0.5
+                  marginRight: { xs: 0.5, sm: 1 }
                 }
               }}
             >
-              {t('telegram.parseChannel')}
+              {t(isMobile ? 'common.parse' : 'telegram.parseChannel', isMobile ? 'PARSE' : 'PARSE CHANNEL')}
             </LoadingButton>
           </DialogActions>
         </Dialog>

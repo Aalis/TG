@@ -1,0 +1,1 @@
+# dependencies\n/node_modules\n/.pnp\n.pnp.js\n\n# testing\n/coverage\n\n# production\n/build\n\n# misc\n.DS_Store\n.env.local\n.env.development.local\n.env.test.local\n.env.production.local\n\nnpm-debug.log*\nyarn-debug.log*\nyarn-error.log*\n\n# Static build files\n../static/static/\n../backend/static/static/\n../static/asset-manifest.json\n../backend/static/asset-manifest.json
