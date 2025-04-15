@@ -61,35 +61,46 @@ const PublicLayout = ({ children }) => {
                 </Box>
               </>
             ) : (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: 'auto' }}>
-                <Button
-                  color="inherit"
-                  onClick={() => navigate('/register')}
+              <>
+                <Typography
+                  variant="h6"
+                  noWrap
+                  component="div"
+                  onClick={() => navigate('/')}
+                  style={{ cursor: 'pointer' }}
                 >
-                  {t('common.register')}
-                </Button>
-                <Button
-                  color="inherit"
-                  variant="outlined"
-                  onClick={() => navigate('/login')}
-                  sx={{ 
-                    borderColor: 'rgba(255, 255, 255, 0.5)',
-                    '&:hover': {
-                      borderColor: 'white'
-                    }
-                  }}
-                >
-                  {t('common.login')}
-                </Button>
-                <IconButton 
-                  sx={{ ml: 1 }} 
-                  onClick={toggleTheme} 
-                  color="inherit"
-                >
-                  {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-                </IconButton>
-                <LanguageSwitcher />
-              </Box>
+                  TG Parser
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: 'auto' }}>
+                  <Button
+                    color="inherit"
+                    onClick={() => navigate('/register')}
+                  >
+                    {t('common.register')}
+                  </Button>
+                  <Button
+                    color="inherit"
+                    variant="outlined"
+                    onClick={() => navigate('/login')}
+                    sx={{ 
+                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      '&:hover': {
+                        borderColor: 'white'
+                      }
+                    }}
+                  >
+                    {t('common.login')}
+                  </Button>
+                  <IconButton 
+                    sx={{ ml: 1 }} 
+                    onClick={toggleTheme} 
+                    color="inherit"
+                  >
+                    {theme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+                  </IconButton>
+                  <LanguageSwitcher />
+                </Box>
+              </>
             )}
           </Toolbar>
         </Container>
